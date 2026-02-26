@@ -1,0 +1,7 @@
+.planning/
+node_modules/
+bin/
+vendor/
+*.test
+*.out
+/bmd
