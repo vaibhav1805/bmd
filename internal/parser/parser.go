@@ -9,6 +9,7 @@ import (
 	"github.com/yuin/goldmark"
 	gast "github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
+	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -240,6 +241,23 @@ func convertExtensionNode(gnode gast.Node, src []byte) ast.Node {
 
 	case "Table":
 		tbl := ast.NewTable()
+		// Extract column alignments from goldmark's extension Table node.
+		if gtbl, ok := gnode.(*east.Table); ok {
+			alignments := make([]string, len(gtbl.Alignments))
+			for i, a := range gtbl.Alignments {
+				switch a {
+				case east.AlignLeft:
+					alignments[i] = "left"
+				case east.AlignCenter:
+					alignments[i] = "center"
+				case east.AlignRight:
+					alignments[i] = "right"
+				default: // AlignNone
+					alignments[i] = ""
+				}
+			}
+			tbl.Alignments = alignments
+		}
 		convertChildrenToParent(gnode, tbl, src)
 		return tbl
 
