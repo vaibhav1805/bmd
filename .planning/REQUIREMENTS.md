@@ -49,12 +49,12 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | REND-01 | Phase 1 | Complete (01-01) |
-| REND-02 | Phase 1 | Complete (01-01) |
-| REND-03 | Phase 1 | Complete (01-01) |
+| REND-02 | Phase 1 | Complete (01-02) |
+| REND-03 | Phase 1 | Complete (01-02) |
 | REND-04 | Phase 1 | Complete (01-01) |
-| REND-05 | Phase 1 | Complete (01-01) |
-| REND-06 | Phase 1 | Complete (01-01) |
-| REND-07 | Phase 1 | Complete (01-01) |
+| REND-05 | Phase 1 | Complete (01-02) |
+| REND-06 | Phase 1 | Complete (01-02) |
+| REND-07 | Phase 1 | Complete (01-02) |
 | NAV-01 | Phase 2 | Pending |
 | NAV-02 | Phase 2 | Pending |
 | NAV-03 | Phase 2 | Pending |

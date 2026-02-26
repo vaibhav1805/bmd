@@ -28,6 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Lists, blockquotes, and tables render with correct structure and visual alignment
 **Plans**:
 - [x] Plan 01: Foundation & Architecture — Go project, goldmark parser, ANSI renderer, CLI pipeline
+- [x] Plan 02: Block-Level Rendering — headings H1-H6, code blocks with chroma highlighting, lists, blockquotes, tables
 
 ### Phase 2: Navigation & Search
 **Goal**: Users can follow links between markdown files and search rendered content without leaving the terminal
@@ -56,6 +57,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Rendering | 1/3 | In Progress | - |
+| 1. Core Rendering | 2/3 | In Progress | - |
 | 2. Navigation & Search | 0/? | Not started | - |
 | 3. Polish & UX | 0/? | Not started | - |
