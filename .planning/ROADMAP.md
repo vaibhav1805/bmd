@@ -39,7 +39,15 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. User clicks/selects a link to another `.md` file and that file renders in place
   2. User can search for a term and matching text is highlighted in the rendered output
   3. User can navigate back to the previously viewed file
-**Plans**: TBD
+**Plans:** 6 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — TUI foundation: bubbletea viewer, scrollable display, keyboard/quit
+- [ ] 02-02-PLAN.md — TDD: navigation history stack + path security resolver (pure logic)
+- [ ] 02-03-PLAN.md — Link navigation: link registry, Tab/mouse/follow, history wiring, file browser
+- [ ] 02-04-PLAN.md — TDD: search matcher (FindMatches, StripANSI, case-insensitive)
+- [ ] 02-05-PLAN.md — Search UI: Ctrl+F prompt, all-match highlighting, n/N jump, match counter
+- [ ] 02-06-PLAN.md — Human verification checkpoint: all NAV-01, NAV-02, NAV-03 checks
 
 ### Phase 3: Polish & UX
 **Goal**: Users understand what the tool can do immediately and can comfortably read any-length document
@@ -58,6 +66,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Rendering | 3/3 | Complete | 2026-02-26 |
+| 1. Core Rendering | 3/3 | Complete    | 2026-02-26 |
 | 2. Navigation & Search | 0/? | Not started | - |
 | 3. Polish & UX | 0/? | Not started | - |
