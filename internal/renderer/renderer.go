@@ -182,21 +182,9 @@ func (r *Renderer) renderListItem(li *ast.ListItem, ordered bool, num int) strin
 	return bullet + content + "\n"
 }
 
-// renderTable stub — will be fully implemented in Wave 2.
+// renderTable delegates to the full table renderer (tables.go).
 func (r *Renderer) renderTable(t *ast.Table) string {
-	var sb strings.Builder
-	for _, child := range t.Children() {
-		if row, ok := child.(*ast.TableRow); ok {
-			for i, cell := range row.Children() {
-				if i > 0 {
-					sb.WriteString(" | ")
-				}
-				sb.WriteString(r.renderInlineChildren(cell.Children()))
-			}
-			sb.WriteString("\n")
-		}
-	}
-	return sb.String()
+	return r.RenderTable(t)
 }
 
 // renderHorizontalRule renders a horizontal rule.

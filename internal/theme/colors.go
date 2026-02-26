@@ -47,6 +47,9 @@ type Theme struct {
 
 	// List colors
 	listBulletColor AnsiColor // bullet/number in lists
+
+	// Table colors
+	tableBorderColor AnsiColor // table box-drawing borders
 }
 
 // DetectColorScheme detects whether the terminal uses a dark or light background.
@@ -124,6 +127,7 @@ func darkTheme() Theme {
 		codeBlockBg:      235,  // very dark grey background
 		langLabelColor:   244,  // medium-dark grey
 		listBulletColor:  39,   // blue bullet/numbers
+		tableBorderColor: 244,  // medium-dark grey borders
 	}
 }
 
@@ -159,6 +163,7 @@ func lightTheme() Theme {
 		codeBlockBg:      254,  // very light grey
 		langLabelColor:   244,  // medium grey
 		listBulletColor:  25,   // dark blue bullet/numbers
+		tableBorderColor: 245,  // medium grey borders
 	}
 }
 
@@ -250,6 +255,11 @@ func (t Theme) LangLabelColor() AnsiColor {
 // ListBulletColor returns the color for list bullets and numbers.
 func (t Theme) ListBulletColor() AnsiColor {
 	return t.listBulletColor
+}
+
+// TableBorderColor returns the color for table box-drawing borders.
+func (t Theme) TableBorderColor() AnsiColor {
+	return t.tableBorderColor
 }
 
 // FgCode returns the ANSI escape sequence to set a 256-color foreground.
