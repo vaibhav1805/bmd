@@ -279,7 +279,21 @@ func convertExtensionNode(gnode gast.Node, src []byte) ast.Node {
 func convertTableCells(gnode gast.Node, row *ast.TableRow, src []byte) {
 	for child := gnode.FirstChild(); child != nil; child = child.NextSibling() {
 		if child.Kind().String() == "TableCell" {
-			cell := ast.NewTableCell("")
+			// Read alignment from goldmark's extension TableCell node.
+			alignment := ""
+			if gtc, ok := child.(*east.TableCell); ok {
+				switch gtc.Alignment {
+				case east.AlignLeft:
+					alignment = "left"
+				case east.AlignCenter:
+					alignment = "center"
+				case east.AlignRight:
+					alignment = "right"
+				default: // AlignNone
+					alignment = ""
+				}
+			}
+			cell := ast.NewTableCell(alignment)
 			for grandchild := child.FirstChild(); grandchild != nil; grandchild = grandchild.NextSibling() {
 				converted := convertNode(grandchild, src)
 				if converted != nil {
