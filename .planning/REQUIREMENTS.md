@@ -54,7 +54,7 @@
 | REND-04 | Phase 1 | Complete (01-01) |
 | REND-05 | Phase 1 | Complete (01-02) |
 | REND-06 | Phase 1 | Complete (01-02) |
-| REND-07 | Phase 1 | Complete (01-02) |
+| REND-07 | Phase 1 | Complete (01-03 gap closure — alignment extraction) |
 | NAV-01 | Phase 2 | Pending |
 | NAV-02 | Phase 2 | Pending |
 | NAV-03 | Phase 2 | Pending |

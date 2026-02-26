@@ -12,7 +12,7 @@ Three phases deliver a beautiful, navigable markdown viewer for the terminal. Ph
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Core Rendering** - Render all markdown elements beautifully in the terminal
+- [x] **Phase 1: Core Rendering** - Render all markdown elements beautifully in the terminal
 - [ ] **Phase 2: Navigation & Search** - Move between files and find content within them
 - [ ] **Phase 3: Polish & UX** - Headers, keyboard hints, scrolling — tool feels complete
 
@@ -29,6 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**:
 - [x] Plan 01: Foundation & Architecture — Go project, goldmark parser, ANSI renderer, CLI pipeline
 - [x] Plan 02: Block-Level Rendering — headings H1-H6, code blocks with chroma highlighting, lists, blockquotes, tables
+- [x] Plan 03: Gap Closure — table column alignment extraction from goldmark AST (REND-07 fully verified)
 
 ### Phase 2: Navigation & Search
 **Goal**: Users can follow links between markdown files and search rendered content without leaving the terminal
@@ -57,6 +58,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Rendering | 2/3 | In Progress | - |
+| 1. Core Rendering | 3/3 | Complete | 2026-02-26 |
 | 2. Navigation & Search | 0/? | Not started | - |
 | 3. Polish & UX | 0/? | Not started | - |
