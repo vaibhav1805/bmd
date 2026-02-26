@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/bmd/bmd/internal/parser"
-	"github.com/bmd/bmd/internal/renderer"
 	"github.com/bmd/bmd/internal/terminal"
 	"github.com/bmd/bmd/internal/theme"
+	"github.com/bmd/bmd/internal/tui"
 )
 
 func main() {
@@ -43,10 +44,13 @@ func main() {
 	// Step 4: Create theme based on terminal background detection
 	th := theme.NewTheme()
 
-	// Step 5: Render AST to string
-	r := renderer.NewRenderer(th, termWidth)
-	output := r.Render(doc)
+	// Step 5: Create viewer model
+	v := tui.New(doc, filePath, th, termWidth)
 
-	// Step 6: Print to stdout
-	fmt.Print(output)
+	// Step 6: Launch bubbletea TUI in alt screen with mouse support
+	p := tea.NewProgram(v, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "bmd: error running TUI: %v\n", err)
+		os.Exit(1)
+	}
 }
