@@ -154,16 +154,9 @@ func (r *Renderer) renderHeading(h *ast.Heading) string {
 	return r.RenderHeading(h)
 }
 
-// renderCodeBlock stub — will be fully implemented in Wave 2.
+// renderCodeBlock delegates to the full code block renderer (code.go).
 func (r *Renderer) renderCodeBlock(cb *ast.CodeBlock) string {
-	fg := theme.FgCode(r.theme.CodeBlockFg())
-	bg := theme.BgCode(r.theme.CodeBlockBg())
-	lines := strings.Split(strings.TrimRight(cb.Content, "\n"), "\n")
-	var sb strings.Builder
-	for _, line := range lines {
-		sb.WriteString(bg + fg + "  " + line + theme.Reset + "\n")
-	}
-	return sb.String()
+	return r.RenderCodeBlock(cb)
 }
 
 // renderBlockQuote stub — will be fully implemented in Wave 2.
