@@ -159,20 +159,9 @@ func (r *Renderer) renderCodeBlock(cb *ast.CodeBlock) string {
 	return r.RenderCodeBlock(cb)
 }
 
-// renderBlockQuote stub — will be fully implemented in Wave 2.
+// renderBlockQuote delegates to the full blockquote renderer (blockquotes.go).
 func (r *Renderer) renderBlockQuote(bq *ast.BlockQuote) string {
-	border := theme.FgCode(r.theme.QuoteBorderColor()) + "│" + theme.Reset
-	textColor := theme.FgCode(r.theme.QuoteColor())
-	var sb strings.Builder
-	for _, child := range bq.Children() {
-		content := r.RenderNode(child)
-		for _, line := range strings.Split(content, "\n") {
-			if line != "" {
-				sb.WriteString(border + " " + textColor + line + theme.Reset + "\n")
-			}
-		}
-	}
-	return sb.String()
+	return r.RenderBlockQuote(bq)
 }
 
 // renderList delegates to the full list renderer (lists.go).
