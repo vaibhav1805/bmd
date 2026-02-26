@@ -44,6 +44,9 @@ type Theme struct {
 	codeBlockFg     AnsiColor // code block foreground
 	codeBlockBg     AnsiColor // code block background
 	langLabelColor  AnsiColor // language label in code block
+
+	// List colors
+	listBulletColor AnsiColor // bullet/number in lists
 }
 
 // DetectColorScheme detects whether the terminal uses a dark or light background.
@@ -120,6 +123,7 @@ func darkTheme() Theme {
 		codeBlockFg:      252,  // light grey text
 		codeBlockBg:      235,  // very dark grey background
 		langLabelColor:   244,  // medium-dark grey
+		listBulletColor:  39,   // blue bullet/numbers
 	}
 }
 
@@ -154,6 +158,7 @@ func lightTheme() Theme {
 		codeBlockFg:      235,  // near-black text
 		codeBlockBg:      254,  // very light grey
 		langLabelColor:   244,  // medium grey
+		listBulletColor:  25,   // dark blue bullet/numbers
 	}
 }
 
@@ -240,6 +245,11 @@ func (t Theme) CodeBlockBg() AnsiColor {
 // LangLabelColor returns the color for the language label in code blocks.
 func (t Theme) LangLabelColor() AnsiColor {
 	return t.langLabelColor
+}
+
+// ListBulletColor returns the color for list bullets and numbers.
+func (t Theme) ListBulletColor() AnsiColor {
+	return t.listBulletColor
 }
 
 // FgCode returns the ANSI escape sequence to set a 256-color foreground.

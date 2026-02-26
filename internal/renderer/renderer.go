@@ -175,32 +175,21 @@ func (r *Renderer) renderBlockQuote(bq *ast.BlockQuote) string {
 	return sb.String()
 }
 
-// renderList stub — will be fully implemented in Wave 2.
+// renderList delegates to the full list renderer (lists.go).
 func (r *Renderer) renderList(l *ast.List) string {
-	var sb strings.Builder
-	for i, child := range l.Children() {
-		if li, ok := child.(*ast.ListItem); ok {
-			sb.WriteString(r.renderListItem(li, l.Ordered, i+l.Start))
-		}
-	}
-	return sb.String()
+	return r.RenderList(l)
 }
 
-// renderListItem renders a single list item.
+// renderListItem is kept for backward compatibility with the dispatcher.
+// Full list item rendering is handled via renderListAtDepth in lists.go.
 func (r *Renderer) renderListItem(li *ast.ListItem, ordered bool, num int) string {
 	var bullet string
 	if ordered {
 		bullet = itoa(num) + ". "
 	} else {
-		bullet = "• "
+		bullet = listBullet
 	}
-	content := r.renderInlineChildren(li.Children())
-	if content == "" {
-		// List item may contain block children (paragraphs)
-		for _, child := range li.Children() {
-			content += r.RenderNode(child)
-		}
-	}
+	content := r.renderListItemContent(li, 0)
 	return bullet + content + "\n"
 }
 
