@@ -67,16 +67,36 @@ func (r *Renderer) RenderNode(node ast.Node) string {
 	}
 }
 
-// renderDocument renders all children of a Document, joining with newlines.
+// renderDocument renders all children of a Document with consistent block spacing.
+// Block elements that embed a leading "\n" (headings, code blocks, blockquotes, tables)
+// are joined directly; others get a blank line separator.
 func (r *Renderer) renderDocument(doc *ast.Document) string {
-	var parts []string
+	var sb strings.Builder
+	first := true
 	for _, child := range doc.Children() {
 		rendered := r.RenderNode(child)
-		if rendered != "" {
-			parts = append(parts, rendered)
+		if rendered == "" {
+			continue
+		}
+		if first {
+			// Trim leading newline from the very first block (no blank line before document start)
+			rendered = strings.TrimPrefix(rendered, "\n")
+			sb.WriteString(rendered)
+			first = false
+			continue
+		}
+		// If the block already starts with \n (provides its own spacing), join directly.
+		// Otherwise add a blank line separator.
+		if strings.HasPrefix(rendered, "\n") {
+			sb.WriteString("\n")
+			sb.WriteString(rendered)
+		} else {
+			sb.WriteString("\n\n")
+			sb.WriteString(rendered)
 		}
 	}
-	return strings.Join(parts, "\n") + "\n"
+	sb.WriteString("\n")
+	return sb.String()
 }
 
 // renderParagraph renders inline children of a paragraph, followed by a blank line.
