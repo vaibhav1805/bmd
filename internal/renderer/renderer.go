@@ -147,14 +147,11 @@ func (r *Renderer) renderImage(img *ast.Image) string {
 	return theme.FgCode(r.theme.LinkColor()) + "[img: " + alt + "]" + theme.Reset
 }
 
-// --- Wave 2 stubs ---
+// --- Wave 2 implementations ---
 
-// renderHeading stub — will be fully implemented in Wave 2.
+// renderHeading delegates to the full heading renderer (headings.go).
 func (r *Renderer) renderHeading(h *ast.Heading) string {
-	prefix := strings.Repeat("#", h.Level) + " "
-	content := r.renderInlineChildren(h.Children())
-	color := r.theme.HeadingColor(h.Level)
-	return theme.FgCode(color) + prefix + content + theme.Reset
+	return r.RenderHeading(h)
 }
 
 // renderCodeBlock stub — will be fully implemented in Wave 2.
