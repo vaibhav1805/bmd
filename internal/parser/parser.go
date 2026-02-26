@@ -59,6 +59,13 @@ func convertNode(gnode gast.Node, src []byte) ast.Node {
 		convertChildrenToParent(n, p, src)
 		return p
 
+	case *gast.TextBlock:
+		// TextBlock is used by goldmark for tight list item content.
+		// Render it like a Paragraph (inline content container).
+		p := ast.NewParagraph()
+		convertChildrenToParent(n, p, src)
+		return p
+
 	case *gast.Heading:
 		h := ast.NewHeading(n.Level)
 		convertChildrenToParent(n, h, src)
@@ -117,11 +124,11 @@ func convertNode(gnode gast.Node, src []byte) ast.Node {
 	case *gast.Text:
 		content := string(n.Segment.Value(src))
 		t := ast.NewText(content)
-		// Check goldmark line-break flags on Text nodes
-		if n.HardLineBreak() {
-			// Return the text node followed by a hard break via wrapper paragraph
-			// handled by parent — just mark content with trailing newline indicator
-			t.Content = content
+		// SoftLineBreak: this text node is followed by a line continuation.
+		// In rendered output, a soft break becomes a space between words.
+		// We append a space to the content to preserve the word boundary.
+		if n.SoftLineBreak() {
+			t.Content = content + " "
 		}
 		return t
 
