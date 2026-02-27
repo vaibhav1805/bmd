@@ -39,7 +39,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. User clicks/selects a link to another `.md` file and that file renders in place
   2. User can search for a term and matching text is highlighted in the rendered output
   3. User can navigate back to the previously viewed file
-**Plans:** 6/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 - [x] 02-01-PLAN.md — TUI foundation: bubbletea viewer, scrollable display, keyboard/quit
@@ -57,7 +57,12 @@ Plans:
   1. File path and basic metadata appear at the top of every rendered view
   2. Keyboard shortcuts for navigation and search are visible on screen
   3. Long documents scroll or paginate — no content is cut off or lost
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [x] 03-01-PLAN.md — Header bar (UX-01) + help overlay (UX-02): compact header with file context, '?' toggleable shortcut overlay grouped by function
+- [ ] 03-02-PLAN.md — Long document navigation (UX-03): line counter, jump-to-line ':N', virtual rendering optimization for >500 line docs
+- [ ] 03-03-PLAN.md — Human verification checkpoint: all Phase 3 UX requirements confirmed
 
 ## Progress
 
@@ -67,5 +72,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Rendering | 3/3 | Complete    | 2026-02-26 |
-| 2. Navigation & Search | 6/6 | Complete   | 2026-02-27 |
-| 3. Polish & UX | 0/? | Not started | - |
+| 2. Navigation & Search | 6/6 | Complete    | 2026-02-27 |
+| 3. Polish & UX | 1/3 | In Progress | - |

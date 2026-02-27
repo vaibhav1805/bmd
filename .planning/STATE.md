@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Render markdown files beautifully in the terminal so developers can read documentation without leaving their terminal.
-**Current focus:** Phase 2 - Navigation & Search (Complete) → Phase 3 - Polish & Distribution
+**Current focus:** Phase 3 - Polish & Distribution (In Progress)
 
 ## Current Position
 
-Phase: 2 of 3 (Navigation & Search) — COMPLETE
-Plan: 6 of 6 in current phase
-Status: Phase Complete
-Last activity: 2026-02-27 — Plan 02-06 complete: Human verification checkpoint, all NAV requirements confirmed
+Phase: 3 of 3 (Polish & Distribution) — In Progress
+Plan: 1 of 3 in current phase
+Status: In Progress
+Last activity: 2026-02-27 — Plan 03-01 complete: Compact header bar (UX-01) and help overlay (UX-02)
 
-Progress: [████████░░] 78%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
+- Total plans completed: 9
 - Average duration: 4 min
-- Total execution time: 0.47 hours
+- Total execution time: 0.60 hours
 
 **By Phase:**
 
@@ -29,9 +29,10 @@ Progress: [████████░░] 78%
 |-------|-------|-------|----------|
 | 01-core-rendering | 3 | 21 min | 7 min |
 | 02-navigation-search | 6 | 7 min | 1 min |
+| 03-polish-ux | 1 | 8 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 5 min, 1 min, 1 min, 3 min, 1 min
+- Last 5 plans: 1 min, 1 min, 3 min, 1 min, 8 min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -75,6 +76,10 @@ Recent decisions affecting current work:
 - [02-05]: Search state cleared on file navigation (loadFile/loadFileNoHistory) — prevents stale match indices across documents
 - [02-05]: "/" added as vim-style search shortcut alongside Ctrl+F
 - [02-06]: Auto-approved human verification checkpoint (auto_advance=true) — all NAV-01/NAV-02/NAV-03 requirements confirmed complete
+- [03-01]: Help overlay replaces full view (no compositing) — simpler, sufficient for use case
+- [03-01]: Header uses direct ANSI escapes (\x1b[48;5;235m/\x1b[38;5;244m) matching codebase pattern
+- [03-01]: contentHeight changed from Height-1 to Height-2 to accommodate header line
+- [03-01]: helpOpen routing placed first in Update() KeyMsg block so overlay consumes all input
 
 ### Pending Todos
 
@@ -87,5 +92,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 02-06-PLAN.md — Human verification checkpoint, Phase 2 complete
+Stopped at: Completed 03-01-PLAN.md — Compact header bar (UX-01) and help overlay (UX-02)
 Resume file: None
