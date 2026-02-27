@@ -5,32 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Render markdown files beautifully in the terminal so developers can read documentation without leaving their terminal.
-**Current focus:** Phase 1 - Core Rendering (COMPLETE)
+**Current focus:** Phase 2 - Navigation & Search (In Progress)
 
 ## Current Position
 
-Phase: 1 of 3 (Core Rendering)
-Plan: 3 of 3 in current phase
-Status: Phase Complete
-Last activity: 2026-02-26 — Plan 01-03 complete: Gap Closure — Table Column Alignment
+Phase: 2 of 3 (Navigation & Search)
+Plan: 2 of 6 in current phase
+Status: In Progress
+Last activity: 2026-02-27 — Plan 02-02 complete: TDD Nav History Stack + Path Security Resolver
 
-Progress: [███░░░░░░░] 33%
+Progress: [████░░░░░░] 44%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 7 min
-- Total execution time: 0.30 hours
+- Total plans completed: 5
+- Average duration: 5 min
+- Total execution time: 0.38 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-core-rendering | 3 | 21 min | 7 min |
+| 02-navigation-search | 2 | 2 min | 1 min |
 
 **Recent Trend:**
-- Last 5 plans: 8 min, 8 min, 5 min
+- Last 5 plans: 8 min, 8 min, 5 min, 1 min, 1 min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -54,6 +55,13 @@ Recent decisions affecting current work:
 - [01-02]: SoftLineBreak fix: trailing space on text nodes with soft line break flag
 - [01-03]: AlignNone maps to empty string — renderer defaults to left-align for empty string, matching markdown spec
 - [01-03]: east import alias used for goldmark/extension/ast — avoids collision with bmd's own ast package
+- [02-01]: bubbletea chosen for TUI event loop — charmbracelet standard, same org as lipgloss companion library
+- [02-01]: Viewer struct fields exported (Doc, Lines, Offset, Height, Width, Theme, FilePath) for extension by later plans
+- [02-01]: WithAltScreen() on program launch — viewer runs in alternate screen buffer, no scroll history pollution
+- [02-01]: WithMouseCellMotion() on program launch — enables mouse events for future link clicking (Plan 03)
+- [02-02]: pos=-1 sentinel for empty History — enables entries[:pos+1] truncation to work cleanly on first Push
+- [02-02]: Trailing filepath.Separator appended to cleanStart in traversal check — prevents /docs matching /docs-extra
+- [02-02]: os.Lstat used (not Stat) so symlink detection works before the OS follows the link
 
 ### Pending Todos
 
@@ -65,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-26
-Stopped at: Completed 01-03-PLAN.md — Phase 1 complete (Gap Closure: Table Column Alignment)
+Last session: 2026-02-27
+Stopped at: Completed 02-01-PLAN.md — TUI Foundation (bubbletea Viewer, scrollable display, keyboard/quit)
 Resume file: None

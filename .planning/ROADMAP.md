@@ -42,8 +42,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 6 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — TUI foundation: bubbletea viewer, scrollable display, keyboard/quit
-- [ ] 02-02-PLAN.md — TDD: navigation history stack + path security resolver (pure logic)
+- [x] 02-01-PLAN.md — TUI foundation: bubbletea viewer, scrollable display, keyboard/quit
+- [x] 02-02-PLAN.md — TDD: navigation history stack + path security resolver (pure logic)
 - [ ] 02-03-PLAN.md — Link navigation: link registry, Tab/mouse/follow, history wiring, file browser
 - [ ] 02-04-PLAN.md — TDD: search matcher (FindMatches, StripANSI, case-insensitive)
 - [ ] 02-05-PLAN.md — Search UI: Ctrl+F prompt, all-match highlighting, n/N jump, match counter
@@ -67,5 +67,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Rendering | 3/3 | Complete    | 2026-02-26 |
-| 2. Navigation & Search | 0/? | Not started | - |
+| 2. Navigation & Search | 2/6 | In Progress | - |
 | 3. Polish & UX | 0/? | Not started | - |
