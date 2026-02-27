@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Render markdown files beautifully in the terminal so developers can read documentation without leaving their terminal.
-**Current focus:** Phase 3 - Polish & Distribution (In Progress)
+**Current focus:** Phase 4 - Mouse Copy Support (In Progress)
 
 ## Current Position
 
-Phase: 3 of 3 (Polish & Distribution) — Complete
-Plan: 3 of 3 in current phase
-Status: Complete
-Last activity: 2026-02-27 — Plan 03-03 complete: Phase 3 verification — all UX requirements confirmed (UX-01, UX-02, UX-03)
+Phase: 4 of 4 (Mouse Copy Support) — In Progress
+Plan: 1 of 1 in current phase
+Status: In Progress
+Last activity: 2026-02-27 — Plan 04-01 complete: Mouse cursor tracking and click navigation — MOUSE-01, MOUSE-02, MOUSE-03 complete
 
 Progress: [██████████] 100%
 
@@ -30,6 +30,7 @@ Progress: [██████████] 100%
 | 01-core-rendering | 3 | 21 min | 7 min |
 | 02-navigation-search | 6 | 7 min | 1 min |
 | 03-polish-ux | 3 | 11 min | 4 min |
+| 04-mouse-copy-support | 1 | 5 min | 5 min |
 
 **Recent Trend:**
 - Last 5 plans: 3 min, 1 min, 8 min, 2 min, 1 min
@@ -84,6 +85,9 @@ Recent decisions affecting current work:
 - [03-02]: jumpMode checked before searchMode in Update() and renderStatusBar() — consistent priority ordering
 - [03-02]: WindowSizeMsg guards re-render behind width-change check — height-only resize skips O(doc) re-render
 - [03-03]: auto_advance=true — checkpoint:human-verify auto-approved, all Phase 3 UX requirements confirmed via passing test suite
+- [04-01]: Header offset fix: msg.Y - 1 + v.Offset (Y=0 is header row, not content) — corrects prior link-click off-by-one
+- [04-01]: insertCursorAt uses rune slice for Unicode-safe indexing — ANSI codes still shift offsets (acceptable Phase 4 approximation)
+- [04-01]: Cursor priority ordering: link focus > committed cursor (underline) > hover cursor (per-char reverse-video)
 
 ### Pending Todos
 
@@ -96,5 +100,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 03-03-PLAN.md — Phase 3 verification complete; all UX requirements (UX-01, UX-02, UX-03) confirmed
+Stopped at: Completed 04-01-PLAN.md — Mouse cursor tracking and click navigation complete; all MOUSE requirements (MOUSE-01, MOUSE-02, MOUSE-03) confirmed
 Resume file: None

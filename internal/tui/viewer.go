@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	osc52 "github.com/aymanbagabas/go-osc52/v2"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/bmd/bmd/internal/ast"
@@ -173,7 +174,21 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.helpOpen = !v.helpOpen
 			return v, nil
 
-		case "q", "ctrl+c":
+		case "q":
+			return v, tea.Quit
+
+		case "ctrl+c":
+			if v.hasCursor {
+				// Copy the plain text of the committed cursor line to clipboard via OSC 52.
+				if v.cursorRow >= 0 && v.cursorRow < len(v.Lines) {
+					plainLine := v.Lines[v.cursorRow]
+					// Write via OSC52 to stderr (terminal clipboard channel).
+					_, _ = osc52.New(plainLine).WriteTo(os.Stderr)
+					// Show confirmation in status bar briefly.
+					v.errorMsg = "Copied line to clipboard"
+					return v, clearErrorAfter(statusTimeout)
+				}
+			}
 			return v, tea.Quit
 
 		case "up", "k":
