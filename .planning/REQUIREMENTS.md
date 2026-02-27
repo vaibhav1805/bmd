@@ -25,7 +25,7 @@
 
 - [x] **UX-01**: Display file path and metadata at top
 - [x] **UX-02**: Show keyboard shortcuts for navigation/search
-- [ ] **UX-03**: Handle long content with scrolling/pagination
+- [x] **UX-03**: Handle long content with scrolling/pagination
 
 ## v2 Requirements
 
@@ -60,7 +60,7 @@
 | NAV-03 | Phase 2 | Complete (02-03 — history wiring with Back/Forward) |
 | UX-01 | Phase 3 | Complete (03-01 — compact header bar with filename, folder, search state) |
 | UX-02 | Phase 3 | Complete (03-01 — '?' and 'h' toggle help overlay grouped by Scrolling/Navigation/Search) |
-| UX-03 | Phase 3 | Pending |
+| UX-03 | Phase 3 | Complete (03-02 — line counter, jump-to-line ':N', virtual rendering optimisation) |
 
 **Coverage:**
 - v1 requirements: 13 total

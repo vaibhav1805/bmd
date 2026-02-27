@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 3 of 3 (Polish & Distribution) — In Progress
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In Progress
-Last activity: 2026-02-27 — Plan 03-01 complete: Compact header bar (UX-01) and help overlay (UX-02)
+Last activity: 2026-02-27 — Plan 03-02 complete: Line counter, jump-to-line mode, and virtual rendering optimisation (UX-03)
 
-Progress: [█████████░] 85%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 4 min
-- Total execution time: 0.60 hours
+- Total execution time: 0.63 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [█████████░] 85%
 |-------|-------|-------|----------|
 | 01-core-rendering | 3 | 21 min | 7 min |
 | 02-navigation-search | 6 | 7 min | 1 min |
-| 03-polish-ux | 1 | 8 min | 8 min |
+| 03-polish-ux | 2 | 10 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 1 min, 1 min, 3 min, 1 min, 8 min
+- Last 5 plans: 1 min, 3 min, 1 min, 8 min, 2 min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -80,6 +80,9 @@ Recent decisions affecting current work:
 - [03-01]: Header uses direct ANSI escapes (\x1b[48;5;235m/\x1b[38;5;244m) matching codebase pattern
 - [03-01]: contentHeight changed from Height-1 to Height-2 to accommodate header line
 - [03-01]: helpOpen routing placed first in Update() KeyMsg block so overlay consumes all input
+- [03-02]: virtualThreshold=500 drives both line counter format and virtualMode flag — single constant, no duplication
+- [03-02]: jumpMode checked before searchMode in Update() and renderStatusBar() — consistent priority ordering
+- [03-02]: WindowSizeMsg guards re-render behind width-change check — height-only resize skips O(doc) re-render
 
 ### Pending Todos
 
@@ -92,5 +95,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 03-01-PLAN.md — Compact header bar (UX-01) and help overlay (UX-02)
+Stopped at: Completed 03-02-PLAN.md — Line counter, jump-to-line mode, and virtual rendering optimisation (UX-03)
 Resume file: None
