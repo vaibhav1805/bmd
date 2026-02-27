@@ -9,8 +9,26 @@ import (
 
 // Renderer holds configuration for rendering an AST to terminal output.
 type Renderer struct {
-	theme       theme.Theme
-	termWidth   int
+	theme             theme.Theme
+	termWidth         int
+	emitLinkSentinels bool // if true, wrap links with sentinel markers for LinkRegistry
+}
+
+// linkSentinelPrefix and related constants mirror tui/linkreg.go — kept here
+// to avoid an import cycle. The TUI package imports renderer, not vice versa.
+const (
+	rendererLinkPrefix = "\x00LINK:"
+	rendererLinkSep    = "\x00"
+	rendererLinkEnd    = "\x00/LINK\x00"
+)
+
+// WithLinkSentinels returns a copy of the renderer with link sentinel emission enabled.
+// Sentinels are control-character markers embedded in link output so that the TUI can
+// build a LinkRegistry mapping lines to URLs.
+func (r *Renderer) WithLinkSentinels() *Renderer {
+	copy := *r
+	copy.emitLinkSentinels = true
+	return &copy
 }
 
 // NewRenderer creates a new Renderer with the given theme and terminal width.
@@ -147,15 +165,24 @@ func (r *Renderer) renderInlineCode(c *ast.Code) string {
 	return bg + fg + " " + c.Content + " " + theme.Reset
 }
 
-// renderLink renders a hyperlink. Shows the link text with link color;
-// appends URL in dim color if the text differs.
+// ansiUnderline is the ANSI escape to enable underline text styling.
+const ansiUnderline = "\x1b[4m"
+
+// renderLink renders a hyperlink with underline + cyan (link color) styling.
+// When emitLinkSentinels is true, wraps output with sentinel markers so the
+// TUI can build a LinkRegistry (see internal/tui/linkreg.go).
 func (r *Renderer) renderLink(l *ast.Link) string {
 	text := r.renderInlineChildren(l.Children())
 	if text == "" {
 		text = l.URL
 	}
-	colored := theme.FgCode(r.theme.LinkColor()) + text + theme.Reset
-	return colored
+	// Underline + link color for visual distinction from body text.
+	styled := ansiUnderline + theme.FgCode(r.theme.LinkColor()) + text + theme.Reset
+	if !r.emitLinkSentinels {
+		return styled
+	}
+	// Wrap with sentinel: \x00LINK:url\x00 + styled_text + \x00/LINK\x00
+	return rendererLinkPrefix + l.URL + rendererLinkSep + styled + rendererLinkEnd
 }
 
 // renderImage renders an image as alt text with a prefix indicator.
