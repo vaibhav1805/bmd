@@ -308,16 +308,62 @@ func (v Viewer) updateBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return v, nil
 }
 
+// renderHeader returns a compact single-line header bar showing the current
+// filename, parent folder, and context-sensitive right-side info (search
+// state, navigation back indicator, or error message).
+func (v Viewer) renderHeader() string {
+	// Left side: "filename  (parent/)"
+	filename := filepath.Base(v.FilePath)
+	parent := filepath.Base(filepath.Dir(v.FilePath))
+	left := filename + "  (" + parent + "/)"
+
+	// Right side: context-sensitive
+	var right string
+	if v.errorMsg != "" {
+		right = "\x1b[31m✗ " + v.errorMsg + "\x1b[0m"
+	} else if v.searchState.Active && len(v.searchState.Matches) > 0 {
+		current := v.searchState.Current + 1
+		total := len(v.searchState.Matches)
+		right = fmt.Sprintf("Searching: %s (%d/%d)", v.searchState.Query, current, total)
+	} else if v.searchState.Active && v.searchState.Query != "" {
+		right = "Searching: " + v.searchState.Query + " (no matches)"
+	} else if v.history.CanGoBack() {
+		right = "← Back (Ctrl+B)"
+	}
+
+	// Measure visible widths (strip ANSI for right side since it may contain color codes)
+	leftLen := len([]rune(left))
+	rightLen := len([]rune(right))
+	// For the error message right side, the ANSI codes add non-visible chars; approximate
+	// by stripping known escape sequences for width calculation.
+	if v.errorMsg != "" {
+		rightLen = len([]rune("✗ " + v.errorMsg))
+	}
+
+	padding := v.Width - leftLen - rightLen
+	if padding < 1 {
+		padding = 1
+	}
+
+	bar := left + strings.Repeat(" ", padding) + right
+
+	return "\x1b[48;5;235m\x1b[38;5;244m" + bar + "\x1b[0m"
+}
+
 // View renders the visible portion of the document for display.
 func (v Viewer) View() string {
-	// Reserve 1 line at bottom for status bar; 1 extra if browser tip needed
-	contentHeight := v.Height - 1 // last line is status bar
+	// Reserve 1 line at top for header and 1 line at bottom for status bar.
+	contentHeight := v.Height - 2 // header + status bar
 
 	if v.browserOpen {
-		return v.viewWithBrowser(contentHeight)
+		return v.renderHeader() + "\n" + v.viewWithBrowser(contentHeight)
 	}
 
 	var sb strings.Builder
+
+	// Always render header at the top.
+	sb.WriteString(v.renderHeader())
+	sb.WriteString("\n")
 
 	if len(v.Lines) == 0 {
 		sb.WriteString(v.renderStatusBar())
