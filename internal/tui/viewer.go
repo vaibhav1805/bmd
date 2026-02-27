@@ -21,6 +21,14 @@ import (
 // statusTimeout is how long an error message stays visible in the status bar.
 const statusTimeout = 3 * time.Second
 
+// virtualThreshold is the number of rendered lines above which the viewer
+// switches to virtual-mode line count display and width-change-only re-rendering.
+const virtualThreshold = 500
+
+// virtualBuffer is the number of lines above/below the viewport pre-rendered in virtual mode.
+// Currently unused in display logic (slicing already handles this), but reserved for future use.
+const virtualBuffer = 50
+
 // clearErrorMsg is sent after the status timeout to clear the error display.
 type clearErrorMsg struct{}
 
@@ -59,6 +67,13 @@ type Viewer struct {
 
 	// Help overlay
 	helpOpen bool // true when the help overlay is visible
+
+	// Jump-to-line mode (activated by ':')
+	jumpMode  bool   // true when ':' has been pressed and a line number is being typed
+	jumpInput string // digits accumulated for the target line number
+
+	// Virtual rendering optimisation
+	virtualMode bool // true when len(Lines) > virtualThreshold
 }
 
 // New creates a new Viewer for the given document and file path.
@@ -93,6 +108,7 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) Viewer {
 		history:     h,
 		startDir:    startDir,
 		searchState: NewSearchState(),
+		virtualMode: len(lines) > virtualThreshold,
 	}
 }
 
@@ -110,14 +126,17 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		v.Height = msg.Height
-		v.Width = msg.Width
-		// Re-render with new width
-		r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels()
-		rendered := r.Render(v.Doc)
-		v.rawLines = strings.Split(rendered, "\n")
-		v.Lines = stripAllSentinels(v.rawLines)
-		v.rendered = strings.Join(v.Lines, "\n")
-		v.links = BuildRegistry(v.rawLines)
+		if msg.Width != v.Width {
+			v.Width = msg.Width
+			// Re-render with new width (skip when only height changes for performance).
+			r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels()
+			rendered := r.Render(v.Doc)
+			v.rawLines = strings.Split(rendered, "\n")
+			v.Lines = stripAllSentinels(v.rawLines)
+			v.rendered = strings.Join(v.Lines, "\n")
+			v.links = BuildRegistry(v.rawLines)
+			v.virtualMode = len(v.Lines) > virtualThreshold
+		}
 		// Clamp offset to new max
 		v.Offset = clamp(v.Offset, 0, v.maxOffset())
 
@@ -130,6 +149,11 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// When browser is open, route keys to browser handling
 		if v.browserOpen {
 			return v.updateBrowser(msg)
+		}
+
+		// When jump-to-line prompt is open, route all input to jump handling.
+		if v.jumpMode {
+			return v.updateJump(msg)
 		}
 
 		// When search input prompt is open, route all input to search handling.
@@ -219,6 +243,10 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.searchState.Prev()
 				v.scrollToMatch()
 			}
+
+		case ":":
+			v.jumpMode = true
+			v.jumpInput = ""
 		}
 
 	case tea.MouseMsg:
@@ -270,6 +298,36 @@ func (v Viewer) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(msg.Runes) > 0 {
 			v.searchInput += string(msg.Runes)
 		}
+	}
+	return v, nil
+}
+
+// updateJump handles keyboard input when the jump-to-line prompt is open.
+// Digit keys accumulate the target line number; Enter executes the jump;
+// Esc, ':', or any non-digit key cancels without jumping.
+func (v Viewer) updateJump(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	switch key {
+	case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		v.jumpInput += key
+	case "backspace":
+		if len(v.jumpInput) > 0 {
+			runes := []rune(v.jumpInput)
+			v.jumpInput = string(runes[:len(runes)-1])
+		}
+	case "enter":
+		if v.jumpInput != "" {
+			var lineNum int
+			if _, err := fmt.Sscanf(v.jumpInput, "%d", &lineNum); err == nil && lineNum > 0 {
+				v.Offset = clamp(lineNum-1, 0, v.maxOffset())
+			}
+		}
+		v.jumpMode = false
+		v.jumpInput = ""
+	default:
+		// esc, ':', or any other key: cancel without jumping
+		v.jumpMode = false
+		v.jumpInput = ""
 	}
 	return v, nil
 }
@@ -575,6 +633,15 @@ func (v Viewer) viewWithBrowser(contentHeight int) string {
 
 // renderStatusBar returns the 1-line status bar displayed at the bottom.
 func (v Viewer) renderStatusBar() string {
+	// Jump-to-line prompt: show typing prompt and return early (checked before searchMode).
+	if v.jumpMode {
+		bar := "Jump to line: " + v.jumpInput + "_"
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("226")).
+			Width(v.Width).
+			Render(bar)
+	}
+
 	// Search input prompt: show the typing prompt and return early.
 	if v.searchMode {
 		bar := "Search: " + v.searchInput + "_"
@@ -633,7 +700,20 @@ func (v Viewer) renderStatusBar() string {
 		middle = "\x1b[31m" + v.errorMsg + "\x1b[0m"
 	}
 
+	// Line counter: "Line N of M" for small docs, "Line N" for large docs.
+	totalLines := len(v.Lines)
+	currentLine := v.Offset + 1 // 1-based display
+	var lineInfo string
+	if totalLines <= virtualThreshold {
+		lineInfo = fmt.Sprintf("Line %d of %d", currentLine, totalLines)
+	} else {
+		lineInfo = fmt.Sprintf("Line %d", currentLine)
+	}
+
 	parts := []string{name}
+	if lineInfo != "" {
+		parts = append(parts, lineInfo)
+	}
 	if navHint != "" {
 		parts = append(parts, navHint)
 	}
@@ -680,6 +760,7 @@ func (v Viewer) loadFile(path string) (Viewer, tea.Cmd) {
 	v.Lines = stripAllSentinels(v.rawLines)
 	v.rendered = strings.Join(v.Lines, "\n")
 	v.links = BuildRegistry(v.rawLines)
+	v.virtualMode = len(v.Lines) > virtualThreshold
 
 	return v, nil
 }
@@ -713,6 +794,7 @@ func (v Viewer) loadFileNoHistory(path string) (Viewer, tea.Cmd) {
 	v.Lines = stripAllSentinels(v.rawLines)
 	v.rendered = strings.Join(v.Lines, "\n")
 	v.links = BuildRegistry(v.rawLines)
+	v.virtualMode = len(v.Lines) > virtualThreshold
 
 	return v, nil
 }
