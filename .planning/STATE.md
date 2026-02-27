@@ -10,25 +10,25 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 2 of 3 (Navigation & Search)
-Plan: 2 of 6 in current phase
+Plan: 4 of 6 in current phase
 Status: In Progress
-Last activity: 2026-02-27 — Plan 02-02 complete: TDD Nav History Stack + Path Security Resolver
+Last activity: 2026-02-27 — Plan 02-04 complete: TDD Search Matcher (FindMatches + StripANSI)
 
-Progress: [████░░░░░░] 44%
+Progress: [█████░░░░░] 56%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 5 min
-- Total execution time: 0.38 hours
+- Total plans completed: 6
+- Average duration: 4 min
+- Total execution time: 0.40 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-core-rendering | 3 | 21 min | 7 min |
-| 02-navigation-search | 2 | 2 min | 1 min |
+| 02-navigation-search | 4 | 3 min | 1 min |
 
 **Recent Trend:**
 - Last 5 plans: 8 min, 8 min, 5 min, 1 min, 1 min
@@ -62,6 +62,9 @@ Recent decisions affecting current work:
 - [02-02]: pos=-1 sentinel for empty History — enables entries[:pos+1] truncation to work cleanly on first Push
 - [02-02]: Trailing filepath.Separator appended to cleanStart in traversal check — prevents /docs matching /docs-extra
 - [02-02]: os.Lstat used (not Stat) so symlink detection works before the OS follows the link
+- [Phase 02-04]: Rune offsets chosen for PlainStart/PlainEnd in Match struct — Unicode-safe for terminal highlighting in Plan 05
+- [Phase 02-04]: ansiEscape regexp compiled once as package-level var — avoids per-call recompilation in search package
+- [Phase 02-04]: Non-overlapping match advances i by queryLen after match — correct standard search semantics
 
 ### Pending Todos
 
@@ -74,5 +77,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 02-01-PLAN.md — TUI Foundation (bubbletea Viewer, scrollable display, keyboard/quit)
+Stopped at: Completed 02-04-PLAN.md — Search Matcher (FindMatches + StripANSI, TDD, internal/search package)
 Resume file: None

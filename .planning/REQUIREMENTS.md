@@ -18,7 +18,7 @@
 ### Navigation & Search
 
 - [ ] **NAV-01**: Follow links to navigate between markdown files
-- [ ] **NAV-02**: Search within rendered content
+- [x] **NAV-02**: Search within rendered content
 - [ ] **NAV-03**: Return to previous file (back button/history) — History logic complete (02-02)
 
 ### Core UX
@@ -56,7 +56,7 @@
 | REND-06 | Phase 1 | Complete (01-02) |
 | REND-07 | Phase 1 | Complete (01-03 gap closure — alignment extraction) |
 | NAV-01 | Phase 2 | In Progress — path resolver logic done (02-02), TUI wiring pending (02-03) |
-| NAV-02 | Phase 2 | Pending |
+| NAV-02 | Phase 2 | Complete |
 | NAV-03 | Phase 2 | In Progress — History stack logic done (02-02), TUI wiring pending (02-03) |
 | UX-01 | Phase 3 | Pending |
 | UX-02 | Phase 3 | Pending |
