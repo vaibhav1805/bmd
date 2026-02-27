@@ -46,6 +46,12 @@ type Viewer struct {
 	// Status bar
 	errorMsg string // displayed in status bar; cleared after statusTimeout
 
+	// Search state
+	// Ctrl+F = search (not forward nav; forward nav uses Ctrl+Right/Alt+Right per design decision)
+	searchState SearchState // committed search state (matches, current index)
+	searchInput string      // query being typed (before Enter commits it)
+	searchMode  bool        // true when Ctrl+F was pressed and the input prompt is open
+
 	// File browser panel
 	browserOpen  bool
 	browserFiles []string // sorted .md file paths in startDir tree
@@ -71,18 +77,19 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) Viewer {
 	reg := BuildRegistry(rawLines)
 
 	return Viewer{
-		Doc:      doc,
-		rendered: strings.Join(lines, "\n"),
-		rawLines: rawLines,
-		Lines:    lines,
-		Offset:   0,
-		Height:   24, // default height; updated by WindowSizeMsg
-		Width:    width,
-		Theme:    th,
-		FilePath: absPath,
-		links:    reg,
-		history:  h,
-		startDir: startDir,
+		Doc:         doc,
+		rendered:    strings.Join(lines, "\n"),
+		rawLines:    rawLines,
+		Lines:       lines,
+		Offset:      0,
+		Height:      24, // default height; updated by WindowSizeMsg
+		Width:       width,
+		Theme:       th,
+		FilePath:    absPath,
+		links:       reg,
+		history:     h,
+		startDir:    startDir,
+		searchState: NewSearchState(),
 	}
 }
 
@@ -115,6 +122,11 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// When browser is open, route keys to browser handling
 		if v.browserOpen {
 			return v.updateBrowser(msg)
+		}
+
+		// When search input prompt is open, route all input to search handling.
+		if v.searchMode {
+			return v.updateSearch(msg)
 		}
 
 		switch msg.String() {
@@ -171,6 +183,30 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.browserOpen = true
 			v.browserFiles = scanMdFiles(v.startDir)
 			v.browserSel = 0
+
+		// Ctrl+F = search (not forward nav; forward nav uses Ctrl+Right/Alt+Right per design decision)
+		// "/" is a vim-style shortcut that also opens search.
+		case "ctrl+f", "/":
+			if v.searchState.Active {
+				// Toggle off: clear search state and highlights.
+				v.searchState = NewSearchState()
+			}
+			// Open the search input prompt.
+			v.searchMode = true
+			v.searchInput = ""
+
+		// n / N: jump to next/previous match when a search is active.
+		case "n":
+			if v.searchState.Active && len(v.searchState.Matches) > 0 {
+				v.searchState.Next()
+				v.scrollToMatch()
+			}
+
+		case "N":
+			if v.searchState.Active && len(v.searchState.Matches) > 0 {
+				v.searchState.Prev()
+				v.scrollToMatch()
+			}
 		}
 
 	case tea.MouseMsg:
@@ -189,6 +225,60 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return v, nil
+}
+
+// updateSearch handles keyboard input when the search prompt is open.
+// Printable characters are appended to searchInput; Enter commits the search;
+// Esc or Ctrl+F cancel/close the prompt.
+func (v Viewer) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	switch key {
+	case "enter":
+		// Commit the search: run FindMatches and close the prompt.
+		v.searchState.Query = v.searchInput
+		v.searchState.Run(v.Lines)
+		v.searchMode = false
+		// Scroll to the first match if one was found.
+		v.scrollToMatch()
+
+	case "esc", "ctrl+f":
+		// Cancel search: clear everything and close the prompt.
+		v.searchInput = ""
+		v.searchState = NewSearchState()
+		v.searchMode = false
+
+	case "backspace":
+		if len(v.searchInput) > 0 {
+			runes := []rune(v.searchInput)
+			v.searchInput = string(runes[:len(runes)-1])
+		}
+
+	default:
+		// Only append printable single characters (avoid special key names).
+		if len(msg.Runes) > 0 {
+			v.searchInput += string(msg.Runes)
+		}
+	}
+	return v, nil
+}
+
+// scrollToMatch scrolls the viewer so that the current match's line is visible.
+// If the match is above the viewport, scrolls up to it.
+// If the match is below the viewport, centers the viewport on it.
+func (v *Viewer) scrollToMatch() {
+	m, ok := v.searchState.CurrentMatch()
+	if !ok {
+		return
+	}
+	lineIdx := m.LineIndex
+	if lineIdx < v.Offset {
+		v.Offset = lineIdx
+	} else if lineIdx >= v.Offset+v.Height-1 {
+		v.Offset = lineIdx - v.Height/2
+		if v.Offset < 0 {
+			v.Offset = 0
+		}
+	}
 }
 
 // updateBrowser handles keyboard input when the file browser panel is open.
@@ -241,7 +331,13 @@ func (v Viewer) View() string {
 		end = len(v.Lines)
 	}
 
-	visible := v.Lines[v.Offset:end]
+	// Apply search highlights to display lines if a search is active.
+	displayLines := v.Lines
+	if v.searchState.Active && len(v.searchState.Matches) > 0 {
+		displayLines = ApplyHighlights(v.Lines, v.searchState, v.Theme)
+	}
+
+	visible := displayLines[v.Offset:end]
 	for i, line := range visible {
 		docLine := v.Offset + i
 		if docLine == focusedLine {
@@ -329,8 +425,34 @@ func (v Viewer) viewWithBrowser(contentHeight int) string {
 
 // renderStatusBar returns the 1-line status bar displayed at the bottom.
 func (v Viewer) renderStatusBar() string {
+	// Search input prompt: show the typing prompt and return early.
+	if v.searchMode {
+		bar := "Search: " + v.searchInput + "_"
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("226")).
+			Width(v.Width).
+			Render(bar)
+	}
+
 	// File name (relative if possible)
 	name := filepath.Base(v.FilePath)
+
+	// If search is active with results, show match counter.
+	if v.searchState.Active {
+		var matchInfo string
+		if len(v.searchState.Matches) > 0 && v.searchState.Current >= 0 {
+			matchInfo = fmt.Sprintf("Match %d of %d", v.searchState.Current+1, len(v.searchState.Matches))
+		} else if v.searchState.Query != "" {
+			matchInfo = fmt.Sprintf("No matches for %q", v.searchState.Query)
+		}
+		if matchInfo != "" {
+			bar := matchInfo + "  |  " + name
+			return lipgloss.NewStyle().
+				Foreground(lipgloss.Color("244")).
+				Width(v.Width).
+				Render(bar)
+		}
+	}
 
 	// Navigation hints
 	var navHint string
@@ -368,6 +490,8 @@ func (v Viewer) renderStatusBar() string {
 	if middle != "" {
 		parts = append(parts, middle)
 	}
+	// Always include search hint in default status bar
+	parts = append(parts, "/ search")
 
 	bar := strings.Join(parts, "  |  ")
 
@@ -395,6 +519,10 @@ func (v Viewer) loadFile(path string) (Viewer, tea.Cmd) {
 	v.Doc = doc
 	v.links.Clear()
 	v.Offset = 0
+	// Clear search state when navigating to a new file.
+	v.searchState = NewSearchState()
+	v.searchMode = false
+	v.searchInput = ""
 
 	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels()
 	rendered := r.Render(doc)
@@ -424,6 +552,10 @@ func (v Viewer) loadFileNoHistory(path string) (Viewer, tea.Cmd) {
 	v.Doc = doc
 	v.links.Clear()
 	v.Offset = 0
+	// Clear search state when navigating to a new file.
+	v.searchState = NewSearchState()
+	v.searchMode = false
+	v.searchInput = ""
 
 	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels()
 	rendered := r.Render(doc)
