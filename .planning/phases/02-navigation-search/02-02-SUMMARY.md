@@ -103,3 +103,15 @@ None - no external service configuration required.
 ---
 *Phase: 02-navigation-search*
 *Completed: 2026-02-26*
+
+## Self-Check: PASSED
+
+- FOUND: internal/nav/history.go
+- FOUND: internal/nav/history_test.go
+- FOUND: internal/nav/pathresolver.go
+- FOUND: internal/nav/pathresolver_test.go
+- FOUND: .planning/phases/02-navigation-search/02-02-SUMMARY.md
+- FOUND: commit cba3349 (RED: failing tests)
+- FOUND: commit d746921 (GREEN: implementation)
+- FOUND: commit 25a8dda (docs: plan metadata)
+- All 20 tests pass: `go test ./internal/nav/... -v`

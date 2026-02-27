@@ -55,9 +55,9 @@
 | REND-05 | Phase 1 | Complete (01-02) |
 | REND-06 | Phase 1 | Complete (01-02) |
 | REND-07 | Phase 1 | Complete (01-03 gap closure — alignment extraction) |
-| NAV-01 | Phase 2 | In Progress — path resolver logic done (02-02), TUI wiring pending (02-03) |
-| NAV-02 | Phase 2 | Complete |
-| NAV-03 | Phase 2 | In Progress — History stack logic done (02-02), TUI wiring pending (02-03) |
+| NAV-01 | Phase 2 | Complete (02-03 — link registry, Tab/follow, file browser) |
+| NAV-02 | Phase 2 | Complete (02-05 — Ctrl+F search, highlights, n/N navigation) |
+| NAV-03 | Phase 2 | Complete (02-03 — history wiring with Back/Forward) |
 | UX-01 | Phase 3 | Pending |
 | UX-02 | Phase 3 | Pending |
 | UX-03 | Phase 3 | Pending |

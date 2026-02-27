@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 2 of 3 (Navigation & Search)
-Plan: 4 of 6 in current phase
+Plan: 5 of 6 in current phase
 Status: In Progress
-Last activity: 2026-02-27 — Plan 02-04 complete: TDD Search Matcher (FindMatches + StripANSI)
+Last activity: 2026-02-27 — Plan 02-05 complete: Ctrl+F Search with Match Highlighting and n/N Navigation
 
-Progress: [█████░░░░░] 56%
+Progress: [██████░░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 7
 - Average duration: 4 min
-- Total execution time: 0.40 hours
+- Total execution time: 0.45 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-core-rendering | 3 | 21 min | 7 min |
-| 02-navigation-search | 4 | 3 min | 1 min |
+| 02-navigation-search | 5 | 6 min | 1 min |
 
 **Recent Trend:**
-- Last 5 plans: 8 min, 8 min, 5 min, 1 min, 1 min
+- Last 5 plans: 8 min, 5 min, 1 min, 1 min, 3 min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -70,6 +70,10 @@ Recent decisions affecting current work:
 - [Phase 02-04]: Rune offsets chosen for PlainStart/PlainEnd in Match struct — Unicode-safe for terminal highlighting in Plan 05
 - [Phase 02-04]: ansiEscape regexp compiled once as package-level var — avoids per-call recompilation in search package
 - [Phase 02-04]: Non-overlapping match advances i by queryLen after match — correct standard search semantics
+- [02-05]: ApplyHighlights strips ANSI then injects plain-text highlights — original styling lost on matched lines, acceptable Phase 2 tradeoff
+- [02-05]: Search highlight colors hardcoded (not in Theme): SearchMatchBg=226 yellow, SearchCurrentBg=214 orange — functional UI state not document style
+- [02-05]: Search state cleared on file navigation (loadFile/loadFileNoHistory) — prevents stale match indices across documents
+- [02-05]: "/" added as vim-style search shortcut alongside Ctrl+F
 
 ### Pending Todos
 
@@ -82,5 +86,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 02-03-PLAN.md — Link Navigation, History, and File Browser in TUI Viewer
+Stopped at: Completed 02-05-PLAN.md — Ctrl+F Search with Match Highlighting and n/N Navigation
 Resume file: None
