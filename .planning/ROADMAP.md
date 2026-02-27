@@ -13,7 +13,7 @@ Three phases deliver a beautiful, navigable markdown viewer for the terminal. Ph
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Core Rendering** - Render all markdown elements beautifully in the terminal
-- [ ] **Phase 2: Navigation & Search** - Move between files and find content within them
+- [x] **Phase 2: Navigation & Search** - Move between files and find content within them
 - [ ] **Phase 3: Polish & UX** - Headers, keyboard hints, scrolling — tool feels complete
 
 ## Phase Details
@@ -39,7 +39,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. User clicks/selects a link to another `.md` file and that file renders in place
   2. User can search for a term and matching text is highlighted in the rendered output
   3. User can navigate back to the previously viewed file
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans executed
 
 Plans:
 - [x] 02-01-PLAN.md — TUI foundation: bubbletea viewer, scrollable display, keyboard/quit
@@ -47,7 +47,7 @@ Plans:
 - [x] 02-03-PLAN.md — Link navigation: link registry, Tab/mouse/follow, history wiring, file browser
 - [x] 02-04-PLAN.md — TDD: search matcher (FindMatches, StripANSI, case-insensitive)
 - [x] 02-05-PLAN.md — Search UI: Ctrl+F prompt, all-match highlighting, n/N jump, match counter
-- [ ] 02-06-PLAN.md — Human verification checkpoint: all NAV-01, NAV-02, NAV-03 checks
+- [x] 02-06-PLAN.md — Human verification checkpoint: all NAV-01, NAV-02, NAV-03 checks
 
 ### Phase 3: Polish & UX
 **Goal**: Users understand what the tool can do immediately and can comfortably read any-length document
@@ -67,5 +67,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Rendering | 3/3 | Complete    | 2026-02-26 |
-| 2. Navigation & Search | 5/6 | In Progress|  |
+| 2. Navigation & Search | 6/6 | Complete   | 2026-02-27 |
 | 3. Polish & UX | 0/? | Not started | - |
