@@ -473,8 +473,13 @@ func (v Viewer) renderHelp() string {
 		line(padRight("  n / N         Next / prev match", boxWidth)),
 		line(padRight("  Esc           Close search", boxWidth)),
 		sectionSep(),
+		line(padRight(" Mouse & Copy", boxWidth)),
+		line(padRight("  Click         Move cursor / follow link", boxWidth)),
+		line(padRight("  Ctrl+C        Copy line at cursor", boxWidth)),
+		sectionSep(),
 		line(padRight("  ? / h         Toggle this help", boxWidth)),
-		line(padRight("  q / Ctrl+C    Quit", boxWidth)),
+		line(padRight("  q             Quit", boxWidth)),
+		line(padRight("  Ctrl+C        Copy (cursor set) / Quit", boxWidth)),
 		footer,
 	}
 
@@ -770,6 +775,10 @@ func (v Viewer) renderStatusBar() string {
 	}
 	// Always include search hint in default status bar
 	parts = append(parts, "/ search")
+	// Show copy hint when a cursor is committed
+	if v.hasCursor {
+		parts = append(parts, "Ctrl+C copy")
+	}
 
 	bar := strings.Join(parts, "  |  ")
 
