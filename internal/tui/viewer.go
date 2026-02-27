@@ -573,8 +573,18 @@ func (v Viewer) View() string {
 		docLine := v.Offset + i
 		if docLine == focusedLine {
 			// Apply reverse video to the focused line so the link stands out.
+			// Link focus takes priority over other cursor indicators.
 			sb.WriteString("\x1b[7m" + line + "\x1b[m")
+		} else if v.hasCursor && docLine == v.cursorRow {
+			// Committed cursor (MOUSE-02): underline the clicked line.
+			sb.WriteString("\x1b[4m" + line + "\x1b[m")
 		} else {
+			// Mouse hover cursor (MOUSE-01): reverse-video the character at mouse position.
+			// v.mouseRow is 0-based screen row; Y=0 is header, Y=1 is first content row.
+			// So content index i corresponds to screen row i+1.
+			if v.mouseRow == i+1 {
+				line = insertCursorAt(line, v.mouseCol)
+			}
 			sb.WriteString(line)
 		}
 		sb.WriteString("\n")
@@ -916,4 +926,21 @@ func clamp(val, min, max int) int {
 		return max
 	}
 	return val
+}
+
+// insertCursorAt injects a reverse-video ANSI sequence around the rune at
+// byte column col in line. This is an approximation — ANSI escape sequences
+// embedded in the line will shift byte offsets, but it is acceptable for
+// Phase 4 mouse cursor display.
+func insertCursorAt(line string, col int) string {
+	runes := []rune(line)
+	if col >= len(runes) {
+		// Column past end of line: append a cursor block as a space.
+		return line + "\x1b[7m \x1b[m"
+	}
+	// Reconstruct: everything before col, reverse-video char, reset, rest.
+	before := string(runes[:col])
+	char := string(runes[col : col+1])
+	after := string(runes[col+1:])
+	return before + "\x1b[7m" + char + "\x1b[m" + after
 }
