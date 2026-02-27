@@ -62,6 +62,11 @@ Recent decisions affecting current work:
 - [02-02]: pos=-1 sentinel for empty History — enables entries[:pos+1] truncation to work cleanly on first Push
 - [02-02]: Trailing filepath.Separator appended to cleanStart in traversal check — prevents /docs matching /docs-extra
 - [02-02]: os.Lstat used (not Stat) so symlink detection works before the OS follows the link
+- [02-03]: Sentinel approach \x00LINK:url\x00...\x00/LINK\x00 used for link position mapping — avoids AST changes, strips cleanly before display
+- [02-03]: emitLinkSentinels=false by default on Renderer — existing tests unaffected; Viewer uses WithLinkSentinels()
+- [02-03]: Ctrl+Right/Alt+Right for forward navigation — Ctrl+F reserved for search (Plan 05)
+- [02-03]: loadFileNoHistory variant for Back/Forward — history.Back/Forward already moves pointer; loadFile must not double-push
+- [02-03]: Reverse video (\x1b[7m) for focused link highlight — terminal-agnostic, no new color entry needed
 - [Phase 02-04]: Rune offsets chosen for PlainStart/PlainEnd in Match struct — Unicode-safe for terminal highlighting in Plan 05
 - [Phase 02-04]: ansiEscape regexp compiled once as package-level var — avoids per-call recompilation in search package
 - [Phase 02-04]: Non-overlapping match advances i by queryLen after match — correct standard search semantics
@@ -77,5 +82,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 02-04-PLAN.md — Search Matcher (FindMatches + StripANSI, TDD, internal/search package)
+Stopped at: Completed 02-03-PLAN.md — Link Navigation, History, and File Browser in TUI Viewer
 Resume file: None

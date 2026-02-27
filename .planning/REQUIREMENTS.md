@@ -17,9 +17,9 @@
 
 ### Navigation & Search
 
-- [ ] **NAV-01**: Follow links to navigate between markdown files
+- [x] **NAV-01**: Follow links to navigate between markdown files
 - [x] **NAV-02**: Search within rendered content
-- [ ] **NAV-03**: Return to previous file (back button/history) — History logic complete (02-02)
+- [x] **NAV-03**: Return to previous file (back button/history) — History logic complete (02-02)
 
 ### Core UX
 

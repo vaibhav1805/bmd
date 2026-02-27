@@ -39,7 +39,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. User clicks/selects a link to another `.md` file and that file renders in place
   2. User can search for a term and matching text is highlighted in the rendered output
   3. User can navigate back to the previously viewed file
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 - [x] 02-01-PLAN.md — TUI foundation: bubbletea viewer, scrollable display, keyboard/quit
@@ -67,5 +67,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Rendering | 3/3 | Complete    | 2026-02-26 |
-| 2. Navigation & Search | 3/6 | In Progress|  |
+| 2. Navigation & Search | 4/6 | In Progress|  |
 | 3. Polish & UX | 0/? | Not started | - |
