@@ -56,6 +56,9 @@ type Viewer struct {
 	browserOpen  bool
 	browserFiles []string // sorted .md file paths in startDir tree
 	browserSel   int      // currently selected index in browser list
+
+	// Help overlay
+	helpOpen bool // true when the help overlay is visible
 }
 
 // New creates a new Viewer for the given document and file path.
@@ -119,6 +122,11 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.Offset = clamp(v.Offset, 0, v.maxOffset())
 
 	case tea.KeyMsg:
+		// When help overlay is open, route all input to help handling.
+		if v.helpOpen {
+			return v.updateHelp(msg)
+		}
+
 		// When browser is open, route keys to browser handling
 		if v.browserOpen {
 			return v.updateBrowser(msg)
@@ -130,6 +138,10 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch msg.String() {
+		case "?", "h":
+			v.helpOpen = !v.helpOpen
+			return v, nil
+
 		case "q", "ctrl+c":
 			return v, tea.Quit
 
@@ -308,6 +320,93 @@ func (v Viewer) updateBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return v, nil
 }
 
+// updateHelp handles keyboard input when the help overlay is open.
+// Pressing esc, q, ?, or h closes the overlay. All other keys are absorbed.
+func (v Viewer) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q", "?", "h":
+		v.helpOpen = false
+	}
+	return v, nil
+}
+
+// renderHelp returns a centered box overlay with grouped keyboard shortcuts.
+// The overlay replaces the full view while helpOpen is true.
+func (v Viewer) renderHelp() string {
+	const boxWidth = 43 // inner content width
+	border := lipgloss.Color("244")
+	text := lipgloss.Color("252")
+	borderStyle := lipgloss.NewStyle().Foreground(border)
+	textStyle := lipgloss.NewStyle().Foreground(text)
+
+	line := func(content string) string {
+		return borderStyle.Render("│") + textStyle.Render(content) + borderStyle.Render("│")
+	}
+	sectionSep := func() string {
+		return borderStyle.Render("├" + strings.Repeat("─", boxWidth) + "┤")
+	}
+	header := borderStyle.Render("┌" + strings.Repeat("─", boxWidth) + "┐")
+	footer := borderStyle.Render("└" + strings.Repeat("─", boxWidth) + "┘")
+
+	padRight := func(s string, width int) string {
+		runeLen := len([]rune(s))
+		if runeLen >= width {
+			return s
+		}
+		return s + strings.Repeat(" ", width-runeLen)
+	}
+
+	lines := []string{
+		header,
+		line(padRight("         Keyboard Shortcuts", boxWidth)),
+		sectionSep(),
+		line(padRight(" Scrolling", boxWidth)),
+		line(padRight("  ↑/k ↓/j       Scroll up / down", boxWidth)),
+		line(padRight("  PgUp/PgDn     Page up / down", boxWidth)),
+		line(padRight("  g/Home G/End  Jump to top / bottom", boxWidth)),
+		sectionSep(),
+		line(padRight(" Navigation", boxWidth)),
+		line(padRight("  Tab/Shift+Tab Focus next/prev link", boxWidth)),
+		line(padRight("  l / Enter     Follow focused link", boxWidth)),
+		line(padRight("  Ctrl+B        Back in history", boxWidth)),
+		line(padRight("  Alt+Right     Forward in history", boxWidth)),
+		line(padRight("  b             File browser", boxWidth)),
+		sectionSep(),
+		line(padRight(" Search", boxWidth)),
+		line(padRight("  Ctrl+F / /    Open search", boxWidth)),
+		line(padRight("  n / N         Next / prev match", boxWidth)),
+		line(padRight("  Esc           Close search", boxWidth)),
+		sectionSep(),
+		line(padRight("  ? / h         Toggle this help", boxWidth)),
+		line(padRight("  q / Ctrl+C    Quit", boxWidth)),
+		footer,
+	}
+
+	// Center the box horizontally.
+	totalBoxWidth := boxWidth + 2 // +2 for the border chars
+	leftPad := (v.Width - totalBoxWidth) / 2
+	if leftPad < 0 {
+		leftPad = 0
+	}
+	prefix := strings.Repeat(" ", leftPad)
+
+	// Center vertically: place the box in the middle of the terminal.
+	totalLines := len(lines)
+	topPad := (v.Height - totalLines) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+
+	var sb strings.Builder
+	for i := 0; i < topPad; i++ {
+		sb.WriteString("\n")
+	}
+	for _, l := range lines {
+		sb.WriteString(prefix + l + "\n")
+	}
+	return sb.String()
+}
+
 // renderHeader returns a compact single-line header bar showing the current
 // filename, parent folder, and context-sensitive right-side info (search
 // state, navigation back indicator, or error message).
@@ -352,6 +451,11 @@ func (v Viewer) renderHeader() string {
 
 // View renders the visible portion of the document for display.
 func (v Viewer) View() string {
+	// If the help overlay is open, render it as the full view.
+	if v.helpOpen {
+		return v.renderHelp()
+	}
+
 	// Reserve 1 line at top for header and 1 line at bottom for status bar.
 	contentHeight := v.Height - 2 // header + status bar
 
