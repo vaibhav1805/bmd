@@ -72,6 +72,13 @@ type Viewer struct {
 	jumpMode  bool   // true when ':' has been pressed and a line number is being typed
 	jumpInput string // digits accumulated for the target line number
 
+	// Mouse cursor state
+	mouseRow  int  // current mouse Y position (0-based, screen row)
+	mouseCol  int  // current mouse X position (0-based, screen col)
+	hasCursor bool // true once the user has clicked to commit a cursor position
+	cursorRow int  // committed cursor row (document line index, 0-based)
+	cursorCol int  // committed cursor column (0-based)
+
 	// Virtual rendering optimisation
 	virtualMode bool // true when len(Lines) > virtualThreshold
 }
@@ -250,16 +257,32 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			// Determine the line number in the document the user clicked
-			clickLine := msg.Y + v.Offset
-			// Reserve the last line for status bar — don't try to follow there
-			if clickLine < len(v.Lines)-1 {
+		switch msg.Action {
+		case tea.MouseActionMotion:
+			// Track mouse position for hover cursor rendering (MOUSE-01).
+			v.mouseRow = msg.Y
+			v.mouseCol = msg.X
+			return v, nil
+
+		case tea.MouseActionPress:
+			if msg.Button == tea.MouseButtonLeft {
+				// Ignore clicks on header (Y=0) or status bar (Y >= Height-1).
+				if msg.Y == 0 || msg.Y >= v.Height-1 {
+					return v, nil
+				}
+				// Y=1 is the first content row; subtract 1 for header offset.
+				clickLine := msg.Y - 1 + v.Offset
+				// Check if any link is registered at this line.
 				for _, entry := range v.links.Links {
 					if entry.LineIndex == clickLine {
 						return v.followLink(entry.URL)
 					}
 				}
+				// No link at this line — commit cursor position (MOUSE-02).
+				v.hasCursor = true
+				v.cursorRow = clickLine
+				v.cursorCol = msg.X
+				return v, nil
 			}
 		}
 	}
