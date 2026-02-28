@@ -45,6 +45,12 @@ The e-commerce platform uses a microservices architecture with asynchronous even
 | Inventory Service | Stock management | Real-time updates | Product |
 | Notification Service | Communications | Email/SMS providers | Order, User |
 
+## System Diagram
+
+![Service Architecture](./architecture-diagram.png)
+
+![Request Flow](./flow-diagram.png)
+
 ## Communication Patterns
 
 ### Synchronous (REST)
@@ -54,6 +60,8 @@ The e-commerce platform uses a microservices architecture with asynchronous even
 - **API Gateway → Product Catalog** — Browse products
 - **Order Service → Product Catalog** — Get product details
 - **Order Service → User Service** — Get customer info
+
+The entire system communicates through REST APIs defined in rest-api standards. The api-gateway depends on all downstream services and calls user-service, order-service, and product-catalog for request routing. Order Service requires integration with payment-processor, which in turn communicates with notification-service. All services integrate with inventory-service for stock management.
 
 ### Asynchronous (Events)
 

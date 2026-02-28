@@ -105,6 +105,8 @@ k6 run -u 100 -d 5m load-test.js
 
 ## Kubernetes Deployment
 
+![Deployment Topology](../deployment-diagram.png)
+
 ### Namespace Setup
 
 ```bash
@@ -321,6 +323,10 @@ Before deploying to production:
 - [ ] Team notified of deployment window
 - [ ] Rollback plan documented
 - [ ] Monitoring alerts configured
+
+## Service Dependencies
+
+Each microservice depends on proper Kubernetes infrastructure for deployment. Order Service requires payment-processor to be running and integrates with notification-service for status updates. The api-gateway calls all downstream services (user-service, order-service, product-catalog, inventory-service) and requires careful health check configuration to ensure availability.
 
 ## See Also
 

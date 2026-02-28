@@ -17,6 +17,10 @@ The API Gateway is the single entry point for all client requests to the e-comme
 5. Log all requests for audit trail
 6. Return standardized error responses
 
+## Critical Dependencies
+
+The API Gateway depends on user-service for all authentication operations. Every incoming request requires a valid JWT token issued by user-service. Additionally, the gateway integrates with order-service for order management, calls product-catalog for product information retrieval, and calls inventory-service for stock checking operations.
+
 ## Architecture
 
 ```
@@ -51,6 +55,29 @@ The API Gateway is the single entry point for all client requests to the e-comme
    │  └──────────────────┘
    v
    [Other Services]
+```
+
+## Implementation
+
+The API Gateway imports and depends on multiple downstream services:
+
+```go
+package main
+
+import (
+    "github.com/ecommerce/user-service"
+    "github.com/ecommerce/order-service"
+    "github.com/ecommerce/inventory-service"
+    "github.com/gorilla/mux"
+    "net/http"
+)
+
+func init() {
+    // Initialize service clients
+    userService.Connect()
+    orderService.Connect()
+    inventoryService.Connect()
+}
 ```
 
 ## API Endpoints

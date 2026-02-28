@@ -226,6 +226,46 @@ When limit exceeded (429):
 }
 ```
 
+## Client Implementation Examples
+
+### JavaScript/Node.js Client
+
+```javascript
+const axios = require('axios');
+
+// Import service clients that depend on this API
+const userServiceClient = require('../services/user-service-client');
+const orderServiceClient = require('../services/order-service-client');
+const productClient = require('../services/product-client');
+
+const apiClient = axios.create({
+    baseURL: 'http://localhost:8000/api/v1',
+    headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.API_TOKEN}`
+    }
+});
+```
+
+### Python Client
+
+```python
+from requests import Session
+from services.user_service import UserServiceClient
+from services.order_service import OrderServiceClient
+
+class APIGatewayClient:
+    def __init__(self, base_url, token):
+        self.session = Session()
+        self.session.headers.update({
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        })
+        self.base_url = base_url
+        self.user_client = UserServiceClient()
+        self.order_client = OrderServiceClient()
+```
+
 ## Idempotency
 
 For safe retries, provide `X-Idempotency-Key` header on POST/PUT:
@@ -249,6 +289,10 @@ Origin: https://example.com
 ```
 
 Allowed origins configured per service.
+
+## Service Integration
+
+All microservices in the platform require this REST API standard. The API Gateway depends on api-gateway standards for routing requests to user-service, order-service, and product-catalog. Services integrate with api-gateway and use rest-api conventions for all communication. This ensures consistency and interoperability across the entire platform.
 
 ## See Also
 

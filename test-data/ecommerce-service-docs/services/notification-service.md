@@ -4,6 +4,8 @@
 
 The Notification Service handles all customer communications including order confirmations, shipment notifications, and promotional emails. It supports multiple channels: email, SMS, and push notifications.
 
+The Notification Service depends on order-service for order event triggers and requires user-service to fetch user communication preferences. It integrates with sendgrid-service for email delivery, twilio-service for SMS, and firebase-service for push notifications. The service calls these external providers for all message delivery.
+
 **Repository:** `github.com/ecommerce/notification-service`
 **Language:** Python/Celery
 **Port:** 9004

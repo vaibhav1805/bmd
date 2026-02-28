@@ -4,6 +4,8 @@
 
 The Order Service manages the complete order lifecycle from creation through fulfillment. It coordinates with [Product Catalog](product-catalog.md), [Payment Processor](payment-processor.md), and [Inventory Service](inventory-service.md).
 
+The Order Service requires user-service to validate customer information and depends on payment-processor for all payment processing. It calls inventory-service to reserve stock and calls notification-service to send order confirmations. The service calls product-catalog to look up product details.
+
 **Repository:** `github.com/ecommerce/order-service`
 **Language:** Java/Spring Boot
 **Port:** 9001
@@ -142,6 +144,38 @@ Response (200):
     "amount": 2929.97,
     "status": "processing"
   }
+}
+```
+
+## Service Implementation
+
+Order Service imports and integrates with Payment Processor and Inventory Service:
+
+```java
+import com.ecommerce.payment.client.PaymentServiceClient;
+import com.ecommerce.inventory.client.InventoryServiceClient;
+import com.ecommerce.product.client.ProductCatalogClient;
+import com.ecommerce.notification.client.NotificationServiceClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+@Service
+public class OrderService {
+    @Autowired
+    private PaymentServiceClient paymentClient;
+
+    @Autowired
+    private InventoryServiceClient inventoryClient;
+
+    @Autowired
+    private ProductCatalogClient productClient;
+
+    @Autowired
+    private NotificationServiceClient notificationClient;
+
+    public void createOrder(Order order) {
+        // Service calls other microservices
+    }
 }
 ```
 

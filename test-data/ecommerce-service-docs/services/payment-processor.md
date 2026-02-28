@@ -4,6 +4,8 @@
 
 The Payment Processor Service handles payment processing, refunds, and payment method management. It integrates with external payment gateways (Stripe, PayPal) and maintains PCI compliance.
 
+The Payment Processor depends on order-service for order context and calls notification-service to alert customers of payment status. It requires secure integration with external payment gateways and calls stripe-gateway and paypal-gateway for transaction processing.
+
 **Repository:** `github.com/ecommerce/payment-processor`
 **Language:** Go
 **Port:** 9002
@@ -17,6 +19,28 @@ The Payment Processor Service handles payment processing, refunds, and payment m
 - PCI compliance and encryption
 - Webhook handling for payment confirmations
 - Transaction audit logging
+
+## Implementation
+
+The Payment Processor service integrates with external payment gateways and event systems:
+
+```go
+package main
+
+import (
+    "github.com/stripe/stripe-go"
+    "github.com/ecommerce/order-service"
+    "github.com/ecommerce/notification-service"
+    "database/sql"
+    _ "github.com/lib/pq"
+)
+
+func init() {
+    stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
+    orderService.Connect()
+    notificationService.Connect()
+}
+```
 
 ## API Endpoints
 
