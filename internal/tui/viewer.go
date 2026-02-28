@@ -522,10 +522,61 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// MouseWheelUp and MouseWheelDown are deprecated types but still work.
 		scrollLines := 3
 		if msg.Type == tea.MouseWheelUp {
-			v.Offset = clamp(v.Offset-scrollLines, 0, v.maxOffset())
+			if v.editMode {
+				// Scroll up in edit mode
+				if v.Offset > scrollLines {
+					v.Offset -= scrollLines
+				} else {
+					v.Offset = 0
+				}
+			} else {
+				v.Offset = clamp(v.Offset-scrollLines, 0, v.maxOffset())
+			}
 			return v, nil
 		} else if msg.Type == tea.MouseWheelDown {
-			v.Offset = clamp(v.Offset+scrollLines, 0, v.maxOffset())
+			if v.editMode {
+				// Scroll down in edit mode
+				lines := v.editBuffer.GetLines()
+				pageSize := v.Height - 2
+				if v.Offset+pageSize < len(lines) {
+					v.Offset += scrollLines
+				} else {
+					v.Offset = max(0, len(lines)-pageSize)
+				}
+			} else {
+				v.Offset = clamp(v.Offset+scrollLines, 0, v.maxOffset())
+			}
+			return v, nil
+		}
+
+		// Handle clicks in edit mode
+		if v.editMode {
+			switch msg.Action {
+			case tea.MouseActionPress:
+				if msg.Button == tea.MouseButtonLeft {
+					// Ignore clicks on header (Y=0) or status bar (Y >= Height-1).
+					if msg.Y == 0 || msg.Y >= v.Height-1 {
+						return v, nil
+					}
+					// Y=1 is the first content row; subtract 1 for header offset.
+					clickLine := msg.Y - 1 + v.Offset
+					lines := v.editBuffer.GetLines()
+					if clickLine >= 0 && clickLine < len(lines) {
+						// Move cursor to the clicked line
+						v.editBuffer.SetCursorLine(clickLine)
+						// Move cursor to approximate column position in the line
+						line := lines[clickLine]
+						col := msg.X
+						// Clamp column to line length (in runes, not bytes)
+						runeCount := len([]rune(line))
+						if col > runeCount {
+							col = runeCount
+						}
+						v.editBuffer.SetCursorCol(col)
+					}
+					return v, nil
+				}
+			}
 			return v, nil
 		}
 

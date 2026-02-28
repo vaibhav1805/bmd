@@ -280,6 +280,22 @@ func (tb *TextBuffer) JumpToLine(lineNum int) {
 	}
 }
 
+// SetCursorLine sets the cursor to a specific line (0-based).
+// Clamps the column to valid range for the new line.
+func (tb *TextBuffer) SetCursorLine(lineNum int) {
+	if lineNum >= 0 && lineNum < len(tb.lines) {
+		tb.cursorLine = lineNum
+		tb.clampCursorCol()
+	}
+}
+
+// SetCursorCol sets the cursor to a specific column (0-based).
+// Clamps to the line length.
+func (tb *TextBuffer) SetCursorCol(col int) {
+	tb.cursorCol = col
+	tb.clampCursorCol()
+}
+
 // Undo reverts to the previous state.
 func (tb *TextBuffer) Undo() {
 	undoState := tb.undoRedo.Undo()
