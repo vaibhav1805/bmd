@@ -857,12 +857,28 @@ func (v Viewer) loadFileNoHistory(path string) (Viewer, tea.Cmd) {
 }
 
 // followLink resolves a URL from the link registry and navigates to it.
+// For external URLs (http/https), opens them in the default web browser.
+// For local markdown files, loads them into the viewer.
 func (v Viewer) followLink(url string) (Viewer, tea.Cmd) {
 	resolved, err := nav.ResolveLink(v.FilePath, url, v.startDir)
 	if err != nil {
 		v.errorMsg = err.Error()
 		return v, clearErrorAfter(statusTimeout)
 	}
+
+	// Check if this is an external URL marker
+	if strings.HasPrefix(resolved, "external://") {
+		externalURL := strings.TrimPrefix(resolved, "external://")
+		err := nav.OpenURL(externalURL)
+		if err != nil {
+			v.errorMsg = fmt.Sprintf("cannot open browser: %v", err)
+		} else {
+			v.errorMsg = fmt.Sprintf("Opening: %s", externalURL)
+		}
+		return v, clearErrorAfter(statusTimeout)
+	}
+
+	// Local file: load it
 	return v.loadFile(resolved)
 }
 

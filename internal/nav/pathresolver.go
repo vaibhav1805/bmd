@@ -3,24 +3,59 @@ package nav
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
+
+// IsExternalURL checks if the href is a web URL.
+func IsExternalURL(href string) bool {
+	return strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://")
+}
+
+// OpenURL opens the given URL in the default web browser.
+// Supports macOS, Linux (xdg-open, gnome-open), and Windows.
+func OpenURL(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		// macOS: use 'open'
+		cmd = exec.Command("open", url)
+	case "linux":
+		// Linux: try xdg-open first, then gnome-open as fallback
+		if _, err := exec.LookPath("xdg-open"); err == nil {
+			cmd = exec.Command("xdg-open", url)
+		} else if _, err := exec.LookPath("gnome-open"); err == nil {
+			cmd = exec.Command("gnome-open", url)
+		} else {
+			return fmt.Errorf("no browser launcher found (try installing xdg-open or gnome-open)")
+		}
+	case "windows":
+		// Windows: use 'start' (cmd.exe /c start)
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default:
+		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+	}
+	return cmd.Start()
+}
 
 // ResolveLink resolves a relative markdown link href against the directory of
 // currentFile, enforcing the following security and correctness constraints:
 //
-//   - Rejects http:// and https:// links (external links not supported)
+//   - Accepts http:// and https:// links (returns special marker)
 //   - Rejects "#..." anchor links
-//   - Requires the href to end in ".md"
+//   - Requires local links to end in ".md"
 //   - The resolved path must stay within startDir (no traversal above it)
 //   - The resolved path must exist as a regular file (not a symlink)
 //
-// Returns the absolute, clean resolved path on success, or a descriptive error.
+// For external URLs, returns the URL prefixed with "external://" marker.
+// For local files, returns the absolute, clean resolved path.
+// Returns descriptive error on validation failure.
 func ResolveLink(currentFile, href, startDir string) (string, error) {
-	// 1. Reject external links.
-	if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") {
-		return "", fmt.Errorf("external link not supported: %s", href)
+	// 1. Allow external links - mark them for special handling
+	if IsExternalURL(href) {
+		return "external://" + href, nil
 	}
 
 	// 2. Reject anchor links.
