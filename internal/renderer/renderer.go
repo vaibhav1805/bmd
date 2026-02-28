@@ -94,6 +94,12 @@ func (r *Renderer) renderDocument(doc *ast.Document) string {
 	var sb strings.Builder
 	first := true
 
+	// Add top margin (blank line from screen top)
+	sb.WriteString("\n")
+
+	// Left margin constant (2 spaces)
+	const leftMargin = "  "
+
 	for _, child := range doc.Children() {
 		rendered := r.RenderNode(child)
 		if rendered == "" {
@@ -103,6 +109,8 @@ func (r *Renderer) renderDocument(doc *ast.Document) string {
 		if first {
 			// Trim leading newline from the very first block (no blank line before document start)
 			rendered = strings.TrimPrefix(rendered, "\n")
+			// Apply left margin to first block lines
+			rendered = applyLeftMargin(rendered, leftMargin)
 			sb.WriteString(rendered)
 			first = false
 			continue
@@ -110,6 +118,7 @@ func (r *Renderer) renderDocument(doc *ast.Document) string {
 
 		// Minimal elegant spacing between blocks (single newline)
 		spacing := "\n"
+		rendered = applyLeftMargin(rendered, leftMargin)
 
 		// If the block already starts with \n (provides its own spacing), adjust spacing
 		if strings.HasPrefix(rendered, "\n") {
@@ -122,6 +131,17 @@ func (r *Renderer) renderDocument(doc *ast.Document) string {
 	}
 	sb.WriteString("\n")
 	return sb.String()
+}
+
+// applyLeftMargin adds left margin spaces to each line of text
+func applyLeftMargin(text string, margin string) string {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = margin + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // renderParagraph renders inline children of a paragraph, followed by a blank line.
