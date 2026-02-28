@@ -1,6 +1,6 @@
-# BMD — Terminal Markdown Viewer & Knowledge System
+# BMD — Beast Markdown Document
 
-A beautiful, fast, feature-rich markdown viewer for the terminal with integrated knowledge graph capabilities for agent-queryable documentation.
+A powerful, beautiful, feature-rich markdown viewer for the terminal with integrated knowledge graph capabilities, full-text search, and agent-queryable documentation interface.
 
 **Features:**
 - 🎨 **Beautiful rendering** — Syntax-highlighted code blocks, styled tables, colored text

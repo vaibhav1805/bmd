@@ -4,9 +4,10 @@
 
 See: .planning/PROJECT.md (updated 2026-02-26)
 
-**Core value:** Render markdown files beautifully in the terminal so developers can read documentation without leaving their terminal.
-**Current focus:** COMPLETE — All 6 phases delivered
-**Post-project improvements:** 3 enhancements completed (2026-02-28)
+**Project Name:** Beast Markdown Document (bmd) — Official branding (2026-02-28)
+**Core value:** Powerful terminal documentation platform with knowledge graphs, full-text search, and agent intelligence for developers who stay in the CLI.
+**Current focus:** COMPLETE — All 6 phases delivered + post-project enhancements
+**Post-project improvements:** 3 bug fixes + enhanced test data with diverse relationship types (2026-02-28)
 
 ## Current Position
 

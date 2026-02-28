@@ -1,12 +1,12 @@
-# Terminal Markdown Viewer
+# Beast Markdown Document (BMD)
 
 ## What This Is
 
-A terminal-based markdown renderer that displays markdown files with beautiful formatting, colors, and syntax highlighting — like viewing them on the web, but in the terminal. Keeps developers in their CLI workflow without context-switching to a browser.
+**bmd** (Beast Markdown Document) — A powerful, beautiful terminal-based markdown viewer with knowledge graph intelligence, full-text search, and integrated agent interface. Displays markdown files with stunning formatting, syntax highlighting, and semantic relationship analysis — bringing the power of web documentation into your terminal. Keeps developers in their CLI workflow without context-switching to a browser.
 
 ## Core Value
 
-Render markdown files beautifully in the terminal so developers can read documentation without leaving their terminal.
+Provide a complete documentation platform in the terminal: beautifully render markdown, navigate complex doc hierarchies via knowledge graphs, and enable AI agent queries over your documentation corpus — all without leaving the CLI.
 
 ## Requirements
 
