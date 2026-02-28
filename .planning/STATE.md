@@ -10,15 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 6 of 6 (Agent Intelligence) — IN PROGRESS
-Plan: 4 of 6 in current phase — 06-04 COMPLETE (06-03 also COMPLETE, wave-2 parallel)
+Plan: 5 of 6 in current phase — 06-05 COMPLETE
 Status: Phase In Progress
-Last activity: 2026-02-28 — 06-03 Microservice Detection executed (wave-2, parallel with 06-04):
+Last activity: 2026-02-28 — 06-05 CLI Agent Interface executed (Wave 3):
   - 06-01: BM25 full-text search and markdown indexing ✓
   - 06-02: Knowledge graph with relationship extraction (edge, graph, extractor) ✓
   - 06-03: Microservice detection and dependency analysis (ServiceDetector, DependencyAnalyzer) ✓
   - 06-04: SQLite persistence layer for indexes and graphs ✓
+  - 06-05: CLI agent interface (index/query/depends/services/graph commands) ✓
 
-Progress: [██████████] Phase 5 complete — Phase 6 in progress (4/6)
+Progress: [██████████] Phase 5 complete — Phase 6 in progress (5/6)
 
 ## Performance Metrics
 
@@ -36,13 +37,14 @@ Progress: [██████████] Phase 5 complete — Phase 6 in progr
 | 03-polish-ux | 3 | 11 min | 4 min |
 | 04-mouse-copy-support | 1 | 5 min | 5 min |
 | 05-enhanced-ux-images | 4 | 30 min | 7.5 min |
-| 06-agent-intelligence | 4/6 | 44 min | 11 min |
+| 06-agent-intelligence | 5/6 | 50 min | 10 min |
 
 **Phase 6 Progress (2026-02-28):**
 - 06-01 (Markdown Indexing & BM25): 25 min (BM25 search, recursive scanner, tokenizer, persistence, 92% coverage)
 - 06-02 (Knowledge Graph Construction): 7 min (edge/graph/extractor, BFS/DFS/cycle detection, 93.5% coverage)
 - 06-03 (Microservice Detection): 15 min (ServiceDetector 3-tier heuristics, DependencyAnalyzer, cycle detection, BFS chains, 90.3% coverage)
 - 06-04 (SQLite Persistence): 6 min (db.go, 6-table schema, save/load index+graph, incremental updates, 43 tests)
+- 06-05 (CLI Agent Interface): 6 min (index/query/depends/services/graph commands, JSON/text/DOT formatters, 87.9% coverage)
 
 **Recent Trend:**
 - Last 5 plans: 3 min, 1 min, 8 min, 2 min, 25 min
@@ -54,6 +56,7 @@ Progress: [██████████] Phase 5 complete — Phase 6 in progr
 | Phase 06-agent-intelligence P02 | 7 | 8 tasks | 5 files |
 | Phase 06-agent-intelligence P03 | 15 | 7 tasks | 4 files |
 | Phase 06-agent-intelligence P04 | 6 | 9 tasks | 4 files |
+| Phase 06-agent-intelligence P05 | 6 | 9 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -129,6 +132,10 @@ Recent decisions affecting current work:
 - [06-04]: WAL journal mode enabled — improves concurrent read performance
 - [06-04]: term_docs stored as JSON blob in bm25_stats — avoids extra join table for corpus statistics
 - [06-04]: batchSize=1000 for inserts — balances memory use vs. transaction overhead
+- [06-05]: splitPositionalsAndFlags pre-processes args before flag.Parse — allows mixed positional/flag order in CLI
+- [06-05]: pruneDanglingEdges applied before SaveGraph — avoids FK constraint failures from unresolved-target edges
+- [06-05]: openOrBuildIndex auto-builds missing index — zero-config for agent scripts
+- [06-05]: Stderr/stdout split — machine-readable output on stdout, progress/status on stderr
 
 ### Pending Todos
 
@@ -140,14 +147,14 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-28 — PHASE 6 EXECUTOR (06-03)
-Completed: 06-03 Microservice Detection and Dependency Analysis
-  - Created internal/knowledge/services.go: ServiceDetector, Service, Endpoint, ServiceConfig, YAML loader
-  - Created internal/knowledge/dependencies.go: DependencyAnalyzer, ServiceGraph, ServiceRef, DependencyChain
-  - Three-tier heuristic scoring: filename (0.9), heading (0.7), in-degree (0.4), configured (1.0)
-  - DFS cycle detection with three-colour marking, BFS shortest-path chain analysis
-  - 43 test functions, 90.3% code coverage, <35µs on 100-service graph
-  - Optional services.yaml config with minimal stdlib-only YAML parser
+Last session: 2026-02-28 — PHASE 6 EXECUTOR (06-05)
+Completed: 06-05 CLI Agent Interface (Wave 3)
+  - Created internal/knowledge/commands.go: CmdIndex, CmdQuery, CmdDepends, CmdServices, CmdGraph
+  - Created internal/knowledge/output.go: JSON/text/CSV/DOT formatters
+  - Updated cmd/bmd/main.go: knowledge command routing, backward-compatible viewer mode
+  - Created internal/knowledge/commands_test.go: 40+ tests, 87.9% coverage
+  - Bug fix: pruneDanglingEdges prevents FK constraint violations in SaveGraph
+  - Bug fix: splitPositionalsAndFlags handles mixed positional/flag CLI arg order
 
-Status: PHASE 6 IN PROGRESS — 4/6 plans complete (06-01, 06-02, 06-03, 06-04 done)
-Stopped at: Completed 06-03-PLAN.md
+Status: PHASE 6 IN PROGRESS — 5/6 plans complete (06-01 through 06-05 done)
+Stopped at: Completed 06-05-PLAN.md
