@@ -297,9 +297,9 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return v, nil
 			case tea.KeyEsc:
-				// Exit edit mode
+				// Exit edit mode and reload file to show saved changes
 				v.editMode = false
-				return v, nil
+				return v.loadFileNoHistory(v.FilePath)
 			}
 			// Handle Page Up/Down by string matching
 			keyStr := msg.String()
