@@ -749,6 +749,10 @@ func (v Viewer) View() string {
 		return v.renderHeader() + "\n" + v.viewWithBrowser(contentHeight)
 	}
 
+	if v.editMode {
+		return v.renderEditMode()
+	}
+
 	var sb strings.Builder
 
 	// Always render header at the top.
@@ -1205,4 +1209,45 @@ func insertCursorAt(line string, col int) string {
 	char := string(runes[col : col+1])
 	after := string(runes[col+1:])
 	return before + "\x1b[7m" + char + "\x1b[m" + after
+}
+
+// renderEditMode returns a string representation of the document in edit mode
+// with raw text lines (no markdown rendering) and line numbers on the left.
+func (v *Viewer) renderEditMode() string {
+	var lines []string
+
+	// Header: show file path and [EDIT MODE]
+	header := fmt.Sprintf(" %s [EDIT MODE]", filepath.Base(v.FilePath))
+	lines = append(lines, header[:min(len(header), v.Width)])
+
+	// Render each visible line with line number + raw text
+	contentHeight := v.Height - 2 // header + status bar
+	end := v.Offset + contentHeight
+	if end > len(v.Lines) {
+		end = len(v.Lines)
+	}
+
+	for i := v.Offset; i < end; i++ {
+		lineNum := i + 1
+		lineNumStr := fmt.Sprintf("%5d | ", lineNum)
+		displayLine := lineNumStr + v.Lines[i]
+		if len(displayLine) > v.Width {
+			displayLine = displayLine[:v.Width]
+		}
+		lines = append(lines, displayLine)
+	}
+
+	// Status bar: show edit hint
+	statusLine := " [e] exit | [Ctrl+S] save (not yet implemented)"
+	lines = append(lines, statusLine[:min(len(statusLine), v.Width)])
+
+	return strings.Join(lines, "\n")
+}
+
+// min returns the minimum of two integers.
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
