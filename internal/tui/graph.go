@@ -50,13 +50,35 @@ func (v Viewer) updateGraph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return v, nil
 
+	case "left":
+		// Navigate to a parent node (first incoming edge source).
+		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
+			incoming := v.graphState.Graph.GetIncoming(v.graphState.SelectedNodeID)
+			if len(incoming) > 0 {
+				v.graphState.SelectedNodeID = incoming[0].Source
+			}
+		}
+		return v, nil
+
+	case "right":
+		// Navigate to a child node (first outgoing edge target).
+		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
+			outgoing := v.graphState.Graph.GetOutgoing(v.graphState.SelectedNodeID)
+			if len(outgoing) > 0 {
+				v.graphState.SelectedNodeID = outgoing[0].Target
+			}
+		}
+		return v, nil
+
 	case "enter", "l":
 		// Open the file corresponding to the selected node.
+		// node.ID is a relative path; resolve it against the graph's rootPath.
 		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
 			node := v.graphState.Graph.Nodes[v.graphState.SelectedNodeID]
 			if node != nil && node.ID != "" {
+				absPath := filepath.Join(v.graphState.RootPath, node.ID)
 				v.graphMode = false
-				return v.loadFile(node.ID)
+				return v.loadFile(absPath)
 			}
 		}
 		return v, nil
