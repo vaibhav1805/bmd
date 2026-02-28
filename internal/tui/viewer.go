@@ -93,6 +93,9 @@ type Viewer struct {
 
 	// Virtual rendering optimisation
 	virtualMode bool // true when len(Lines) > virtualThreshold
+
+	// Edit mode state
+	editMode bool // true when in edit mode, false when in read-only view mode
 }
 
 // New creates a new Viewer for the given document and file path.
