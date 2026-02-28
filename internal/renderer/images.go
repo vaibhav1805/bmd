@@ -75,6 +75,12 @@ func DetectImageProtocol() ImageProtocol {
 		return ProtocolSixel
 	}
 
+	// xterm-256color: Try Kitty protocol (works on Alacritty, modern xterm, WezTerm)
+	if strings.Contains(term, "xterm") || strings.Contains(term, "screen") || strings.Contains(term, "tmux") {
+		fmt.Fprintf(os.Stderr, "[DEBUG] → Modern terminal (Kitty fallback for %s)\n", term)
+		return ProtocolKitty
+	}
+
 	fmt.Fprintf(os.Stderr, "[DEBUG] → No protocol detected, using Unicode\n")
 	return ProtocolUnicode
 }
