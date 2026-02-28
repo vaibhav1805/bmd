@@ -113,9 +113,9 @@ Plans:
 
 Plans:
 - [x] 06-01-PLAN.md — Markdown indexing & retrieval: Recursive directory scanning, full-text search, agent API
-- [ ] 06-02-PLAN.md — Knowledge graph construction: Parse relationships, build edge registry, detect mentions
+- [x] 06-02-PLAN.md — Knowledge graph construction: Parse relationships, build edge registry, detect mentions
 - [ ] 06-03-PLAN.md — Dependency detection: Microservice patterns, API endpoint extraction, call chain analysis
-- [ ] 06-04-PLAN.md — Local knowledge persistence: Sqlite-based memory, graph serialization, incremental updates
+- [x] 06-04-PLAN.md — Local knowledge persistence: Sqlite-based memory, graph serialization, incremental updates
 - [ ] 06-05-PLAN.md — Agent query interface: Q&A endpoint, dependency queries, relationship traversal
 - [ ] 06-06-PLAN.md — Human verification checkpoint: all Phase 6 requirements confirmed
 
@@ -131,6 +131,6 @@ Phases execute in numeric order: 1 → 2 → 3
 | 3. Polish & UX | 3/3 | Complete    | 2026-02-27 |
 | 4. Mouse & Copy | 2/3 | Complete    | 2026-02-28 |
 | 5. Enhanced UX & Images | 4/4 | Complete    | 2026-02-28 |
-| 6. Agent Intelligence & Knowledge Graphs | 1/6 | In Progress | 2026-02-28 |
+| 6. Agent Intelligence & Knowledge Graphs | 4/6 | In Progress | 2026-02-28 |
 
-**Phase 6 In Progress: 1/6 plans complete (06-01 BM25 indexing done)**
+**Phase 6 In Progress: 4/6 plans complete (06-01 BM25 indexing, 06-02 knowledge graph, 06-04 SQLite persistence done)**
