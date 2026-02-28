@@ -167,6 +167,8 @@ Recent decisions affecting current work:
 - [07-06]: Ctrl+G jump-to-line in edit mode moves cursor AND scrolls viewport — complete navigation workflow
 - [Phase 08-directory-browser]: Level-based topological layout with iterative edge relaxation for graph rendering
 - [Phase 08-directory-browser]: maxAsciiNodes=40 threshold triggers list fallback for large graph readability
+- [Phase 08-directory-browser]: '/' for cross-document search; Ctrl+F for in-document search — global vs local search separation
+- [Phase 08-directory-browser]: SearchAllDocuments() reuses Phase 6 openOrBuildIndex — zero new indexing logic needed
 
 ### Pending Todos
 
