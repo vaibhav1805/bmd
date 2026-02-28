@@ -97,8 +97,9 @@ type Viewer struct {
 	virtualMode bool // true when len(Lines) > virtualThreshold
 
 	// Edit mode state
-	editMode   bool                 // true when in edit mode, false when in read-only view mode
-	editBuffer *editor.TextBuffer   // text buffer for editing
+	editMode              bool                 // true when in edit mode, false when in read-only view mode
+	editBuffer            *editor.TextBuffer   // text buffer for editing
+	markdownSyntaxOpen    bool                 // true when markdown syntax help is displayed in edit mode
 }
 
 // New creates a new Viewer for the given document and file path.
@@ -299,7 +300,12 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyEsc:
 				// Exit edit mode and reload file to show saved changes
 				v.editMode = false
+				v.markdownSyntaxOpen = false
 				return v.loadFileNoHistory(v.FilePath)
+			case '?':
+				// Toggle markdown syntax help in edit mode
+				v.markdownSyntaxOpen = !v.markdownSyntaxOpen
+				return v, nil
 			}
 			// Handle Page Up/Down by string matching
 			keyStr := msg.String()
@@ -812,6 +818,106 @@ func (v Viewer) renderHelp() string {
 	return sb.String()
 }
 
+// renderMarkdownSyntax returns a centered box overlay with common markdown syntax examples.
+// Displayed in edit mode when '?' is pressed.
+func (v Viewer) renderMarkdownSyntax() string {
+	const boxWidth = 52 // inner content width
+	border := lipgloss.Color("82")    // bright green border
+	text := lipgloss.Color("252")     // light text
+	section := lipgloss.Color("118")  // section headers in green
+	code := lipgloss.Color("244")     // code examples in gray
+	borderStyle := lipgloss.NewStyle().Foreground(border).Bold(true)
+	textStyle := lipgloss.NewStyle().Foreground(text)
+	sectionStyle := lipgloss.NewStyle().Foreground(section).Bold(true)
+	codeStyle := lipgloss.NewStyle().Foreground(code)
+
+	padRight := func(s string, width int) string {
+		runeLen := len([]rune(s))
+		if runeLen >= width {
+			return s
+		}
+		return s + strings.Repeat(" ", width-runeLen)
+	}
+
+	line := func(content string) string {
+		return borderStyle.Render("│") + textStyle.Render(content) + borderStyle.Render("│")
+	}
+	codeLine := func(content string) string {
+		return borderStyle.Render("│") + codeStyle.Render(padRight("  "+content, boxWidth)) + borderStyle.Render("│")
+	}
+	sectionLine := func(content string) string {
+		return borderStyle.Render("│") + sectionStyle.Render(padRight(" "+content, boxWidth)) + borderStyle.Render("│")
+	}
+	sectionSep := func() string {
+		return borderStyle.Render("├" + strings.Repeat("─", boxWidth) + "┤")
+	}
+	header := borderStyle.Render("┌" + strings.Repeat("─", boxWidth) + "┐")
+	footer := borderStyle.Render("└" + strings.Repeat("─", boxWidth) + "┘")
+
+	lines := []string{
+		header,
+		line(padRight("    📝 Markdown Syntax Reference", boxWidth)),
+		sectionSep(),
+		sectionLine("Headings"),
+		codeLine("# H1 Heading"),
+		codeLine("## H2 Heading"),
+		codeLine("### H3 Heading"),
+		sectionSep(),
+		sectionLine("Text Formatting"),
+		codeLine("**bold** or __bold__"),
+		codeLine("*italic* or _italic_"),
+		codeLine("`code` for inline code"),
+		sectionSep(),
+		sectionLine("Lists"),
+		codeLine("- item 1"),
+		codeLine("- item 2"),
+		codeLine("  - nested item"),
+		codeLine("1. first"),
+		codeLine("2. second"),
+		sectionSep(),
+		sectionLine("Links & Images"),
+		codeLine("[link text](url)"),
+		codeLine("![alt text](image.png)"),
+		sectionSep(),
+		sectionLine("Code Blocks"),
+		codeLine("```language"),
+		codeLine("code here"),
+		codeLine("```"),
+		sectionSep(),
+		sectionLine("Other"),
+		codeLine("> blockquote"),
+		codeLine("| table | data |"),
+		codeLine("---"),
+		sectionSep(),
+		line(padRight("  ? to close this help", boxWidth)),
+		footer,
+	}
+
+	// Center the box horizontally.
+	totalBoxWidth := boxWidth + 2 // +2 for the border chars
+	leftPad := (v.Width - totalBoxWidth) / 2
+	if leftPad < 0 {
+		leftPad = 0
+	}
+	prefix := strings.Repeat(" ", leftPad)
+
+	// Center vertically: place the box in the middle of the terminal.
+	totalLines := len(lines)
+	topPad := (v.Height - totalLines) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+
+	var sb strings.Builder
+	for i := 0; i < topPad; i++ {
+		sb.WriteString("\n")
+	}
+	for _, l := range lines {
+		sb.WriteString(prefix + l + "\n")
+	}
+	return sb.String()
+}
+
 // renderHeader returns a compact single-line header bar showing the current
 // filename, parent folder, and context-sensitive right-side info (search
 // state, navigation back indicator, or error message).
@@ -884,6 +990,10 @@ func (v Viewer) View() string {
 	}
 
 	if v.editMode {
+		// If markdown syntax help is open in edit mode, show it instead
+		if v.markdownSyntaxOpen {
+			return v.renderMarkdownSyntax()
+		}
 		return v.renderEditMode()
 	}
 
