@@ -21,65 +21,61 @@ const (
 
 // DetectImageProtocol checks terminal capabilities and returns the best-supported protocol.
 func DetectImageProtocol() ImageProtocol {
-	// Check TERM environment variable for protocol support
+	// Check environment variables
 	term := os.Getenv("TERM")
 	termProgram := os.Getenv("TERM_PROGRAM")
+	iterm := os.Getenv("ITERM_PROGRAM")
+	iterm2 := os.Getenv("ITERM2_SHOULDMANAGEPASTEBOARD")
 
-	fmt.Fprintf(os.Stderr, "[DEBUG] DetectImageProtocol: TERM=%s, TERM_PROGRAM=%s, KITTY_WINDOW_ID=%s\n",
-		term, termProgram, os.Getenv("KITTY_WINDOW_ID"))
+	fmt.Fprintf(os.Stderr, "[DEBUG] DetectImageProtocol:\n")
+	fmt.Fprintf(os.Stderr, "  TERM=%q\n", term)
+	fmt.Fprintf(os.Stderr, "  TERM_PROGRAM=%q\n", termProgram)
+	fmt.Fprintf(os.Stderr, "  ITERM_PROGRAM=%q\n", iterm)
+	fmt.Fprintf(os.Stderr, "  ITERM2_SHOULDMANAGEPASTEBOARD=%q\n", iterm2)
 
-	// Explicit Kitty window detection
+	// Explicit Kitty detection
 	if os.Getenv("KITTY_WINDOW_ID") != "" {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: Kitty (KITTY_WINDOW_ID set)\n")
+		fmt.Fprintf(os.Stderr, "[DEBUG] → Kitty (KITTY_WINDOW_ID set)\n")
 		return ProtocolKitty
 	}
-
-	// TERM explicitly set to kitty
 	if strings.Contains(term, "kitty") {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: Kitty (TERM contains kitty)\n")
+		fmt.Fprintf(os.Stderr, "[DEBUG] → Kitty (TERM=kitty)\n")
 		return ProtocolKitty
 	}
 
-	// macOS Terminal.app - supports iTerm2 protocol
-	if termProgram == "Apple_Terminal" || termProgram == "iTerm.app" {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: %s (TERM_PROGRAM=%s)\n", termProgram, termProgram)
+	// macOS checks (Terminal.app AND iTerm2)
+	if termProgram == "Apple_Terminal" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] → macOS Terminal.app (iTerm2 protocol)\n")
+		return ProtocolITerm2
+	}
+	if termProgram == "iTerm.app" || iterm != "" || iterm2 != "" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] → iTerm2 (ITERM_PROGRAM or ITERM2_* set)\n")
+		return ProtocolITerm2
+	}
+	if strings.Contains(termProgram, "Terminal") && strings.Contains(termProgram, "Mac") {
+		fmt.Fprintf(os.Stderr, "[DEBUG] → macOS Terminal (iTerm2 fallback)\n")
 		return ProtocolITerm2
 	}
 
-	// Explicit iTerm2 detection
-	if os.Getenv("ITERM_PROGRAM") != "" {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: iTerm2 (ITERM_PROGRAM set)\n")
-		return ProtocolITerm2
-	}
-
-	// Alacritty - supports Kitty graphics protocol well
-	if strings.Contains(term, "alacritty") {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: Alacritty (TERM=alacritty, using Kitty protocol)\n")
+	// Alacritty detection (multiple checks)
+	if strings.Contains(term, "alacritty") || strings.Contains(strings.ToLower(os.Getenv("COLORTERM")), "alacritty") {
+		fmt.Fprintf(os.Stderr, "[DEBUG] → Alacritty (Kitty protocol)\n")
 		return ProtocolKitty
 	}
 
-	// WezTerm - supports Kitty
+	// WezTerm
 	if strings.Contains(term, "wezterm") {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: WezTerm (using Kitty protocol)\n")
+		fmt.Fprintf(os.Stderr, "[DEBUG] → WezTerm (Kitty protocol)\n")
 		return ProtocolKitty
 	}
 
-	// Sixel support (xterm variants with sixel)
+	// Sixel support
 	if strings.Contains(term, "sixel") {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: Sixel support\n")
-		return ProtocolSixel
-	}
-	if strings.HasPrefix(term, "xterm") && os.Getenv("XTERM_VERSION") != "" {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: xterm with Sixel support\n")
-		return ProtocolSixel
-	}
-	if strings.Contains(term, "mlterm") {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: mlterm (Sixel support)\n")
+		fmt.Fprintf(os.Stderr, "[DEBUG] → Sixel\n")
 		return ProtocolSixel
 	}
 
-	// Default fallback
-	fmt.Fprintf(os.Stderr, "[DEBUG] No image protocol detected, using Unicode fallback\n")
+	fmt.Fprintf(os.Stderr, "[DEBUG] → No protocol detected, using Unicode\n")
 	return ProtocolUnicode
 }
 
