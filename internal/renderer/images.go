@@ -75,16 +75,14 @@ func DetectImageProtocol() ImageProtocol {
 		return ProtocolSixel
 	}
 
-	// xterm-256color on macOS likely means Terminal.app (use iTerm2 protocol)
+	// xterm-256color on macOS likely means Terminal.app (which doesn't support images)
 	if strings.Contains(term, "xterm") {
-		// On macOS, prefer iTerm2 protocol for generic terminals (likely Terminal.app)
-		homeDir, _ := os.UserHomeDir()
-		if homeDir != "" {
-			// Check if running on macOS
-			if _, err := os.Stat("/System/Applications/Utilities/Terminal.app"); err == nil {
-				fmt.Fprintf(os.Stderr, "[DEBUG] → macOS xterm (likely Terminal.app, using iTerm2)\n")
-				return ProtocolITerm2
-			}
+		// Check if running on macOS
+		if _, err := os.Stat("/System/Applications/Utilities/Terminal.app"); err == nil {
+			// macOS Terminal.app doesn't support iTerm2 inline images, Kitty, or Sixel
+			// Fall back to showing image paths/alt text
+			fmt.Fprintf(os.Stderr, "[DEBUG] → macOS xterm (Terminal.app - no image support, using alt text)\n")
+			return ProtocolNone
 		}
 
 		// On other systems, xterm-256color might support Kitty (Alacritty, etc)
@@ -241,6 +239,13 @@ func ImageToTerminal(imageData []byte, imagePath, altText string, width, height 
 			return "[Image: " + altText + " - saved to " + tempPath + "]"
 		}
 		return ImageToUnicode(imageData, altText, width)
+	case ProtocolNone:
+		// For terminals without image support, show the file path
+		// This is a helpful fallback for Terminal.app and other limited terminals
+		if imagePath != "" {
+			return "[Image: " + altText + " (" + filepath.Base(imagePath) + ")]"
+		}
+		return "[Image: " + altText + "]"
 	default:
 		return altText
 	}
