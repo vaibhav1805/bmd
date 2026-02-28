@@ -10,11 +10,12 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 6 of 6 (Agent Intelligence) — IN PROGRESS
-Plan: 4 of 6 in current phase — 06-04 COMPLETE
+Plan: 4 of 6 in current phase — 06-04 COMPLETE (06-03 also COMPLETE, wave-2 parallel)
 Status: Phase In Progress
-Last activity: 2026-02-28 — 06-04 SQLite Persistence executed:
+Last activity: 2026-02-28 — 06-03 Microservice Detection executed (wave-2, parallel with 06-04):
   - 06-01: BM25 full-text search and markdown indexing ✓
   - 06-02: Knowledge graph with relationship extraction (edge, graph, extractor) ✓
+  - 06-03: Microservice detection and dependency analysis (ServiceDetector, DependencyAnalyzer) ✓
   - 06-04: SQLite persistence layer for indexes and graphs ✓
 
 Progress: [██████████] Phase 5 complete — Phase 6 in progress (4/6)
@@ -40,6 +41,7 @@ Progress: [██████████] Phase 5 complete — Phase 6 in progr
 **Phase 6 Progress (2026-02-28):**
 - 06-01 (Markdown Indexing & BM25): 25 min (BM25 search, recursive scanner, tokenizer, persistence, 92% coverage)
 - 06-02 (Knowledge Graph Construction): 7 min (edge/graph/extractor, BFS/DFS/cycle detection, 93.5% coverage)
+- 06-03 (Microservice Detection): 15 min (ServiceDetector 3-tier heuristics, DependencyAnalyzer, cycle detection, BFS chains, 90.3% coverage)
 - 06-04 (SQLite Persistence): 6 min (db.go, 6-table schema, save/load index+graph, incremental updates, 43 tests)
 
 **Recent Trend:**
@@ -50,6 +52,7 @@ Progress: [██████████] Phase 5 complete — Phase 6 in progr
 | Phase 04-mouse-copy-support P02 | 5 | 2 tasks | 3 files |
 | Phase 06-agent-intelligence P01 | 25 | 9 tasks | 12 files |
 | Phase 06-agent-intelligence P02 | 7 | 8 tasks | 5 files |
+| Phase 06-agent-intelligence P03 | 15 | 7 tasks | 4 files |
 | Phase 06-agent-intelligence P04 | 6 | 9 tasks | 4 files |
 
 ## Accumulated Context
@@ -115,6 +118,12 @@ Recent decisions affecting current work:
 - [06-02]: ResolveLink uses os.Lstat (not Stat) to detect non-existent targets without following symlinks
 - [06-02]: Code extractor uses state-machine fence parser (not goldmark AST) — goldmark doesn't expose block language in Walk
 - [06-02]: Confidence constants: ConfidenceLink=1.0, ConfidenceCode=0.9, ConfidenceMention=0.7, ConfidenceUnresolved=0.5
+- [06-03]: ServiceDetector.DetectServices takes both Graph and []Document — graph provides in-degree topology, documents enable endpoint extraction
+- [06-03]: High in-degree heuristic only applies when no filename/heading heuristic matched — prevents double-counting named service files
+- [06-03]: cycleKey uses lexicographically smallest rotation — DFS traversal order is non-deterministic (Go map), normalization prevents duplicate cycle reports
+- [06-03]: Two-pass endpoint extraction — pass 1 extracts from backtick spans, pass 2 cleans full line; single-pass missed inline-code patterns
+- [06-03]: Minimal YAML parser for services.yaml — preserves stdlib-only constraint (no gopkg.in/yaml.v3)
+- [06-03]: FindPath depth limit 10, FindDependencyChain depth limit 5 — all-paths DFS vs shortest-path BFS need different explosion guards
 - [06-04]: modernc.org/sqlite chosen as pure-Go SQLite driver — eliminates CGO requirement
 - [06-04]: ON DELETE CASCADE on index_entries and graph_edges — deleting doc/node removes dependent rows automatically
 - [06-04]: WAL journal mode enabled — improves concurrent read performance
@@ -131,14 +140,14 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-28 — PHASE 6 EXECUTOR (06-04)
-Completed: 06-04 SQLite Persistence Layer
-  - Created internal/knowledge/db.go (~500 LOC) with Database type
-  - 6-table schema: documents, index_entries, bm25_stats, graph_nodes, graph_edges, metadata
-  - SaveIndex/LoadIndex, SaveGraph/LoadGraph round-trip persistence
-  - Hash-based incremental change detection (GetChanges)
-  - 43 unit tests, 80% coverage on db.go
-  - Added modernc.org/sqlite pure-Go driver dependency
+Last session: 2026-02-28 — PHASE 6 EXECUTOR (06-03)
+Completed: 06-03 Microservice Detection and Dependency Analysis
+  - Created internal/knowledge/services.go: ServiceDetector, Service, Endpoint, ServiceConfig, YAML loader
+  - Created internal/knowledge/dependencies.go: DependencyAnalyzer, ServiceGraph, ServiceRef, DependencyChain
+  - Three-tier heuristic scoring: filename (0.9), heading (0.7), in-degree (0.4), configured (1.0)
+  - DFS cycle detection with three-colour marking, BFS shortest-path chain analysis
+  - 43 test functions, 90.3% code coverage, <35µs on 100-service graph
+  - Optional services.yaml config with minimal stdlib-only YAML parser
 
-Status: PHASE 6 IN PROGRESS — 4/6 plans complete
-Stopped at: Completed 06-04-PLAN.md
+Status: PHASE 6 IN PROGRESS — 4/6 plans complete (06-01, 06-02, 06-03, 06-04 done)
+Stopped at: Completed 06-03-PLAN.md
