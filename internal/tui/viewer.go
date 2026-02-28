@@ -69,6 +69,10 @@ type Viewer struct {
 	// Help overlay
 	helpOpen bool // true when the help overlay is visible
 
+	// Theme selection dialog
+	themeDialog      ThemeDialog      // theme selection menu
+	currentThemeName theme.ThemeName // track the currently applied theme name
+
 	// Jump-to-line mode (activated by ':')
 	jumpMode  bool   // true when ':' has been pressed and a line number is being typed
 	jumpInput string // digits accumulated for the target line number
@@ -79,6 +83,12 @@ type Viewer struct {
 	hasCursor bool // true once the user has clicked to commit a cursor position
 	cursorRow int  // committed cursor row (document line index, 0-based)
 	cursorCol int  // committed cursor column (0-based)
+
+	// Text selection state (separate from cursor position)
+	isSelecting   bool
+	selectionStart *SelectionPoint
+	selectionEnd   *SelectionPoint
+	selectedText   string
 
 	// Virtual rendering optimisation
 	virtualMode bool // true when len(Lines) > virtualThreshold
@@ -103,21 +113,47 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) Viewer {
 	reg := BuildRegistry(rawLines)
 
 	return Viewer{
-		Doc:         doc,
-		rendered:    strings.Join(lines, "\n"),
-		rawLines:    rawLines,
-		Lines:       lines,
-		Offset:      0,
-		Height:      24, // default height; updated by WindowSizeMsg
-		Width:       width,
-		Theme:       th,
-		FilePath:    absPath,
-		links:       reg,
-		history:     h,
-		startDir:    startDir,
-		searchState: NewSearchState(),
-		virtualMode: len(lines) > virtualThreshold,
+		Doc:              doc,
+		rendered:         strings.Join(lines, "\n"),
+		rawLines:         rawLines,
+		Lines:            lines,
+		Offset:           0,
+		Height:           24, // default height; updated by WindowSizeMsg
+		Width:            width,
+		Theme:            th,
+		FilePath:         absPath,
+		links:            reg,
+		history:          h,
+		startDir:         startDir,
+		searchState:      NewSearchState(),
+		themeDialog:      NewThemeDialog(theme.ThemeDefault),
+		currentThemeName: theme.ThemeDefault,
+		virtualMode:      len(lines) > virtualThreshold,
 	}
+}
+
+// UpdateTheme switches the viewer to a new theme and re-renders the document.
+// The document is re-rendered with the new theme's colors without reloading the file.
+// Also updates the tracked current theme name.
+func (v *Viewer) UpdateTheme(newTheme theme.Theme, themeName theme.ThemeName) {
+	v.Theme = newTheme
+	v.currentThemeName = themeName
+	// Re-render the document with the new theme
+	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels()
+	rendered := r.Render(v.Doc)
+
+	// Rebuild the line cache
+	v.rawLines = strings.Split(rendered, "\n")
+	v.Lines = stripAllSentinels(v.rawLines)
+	v.rendered = strings.Join(v.Lines, "\n")
+
+	// Rebuild the link registry for the new rendering
+	v.links = BuildRegistry(v.rawLines)
+}
+
+// getCurrentThemeName returns the currently applied theme name.
+func (v *Viewer) getCurrentThemeName() theme.ThemeName {
+	return v.currentThemeName
 }
 
 // Init satisfies bubbletea.Model — no I/O on startup.
@@ -149,6 +185,11 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.Offset = clamp(v.Offset, 0, v.maxOffset())
 
 	case tea.KeyMsg:
+		// When theme dialog is open, route all input to theme dialog handling.
+		if v.themeDialog.IsVisible() {
+			return v.updateThemeDialog(msg)
+		}
+
 		// When help overlay is open, route all input to help handling.
 		if v.helpOpen {
 			return v.updateHelp(msg)
@@ -178,6 +219,16 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v, tea.Quit
 
 		case "ctrl+c":
+			// If there's a selection, copy selected text
+			if v.HasSelection() {
+				text := v.SelectedText()
+				_, _ = osc52.New(text).WriteTo(os.Stderr)
+				v.ClearSelection()
+				v.errorMsg = "Selection copied"
+				return v, clearErrorAfter(statusTimeout)
+			}
+
+			// If there's a committed cursor, copy the current line
 			if v.hasCursor {
 				// Copy the plain text of the committed cursor line to clipboard via OSC 52.
 				if v.cursorRow >= 0 && v.cursorRow < len(v.Lines) {
@@ -191,29 +242,44 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return v, tea.Quit
 
+		case "esc":
+			if v.HasSelection() {
+				v.ClearSelection()
+				return v, nil
+			}
+			// ... other escape handling can go here
+
 		case "up", "k":
+			v.ClearSelection()
 			v.Offset = clamp(v.Offset-1, 0, v.maxOffset())
 
 		case "down", "j":
+			v.ClearSelection()
 			v.Offset = clamp(v.Offset+1, 0, v.maxOffset())
 
 		case "pgup":
+			v.ClearSelection()
 			v.Offset = clamp(v.Offset-v.Height, 0, v.maxOffset())
 
 		case "pgdown":
+			v.ClearSelection()
 			v.Offset = clamp(v.Offset+v.Height, 0, v.maxOffset())
 
 		case "home", "g":
+			v.ClearSelection()
 			v.Offset = 0
 
 		case "end", "G":
+			v.ClearSelection()
 			v.Offset = v.maxOffset()
 
 		case "tab":
+			v.ClearSelection()
 			v.links.FocusNext()
 			v.scrollToFocusedLink()
 
 		case "shift+tab":
+			v.ClearSelection()
 			v.links.FocusPrev()
 			v.scrollToFocusedLink()
 
@@ -269,6 +335,11 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case ":":
 			v.jumpMode = true
 			v.jumpInput = ""
+
+		case "shift+t":
+			// Open theme selection dialog
+			v.themeDialog.Open(v.getCurrentThemeName())
+			return v, nil
 		}
 
 	case tea.MouseMsg:
@@ -288,6 +359,14 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Track mouse position for hover cursor rendering (MOUSE-01).
 			v.mouseRow = msg.Y
 			v.mouseCol = msg.X
+
+			// If currently selecting, extend the selection
+			if v.isSelecting && v.selectionStart != nil {
+				docLine := msg.Y - 1 + v.Offset
+				if docLine >= 0 && docLine < len(v.Lines) {
+					v.ExtendSelection(docLine, msg.X)
+				}
+			}
 			return v, nil
 
 		case tea.MouseActionPress:
@@ -301,13 +380,27 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Check if any link is registered at this line.
 				for _, entry := range v.links.Links {
 					if entry.LineIndex == clickLine {
+						v.ClearSelection()
 						return v.followLink(entry.URL)
 					}
 				}
-				// No link at this line — commit cursor position (MOUSE-02).
-				v.hasCursor = true
-				v.cursorRow = clickLine
-				v.cursorCol = msg.X
+
+				// Check for Shift+Click to extend selection
+				if msg.Shift {
+					if v.HasSelection() {
+						v.ExtendSelection(clickLine, msg.X)
+					} else {
+						// Start new selection if Shift+Click but no prior selection
+						v.StartSelection(clickLine, msg.X)
+					}
+				} else {
+					// Normal click: start new selection
+					v.StartSelection(clickLine, msg.X)
+					// Also commit the cursor position as before
+					v.hasCursor = true
+					v.cursorRow = clickLine
+					v.cursorCol = msg.X
+				}
 				return v, nil
 			}
 		}
@@ -427,6 +520,28 @@ func (v Viewer) updateBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return v, nil
 }
 
+// updateThemeDialog handles keyboard input when the theme selection dialog is open.
+// Arrow keys navigate; Enter selects; Esc cancels.
+func (v Viewer) updateThemeDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		v.themeDialog.SelectPrev()
+	case "down", "j":
+		v.themeDialog.SelectNext()
+	case "enter":
+		// Apply the selected theme
+		selectedTheme := v.themeDialog.SelectedTheme()
+		newTheme := theme.NewThemeByName(selectedTheme)
+		v.UpdateTheme(newTheme, selectedTheme)
+		v.errorMsg = "Theme: " + string(selectedTheme)
+		v.themeDialog.Close()
+		return v, clearErrorAfter(statusTimeout)
+	case "esc":
+		v.themeDialog.Close()
+	}
+	return v, nil
+}
+
 // updateHelp handles keyboard input when the help overlay is open.
 // Pressing esc, q, ?, or h closes the overlay. All other keys are absorbed.
 func (v Viewer) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -489,6 +604,9 @@ func (v Viewer) renderHelp() string {
 		line(padRight("  Ctrl+F / /    Open search", boxWidth)),
 		line(padRight("  n / N         Next / prev match", boxWidth)),
 		line(padRight("  Esc           Close search", boxWidth)),
+		sectionSep(),
+		sectionLine("Theme"),
+		line(padRight("  Shift+T       Select theme", boxWidth)),
 		sectionSep(),
 		sectionLine("Mouse & Copy"),
 		line(padRight("  Click         Move cursor / follow link", boxWidth)),
@@ -579,6 +697,11 @@ func (v Viewer) renderHeader() string {
 
 // View renders the visible portion of the document for display.
 func (v Viewer) View() string {
+	// If the theme dialog is open, render it as the full view.
+	if v.themeDialog.IsVisible() {
+		return v.renderHeader() + "\n" + v.themeDialog.Render(v.Width, v.Height-2)
+	}
+
 	// If the help overlay is open, render it as the full view.
 	if v.helpOpen {
 		return v.renderHelp()
@@ -618,6 +741,29 @@ func (v Viewer) View() string {
 	visible := displayLines[v.Offset:end]
 	for i, line := range visible {
 		docLine := v.Offset + i
+
+		// Apply selection highlighting if this line is part of the selection
+		if v.HasSelection() {
+			start, end := NormalizeSelection(*v.selectionStart, *v.selectionEnd)
+
+			if docLine >= start.LineIndex && docLine <= end.LineIndex {
+				// This line is part of the selection
+				if docLine == start.LineIndex && docLine == end.LineIndex {
+					// Single-line selection: highlight from start to end column
+					line = highlightTextRange(line, start.ColumnIndex, end.ColumnIndex)
+				} else if docLine == start.LineIndex {
+					// First line of multi-line selection: highlight from start to end
+					line = highlightTextRange(line, start.ColumnIndex, len([]rune(displayLines[docLine])))
+				} else if docLine == end.LineIndex {
+					// Last line of multi-line selection: highlight from start to end
+					line = highlightTextRange(line, 0, end.ColumnIndex)
+				} else {
+					// Middle line: highlight entire line
+					line = "\x1b[48;5;238m" + line + "\x1b[m"
+				}
+			}
+		}
+
 		if docLine == focusedLine {
 			// Apply reverse video to the focused line so the link stands out.
 			// Link focus takes priority over other cursor indicators.
@@ -793,6 +939,13 @@ func (v Viewer) renderStatusBar() string {
 		lineInfo = fmt.Sprintf("\x1b[38;5;117m%d\x1b[0m", currentLine)
 	}
 
+	// Current theme display
+	currentThemeName := v.getCurrentThemeName()
+	themeDisplay := string(currentThemeName)
+	if len(themeDisplay) > 0 {
+		themeDisplay = strings.ToUpper(themeDisplay[:1]) + themeDisplay[1:]
+	}
+
 	parts := []string{"\x1b[1m" + name + "\x1b[0m"}
 	if lineInfo != "" {
 		parts = append(parts, lineInfo)
@@ -809,6 +962,8 @@ func (v Viewer) renderStatusBar() string {
 	if v.hasCursor {
 		parts = append(parts, "\x1b[38;5;244m📋 copy\x1b[0m")
 	}
+	// Show current theme
+	parts = append(parts, "\x1b[38;5;244m🎨 "+themeDisplay+"\x1b[0m")
 
 	bar := strings.Join(parts, "  ")
 
