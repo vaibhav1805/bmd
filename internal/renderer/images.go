@@ -169,6 +169,7 @@ func ImageToUnicode(imageData []byte, altText string, width int) string {
 }
 
 // ImageToTerminal renders image data using the best-supported protocol.
+// If no protocol is available, saves image to a temp file and shows the path.
 func ImageToTerminal(imageData []byte, imagePath, altText string, width, height int) string {
 	if len(imageData) == 0 {
 		// Fallback to alt text if no data
@@ -183,18 +184,41 @@ func ImageToTerminal(imageData []byte, imagePath, altText string, width, height 
 		ProtocolSixel:   "Sixel",
 		ProtocolUnicode: "Unicode",
 	}
-	fmt.Fprintf(os.Stderr, "[DEBUG] ImageToTerminal: protocol=%s\n", protocolNames[protocol])
+	fmt.Fprintf(os.Stderr, "[DEBUG] ImageToTerminal: protocol=%s, size=%d bytes\n", protocolNames[protocol], len(imageData))
 
 	switch protocol {
 	case ProtocolKitty:
-		return ImageToKitty(imageData, width, height)
+		result := ImageToKitty(imageData, width, height)
+		fmt.Fprintf(os.Stderr, "[DEBUG] Kitty sequence generated, %d bytes\n", len(result))
+		return result
 	case ProtocolITerm2:
-		return ImageToITerm2(imageData, width, height)
+		result := ImageToITerm2(imageData, width, height)
+		fmt.Fprintf(os.Stderr, "[DEBUG] iTerm2 sequence generated, %d bytes\n", len(result))
+		return result
 	case ProtocolSixel:
 		return ImageToSixel(imageData, width, height)
 	case ProtocolUnicode:
+		// Try to save image to a temp file and show path
+		tempPath := SaveImageTemp(imageData, altText)
+		if tempPath != "" {
+			return "[Image: " + altText + " - saved to " + tempPath + "]"
+		}
 		return ImageToUnicode(imageData, altText, width)
 	default:
 		return altText
 	}
+}
+
+// SaveImageTemp writes image data to a temporary file and returns the path.
+// Returns empty string on failure.
+func SaveImageTemp(data []byte, hint string) string {
+	tmpDir := os.TempDir()
+	tmpFile := filepath.Join(tmpDir, "bmd-image-"+hint+".png")
+	err := os.WriteFile(tmpFile, data, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Failed to save image temp file: %v\n", err)
+		return ""
+	}
+	fmt.Fprintf(os.Stderr, "[DEBUG] Saved image to: %s\n", tmpFile)
+	return tmpFile
 }
