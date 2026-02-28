@@ -1,5 +1,13 @@
 package editor
 
+import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
 // TextBuffer represents an in-memory editable document with cursor position tracking.
 type TextBuffer struct {
 	lines      []string // document lines (each line is the full text, no newlines)
@@ -173,4 +181,56 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// SaveToFile writes the buffer content to the specified file path using an atomic write pattern.
+// This prevents data loss if the write is interrupted (writes to temp file, then renames).
+// Returns nil on success, or an error if the write fails.
+func (tb *TextBuffer) SaveToFile(filePath string) error {
+	// Ensure the file path is absolute or resolve it relative to the current directory
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve file path: %w", err)
+	}
+
+	// Create the directory if it doesn't exist
+	dir := filepath.Dir(absPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Join all lines with newline
+	content := strings.Join(tb.GetLines(), "\n")
+
+	// Write to a temporary file in the same directory as the target file
+	// This ensures the temp file is on the same filesystem for atomic rename
+	tempFile, err := ioutil.TempFile(dir, ".bmd-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer tempFile.Close()
+
+	tempPath := tempFile.Name()
+
+	// Write the content to the temp file
+	if _, err := tempFile.WriteString(content); err != nil {
+		// Clean up the temp file on write failure
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+
+	// Ensure all data is flushed to disk
+	if err := tempFile.Sync(); err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+
+	// Atomically rename the temp file to the target path
+	// This is atomic on most filesystems (POSIX semantics)
+	if err := os.Rename(tempPath, absPath); err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to rename temp file to target: %w", err)
+	}
+
+	return nil
 }
