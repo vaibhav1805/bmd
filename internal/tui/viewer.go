@@ -272,6 +272,17 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
+		// Handle mouse wheel scrolling (SCROLL-01) using the Type field.
+		// MouseWheelUp and MouseWheelDown are deprecated types but still work.
+		scrollLines := 3
+		if msg.Type == tea.MouseWheelUp {
+			v.Offset = clamp(v.Offset-scrollLines, 0, v.maxOffset())
+			return v, nil
+		} else if msg.Type == tea.MouseWheelDown {
+			v.Offset = clamp(v.Offset+scrollLines, 0, v.maxOffset())
+			return v, nil
+		}
+
 		switch msg.Action {
 		case tea.MouseActionMotion:
 			// Track mouse position for hover cursor rendering (MOUSE-01).
