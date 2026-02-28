@@ -131,3 +131,72 @@ func TestRenderNode_AllTypesNoParic(t *testing.T) {
 		_ = result // just verify no panic
 	}
 }
+
+// TestThemesWithRenderer verifies all themes work correctly with the renderer.
+func TestThemesWithRenderer(t *testing.T) {
+	doc := ast.NewDocument()
+	h := ast.NewHeading(1)
+	h.AddChild(ast.NewText("Test Heading"))
+	doc.AddChild(h)
+
+	p := ast.NewParagraph()
+	p.AddChild(ast.NewText("Body text"))
+	doc.AddChild(p)
+
+	code := ast.NewCodeBlock("go", "fmt.Println(\"hello\")\n")
+	doc.AddChild(code)
+
+	themeNames := theme.AvailableThemes()
+	for _, name := range themeNames {
+		th := theme.NewThemeByName(name)
+		r := NewRenderer(th, 80)
+		output := r.Render(doc)
+
+		// Verify output is not empty
+		if output == "" {
+			t.Errorf("theme %s produced empty output", name)
+		}
+
+		// Verify output contains ANSI color codes (themes should apply colors)
+		if !strings.Contains(output, "\x1b[") {
+			t.Errorf("theme %s produced output with no ANSI codes", name)
+		}
+	}
+}
+
+// TestRenderImage verifies image rendering with alt text fallback.
+func TestRenderImage(t *testing.T) {
+	doc := ast.NewDocument()
+	h := ast.NewHeading(1)
+	h.AddChild(ast.NewText("Image Test"))
+	doc.AddChild(h)
+
+	// Create an image node
+	img := &ast.Image{
+		URL: "example.png",
+		Alt: "Alt text",
+	}
+	doc.AddChild(img)
+
+	r := testRenderer()
+	output := r.Render(doc)
+
+	// Verify output is not empty
+	if output == "" {
+		t.Error("image rendering produced empty output")
+	}
+
+	// Verify alt text appears (fallback for missing local file)
+	if !strings.Contains(output, "Alt text") {
+		t.Error("alt text not found in output")
+	}
+}
+
+// TestImageProtocolDetection verifies image protocol detection works.
+func TestImageProtocolDetection(t *testing.T) {
+	protocol := DetectImageProtocol()
+	// Just verify it returns a valid value
+	if protocol < 0 || protocol > 3 {
+		t.Errorf("DetectImageProtocol returned invalid value: %d", protocol)
+	}
+}

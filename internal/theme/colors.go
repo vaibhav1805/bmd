@@ -7,6 +7,30 @@ import (
 	"strings"
 )
 
+// Theme System Architecture
+//
+// The theme system uses ANSI 256-color codes for terminal compatibility. Each theme
+// is a preset combination of 14+ colors that apply to headings, code, quotes, links,
+// and other markdown elements.
+//
+// Theme Design Principles:
+//  1. Contrast: Code blocks, quotes, and links are always visually distinct from body text
+//  2. Hierarchy: H1 > H2 > H3 heading colors are clearly different to show structure
+//  3. Harmony: All colors within a theme work together cohesively (e.g., ocean theme uses only cool tones)
+//  4. Accessibility: No pure red-on-green or vice versa; colors work for color-blind users
+//  5. Terminal compat: All colors are ANSI 256-color codes for broad terminal support
+//
+// Available presets:
+//  - ThemeDefault: Auto-detects dark/light background from terminal env vars (light or dark)
+//  - ThemeOcean: Calming ocean blue tones (dark) - cool, calming palette
+//  - ThemeForest: Earthy forest green tones (dark) - natural, organic colors
+//  - ThemeSunset: Warm orange/red sunset tones (dark) - warm, energetic colors
+//  - ThemeMidnight: Deep purple/blue midnight tones (dark) - sophisticated, deep tones
+//
+// Each theme targets a specific background scheme (dark or light) for optimal readability.
+// Switching themes (press 'T' in the viewer) calls UpdateTheme() which re-renders
+// the document with new colors without reloading the file.
+
 // AnsiColor represents an ANSI 256-color palette index (0-255).
 type AnsiColor int
 
@@ -330,6 +354,17 @@ func midnightTheme() Theme {
 func NewTheme() Theme {
 	scheme := DetectColorScheme()
 	return NewThemeForScheme(scheme)
+}
+
+// AvailableThemes returns a slice of all available theme names in display order.
+func AvailableThemes() []ThemeName {
+	return []ThemeName{
+		ThemeDefault,
+		ThemeOcean,
+		ThemeForest,
+		ThemeSunset,
+		ThemeMidnight,
+	}
 }
 
 // NewThemeByName creates a theme with the specified name preset.

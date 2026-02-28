@@ -1,6 +1,7 @@
 package renderer
 
 import (
+	"os"
 	"strings"
 
 	"github.com/bmd/bmd/internal/ast"
@@ -213,13 +214,38 @@ func (r *Renderer) renderLink(l *ast.Link) string {
 	return rendererLinkPrefix + l.URL + rendererLinkSep + styled + rendererLinkEnd
 }
 
-// renderImage renders an image as alt text with a prefix indicator.
+// renderImage renders an image using terminal protocol or alt text fallback.
 func (r *Renderer) renderImage(img *ast.Image) string {
 	alt := img.Alt
 	if alt == "" {
 		alt = "[image]"
 	}
-	return theme.FgCode(r.theme.LinkColor()) + "[img: " + alt + "]" + theme.Reset
+
+	imageURL := img.URL
+
+	// Resolve relative URLs (use current directory as base for now)
+	basePath, _ := os.Getwd()
+	resolvedPath, isLocal := ResolveImageURL(imageURL, basePath)
+
+	// Load image data
+	var imageData []byte
+	if isLocal {
+		imageData = LoadImageData(resolvedPath, true)
+	} else {
+		// For remote URLs, skip in Phase 5 MVP; show alt text
+		return theme.FgCode(r.theme.LinkColor()) + "[img: " + alt + "]" + theme.Reset
+	}
+
+	// If image couldn't be loaded, fall back to alt text
+	if imageData == nil {
+		return theme.FgCode(r.theme.LinkColor()) + "[img: " + alt + "]" + theme.Reset
+	}
+
+	// Render using terminal image protocol
+	imageStr := ImageToTerminal(imageData, resolvedPath, alt, r.termWidth, 20)
+
+	// Wrap in theme colors and paragraph break for visual separation
+	return theme.FgCode(r.theme.LinkColor()) + imageStr + theme.Reset + "\n"
 }
 
 // --- Wave 2 implementations ---

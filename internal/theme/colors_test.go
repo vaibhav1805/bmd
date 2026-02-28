@@ -95,3 +95,84 @@ func TestHeadingColorBoundary(t *testing.T) {
 		t.Errorf("HeadingColor(7) and HeadingColor(6) should be same (clamped), got %d vs %d", c7, c6)
 	}
 }
+
+// TestThemeDistinctness verifies each theme has distinct colors and differs from others.
+func TestThemeDistinctness(t *testing.T) {
+	themes := map[string]Theme{
+		"ocean":     NewThemeByName(ThemeOcean),
+		"forest":    NewThemeByName(ThemeForest),
+		"sunset":    NewThemeByName(ThemeSunset),
+		"midnight":  NewThemeByName(ThemeMidnight),
+	}
+
+	// Verify ocean heading colors are distinct from others
+	oceanH1 := themes["ocean"].HeadingColor(1)
+	forestH1 := themes["forest"].HeadingColor(1)
+	sunsetH1 := themes["sunset"].HeadingColor(1)
+	midnightH1 := themes["midnight"].HeadingColor(1)
+
+	if oceanH1 == forestH1 {
+		t.Error("ocean and forest themes have same H1 color")
+	}
+	if oceanH1 == sunsetH1 {
+		t.Error("ocean and sunset themes have same H1 color")
+	}
+	if oceanH1 == midnightH1 {
+		t.Error("ocean and midnight themes have same H1 color")
+	}
+	if forestH1 == sunsetH1 {
+		t.Error("forest and sunset themes have same H1 color")
+	}
+	if forestH1 == midnightH1 {
+		t.Error("forest and midnight themes have same H1 color")
+	}
+	if sunsetH1 == midnightH1 {
+		t.Error("sunset and midnight themes have same H1 color")
+	}
+}
+
+// TestThemeContrast verifies code colors and link colors have good contrast.
+func TestThemeContrast(t *testing.T) {
+	themes := []struct {
+		name  string
+		theme Theme
+	}{
+		{"ocean", NewThemeByName(ThemeOcean)},
+		{"forest", NewThemeByName(ThemeForest)},
+		{"sunset", NewThemeByName(ThemeSunset)},
+		{"midnight", NewThemeByName(ThemeMidnight)},
+	}
+
+	for _, tc := range themes {
+		// Inline code should have a background (codeBgColor != NoColor)
+		if tc.theme.CodeBgColor() == NoColor {
+			t.Errorf("%s theme inline code has no background color", tc.name)
+		}
+
+		// Code block fg should be different from code block bg
+		if tc.theme.CodeBlockFg() == tc.theme.CodeBlockBg() {
+			t.Errorf("%s theme code block fg and bg are the same color", tc.name)
+		}
+
+		// Links should be colored (not NoColor)
+		if tc.theme.LinkColor() == NoColor {
+			t.Errorf("%s theme links have no color", tc.name)
+		}
+	}
+}
+
+// TestAllThemesInitialize verifies all themes can be created without panic.
+func TestAllThemesInitialize(t *testing.T) {
+	themeNames := AvailableThemes()
+	if len(themeNames) < 5 {
+		t.Errorf("Expected at least 5 themes, got %d", len(themeNames))
+	}
+
+	for _, name := range themeNames {
+		th := NewThemeByName(name)
+		// Verify theme has valid scheme
+		if th.Scheme() != Dark && th.Scheme() != Light {
+			t.Errorf("theme %s has invalid scheme", name)
+		}
+	}
+}
