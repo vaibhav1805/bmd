@@ -1230,7 +1230,10 @@ func (v *Viewer) renderEditMode() string {
 	for i := v.Offset; i < end; i++ {
 		lineNum := i + 1
 		lineNumStr := fmt.Sprintf("%5d | ", lineNum)
-		displayLine := lineNumStr + v.Lines[i]
+
+		// Apply markdown syntax highlighting to the line
+		highlightedLine := v.highlightMarkdownLine(v.Lines[i])
+		displayLine := lineNumStr + highlightedLine
 		if len(displayLine) > v.Width {
 			displayLine = displayLine[:v.Width]
 		}
