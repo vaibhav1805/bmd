@@ -8,11 +8,90 @@ import (
 	"strings"
 )
 
+// UndoRedoManager maintains undo and redo stacks of document states.
+type UndoRedoManager struct {
+	undoStack [][]string // Each entry is a snapshot of []string (buffer lines)
+	redoStack [][]string
+}
+
+// NewUndoRedoManager creates a new undo/redo manager.
+func NewUndoRedoManager() *UndoRedoManager {
+	return &UndoRedoManager{
+		undoStack: make([][]string, 0),
+		redoStack: make([][]string, 0),
+	}
+}
+
+// Push saves the current state to the undo stack and clears the redo stack.
+// This is called BEFORE an edit operation, so the undo stack contains the pre-edit state.
+func (urm *UndoRedoManager) Push(state []string) {
+	// Deep copy the state
+	snapshot := make([]string, len(state))
+	copy(snapshot, state)
+	urm.undoStack = append(urm.undoStack, snapshot)
+	// Clear redo stack when a new edit is made
+	urm.redoStack = make([][]string, 0)
+}
+
+// Undo reverts to the previous state, if available.
+// Returns the pre-undo state to restore, or nil if no undo available.
+func (urm *UndoRedoManager) Undo() []string {
+	if len(urm.undoStack) == 0 {
+		return nil
+	}
+
+	// Pop from undo stack
+	undoState := urm.undoStack[len(urm.undoStack)-1]
+	urm.undoStack = urm.undoStack[:len(urm.undoStack)-1]
+
+	// Push current state to redo stack (will be provided by caller)
+	// This is a bit awkward: we need the current state to push to redo
+	// See the Undo method in TextBuffer below for the full interaction
+
+	return undoState
+}
+
+// Redo reapplies a previously undone state, if available.
+func (urm *UndoRedoManager) Redo() []string {
+	if len(urm.redoStack) == 0 {
+		return nil
+	}
+
+	// Pop from redo stack
+	redoState := urm.redoStack[len(urm.redoStack)-1]
+	urm.redoStack = urm.redoStack[:len(urm.redoStack)-1]
+
+	return redoState
+}
+
+// CanUndo returns true if undo is available.
+func (urm *UndoRedoManager) CanUndo() bool {
+	return len(urm.undoStack) > 0
+}
+
+// CanRedo returns true if redo is available.
+func (urm *UndoRedoManager) CanRedo() bool {
+	return len(urm.redoStack) > 0
+}
+
+// PushRedo saves the current state to the redo stack (called by TextBuffer.Undo).
+func (urm *UndoRedoManager) PushRedo(state []string) {
+	snapshot := make([]string, len(state))
+	copy(snapshot, state)
+	urm.redoStack = append(urm.redoStack, snapshot)
+}
+
+// PushUndo saves the current state to the undo stack (called by TextBuffer before edits).
+func (urm *UndoRedoManager) PushUndo(state []string) {
+	urm.Push(state)
+}
+
 // TextBuffer represents an in-memory editable document with cursor position tracking.
 type TextBuffer struct {
-	lines      []string // document lines (each line is the full text, no newlines)
-	cursorLine int      // 0-based line index
-	cursorCol  int      // 0-based column (character position in the line)
+	lines      []string          // document lines (each line is the full text, no newlines)
+	cursorLine int               // 0-based line index
+	cursorCol  int               // 0-based column (character position in the line)
+	undoRedo   *UndoRedoManager  // undo/redo manager for edit history
 }
 
 // NewTextBuffer creates a TextBuffer from initial lines.
@@ -23,6 +102,7 @@ func NewTextBuffer(initialLines []string) *TextBuffer {
 		lines:      lines,
 		cursorLine: 0,
 		cursorCol:  0,
+		undoRedo:   NewUndoRedoManager(),
 	}
 }
 
@@ -97,6 +177,9 @@ func (tb *TextBuffer) Insert(r rune) {
 	if tb.cursorLine >= len(tb.lines) {
 		return // cursor past end of buffer
 	}
+	// Push current state to undo stack BEFORE making the edit
+	tb.undoRedo.PushUndo(tb.GetLines())
+
 	line := tb.lines[tb.cursorLine]
 	if tb.cursorCol > len(line) {
 		tb.cursorCol = len(line)
@@ -113,6 +196,9 @@ func (tb *TextBuffer) Delete() {
 	if tb.cursorLine >= len(tb.lines) {
 		return
 	}
+	// Push current state to undo stack BEFORE making the edit
+	tb.undoRedo.PushUndo(tb.GetLines())
+
 	line := tb.lines[tb.cursorLine]
 	if tb.cursorCol >= len(line) {
 		// At end of line: join with next line
@@ -131,6 +217,9 @@ func (tb *TextBuffer) Delete() {
 // Backspace removes the character before the cursor (like Backspace key).
 // If at start of line, joins with previous line.
 func (tb *TextBuffer) Backspace() {
+	// Push current state to undo stack BEFORE making the edit
+	tb.undoRedo.PushUndo(tb.GetLines())
+
 	if tb.cursorCol > 0 {
 		// Delete character before cursor
 		line := tb.lines[tb.cursorLine]
@@ -153,6 +242,9 @@ func (tb *TextBuffer) EnterNewLine() {
 	if tb.cursorLine >= len(tb.lines) {
 		return
 	}
+	// Push current state to undo stack BEFORE making the edit
+	tb.undoRedo.PushUndo(tb.GetLines())
+
 	line := tb.lines[tb.cursorLine]
 	runes := []rune(line)
 
@@ -164,6 +256,44 @@ func (tb *TextBuffer) EnterNewLine() {
 
 	tb.cursorLine++
 	tb.cursorCol = 0
+}
+
+// Undo reverts to the previous state.
+func (tb *TextBuffer) Undo() {
+	undoState := tb.undoRedo.Undo()
+	if undoState == nil {
+		return // No undo available
+	}
+
+	// Push current state to redo stack before restoring undo state
+	tb.undoRedo.PushRedo(tb.GetLines())
+
+	// Restore the undo state
+	tb.SetLines(undoState)
+}
+
+// Redo reapplies a previously undone state.
+func (tb *TextBuffer) Redo() {
+	redoState := tb.undoRedo.Redo()
+	if redoState == nil {
+		return // No redo available
+	}
+
+	// Push current state to undo stack before restoring redo state
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	// Restore the redo state
+	tb.SetLines(redoState)
+}
+
+// CanUndo returns true if undo is available.
+func (tb *TextBuffer) CanUndo() bool {
+	return tb.undoRedo.CanUndo()
+}
+
+// CanRedo returns true if redo is available.
+func (tb *TextBuffer) CanRedo() bool {
+	return tb.undoRedo.CanRedo()
 }
 
 // clampCursorCol ensures the cursor column is within valid bounds for the current line.
