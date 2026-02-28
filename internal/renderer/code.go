@@ -66,7 +66,7 @@ func (r *Renderer) RenderCodeBlock(cb *ast.CodeBlock) string {
 		if padding < 0 {
 			padding = 0
 		}
-		sb.WriteString(labelColor + "│" + reset + " " + line + strings.Repeat(" ", padding) + " " + labelColor + "│" + reset + "\n")
+		sb.WriteString(labelColor + "│ " + reset + line + strings.Repeat(" ", padding) + " " + labelColor + "│" + reset + "\n")
 	}
 
 	// Bottom border
