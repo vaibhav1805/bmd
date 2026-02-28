@@ -19,6 +19,7 @@ import (
 	"github.com/bmd/bmd/internal/nav"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/renderer"
+	"github.com/bmd/bmd/internal/search"
 	"github.com/bmd/bmd/internal/theme"
 )
 
@@ -349,8 +350,12 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Toggle edit mode
 			v.editMode = !v.editMode
 			if v.editMode {
-				// Entering edit mode: create text buffer and clear search state
-				v.editBuffer = editor.NewTextBuffer(v.Lines)
+				// Entering edit mode: create text buffer with stripped ANSI codes and clear search state
+				plainLines := make([]string, len(v.Lines))
+				for i, line := range v.Lines {
+					plainLines[i] = search.StripANSI(line)
+				}
+				v.editBuffer = editor.NewTextBuffer(plainLines)
 				v.searchMode = false
 				v.searchInput = ""
 				v.isSelecting = false
@@ -1346,16 +1351,29 @@ func (v *Viewer) renderEditMode() string {
 	// Render each visible line with line number + raw text
 	contentHeight := v.Height - 2 // header + status bar
 	end := v.Offset + contentHeight
-	if end > len(v.Lines) {
-		end = len(v.Lines)
+
+	// Get total lines from editBuffer
+	totalLines := 0
+	if v.editBuffer != nil {
+		totalLines = len(v.editBuffer.GetLines())
+	}
+
+	if end > totalLines {
+		end = totalLines
 	}
 
 	for i := v.Offset; i < end; i++ {
 		lineNum := i + 1
 		lineNumStr := fmt.Sprintf("%5d | ", lineNum)
 
-		// Get the content line
-		contentLine := v.Lines[i]
+		// Get the content line from the editBuffer (which contains plain text)
+		var contentLine string
+		if v.editBuffer != nil {
+			bufferLines := v.editBuffer.GetLines()
+			if i < len(bufferLines) {
+				contentLine = bufferLines[i]
+			}
+		}
 
 		// Apply markdown syntax highlighting to the line
 		highlightedLine := v.highlightMarkdownLine(contentLine)
