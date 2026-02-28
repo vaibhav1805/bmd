@@ -14,6 +14,7 @@ type Renderer struct {
 	termWidth         int
 	emitLinkSentinels bool // if true, wrap links with sentinel markers for LinkRegistry
 	leftMargin        int   // left margin (spaces) for elegant screen edge padding
+	docDir            string // directory of the document being rendered (for relative image paths)
 }
 
 // linkSentinelPrefix and related constants mirror tui/linkreg.go — kept here
@@ -30,6 +31,14 @@ const (
 func (r *Renderer) WithLinkSentinels() *Renderer {
 	copy := *r
 	copy.emitLinkSentinels = true
+	return &copy
+}
+
+// WithDocDir returns a copy of the renderer configured with the document's directory.
+// This is used to resolve relative image paths relative to the document's location.
+func (r *Renderer) WithDocDir(dir string) *Renderer {
+	copy := *r
+	copy.docDir = dir
 	return &copy
 }
 
@@ -223,8 +232,11 @@ func (r *Renderer) renderImage(img *ast.Image) string {
 
 	imageURL := img.URL
 
-	// Resolve relative URLs (use current directory as base for now)
-	basePath, _ := os.Getwd()
+	// Resolve relative URLs relative to the document's directory
+	basePath := r.docDir
+	if basePath == "" {
+		basePath, _ = os.Getwd()
+	}
 	resolvedPath, isLocal := ResolveImageURL(imageURL, basePath)
 
 	// Load image data

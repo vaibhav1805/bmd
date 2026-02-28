@@ -107,7 +107,7 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) Viewer {
 	h := nav.New()
 	h.Push(absPath)
 
-	r := renderer.NewRenderer(th, width).WithLinkSentinels()
+	r := renderer.NewRenderer(th, width).WithLinkSentinels().WithDocDir(filepath.Dir(absPath))
 	rendered := r.Render(doc)
 	rawLines := strings.Split(rendered, "\n")
 	lines := stripAllSentinels(rawLines)
@@ -140,7 +140,7 @@ func (v *Viewer) UpdateTheme(newTheme theme.Theme, themeName theme.ThemeName) {
 	v.Theme = newTheme
 	v.currentThemeName = themeName
 	// Re-render the document with the new theme
-	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels()
+	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels().WithDocDir(filepath.Dir(v.FilePath))
 	rendered := r.Render(v.Doc)
 
 	// Rebuild the line cache
@@ -178,7 +178,7 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Width != v.Width {
 			v.Width = msg.Width
 			// Re-render with new width (skip when only height changes for performance).
-			r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels()
+			r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels().WithDocDir(filepath.Dir(v.FilePath))
 			rendered := r.Render(v.Doc)
 			v.rawLines = strings.Split(rendered, "\n")
 			v.Lines = stripAllSentinels(v.rawLines)
@@ -1013,7 +1013,7 @@ func (v Viewer) loadFile(path string) (Viewer, tea.Cmd) {
 	v.searchMode = false
 	v.searchInput = ""
 
-	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels()
+	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels().WithDocDir(filepath.Dir(v.FilePath))
 	rendered := r.Render(doc)
 	v.rawLines = strings.Split(rendered, "\n")
 	v.Lines = stripAllSentinels(v.rawLines)
@@ -1047,7 +1047,7 @@ func (v Viewer) loadFileNoHistory(path string) (Viewer, tea.Cmd) {
 	v.searchMode = false
 	v.searchInput = ""
 
-	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels()
+	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels().WithDocDir(filepath.Dir(v.FilePath))
 	rendered := r.Render(doc)
 	v.rawLines = strings.Split(rendered, "\n")
 	v.Lines = stripAllSentinels(v.rawLines)
