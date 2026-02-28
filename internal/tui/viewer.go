@@ -260,6 +260,14 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return clearErrorMsg{}
 					})
 				}
+			case tea.KeyCtrlZ:
+				// Undo
+				v.editBuffer.Undo()
+				return v, nil
+			case tea.KeyCtrlY:
+				// Redo
+				v.editBuffer.Redo()
+				return v, nil
 			case tea.KeyEsc:
 				// Exit edit mode
 				v.editMode = false
