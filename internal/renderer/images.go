@@ -23,6 +23,7 @@ const (
 func DetectImageProtocol() ImageProtocol {
 	// Check TERM environment variable for protocol support
 	term := os.Getenv("TERM")
+	fmt.Fprintf(os.Stderr, "[DEBUG] DetectImageProtocol: TERM=%s\n", term)
 
 	// Kitty graphics protocol (priority: works in Alacritty, Kitty, WezTerm)
 	if os.Getenv("KITTY_WINDOW_ID") != "" {
@@ -117,12 +118,18 @@ func ImageToITerm2(imageData []byte, width, height int) string {
 		return ""
 	}
 
-	// iTerm2 inline image protocol:
-	// \x1b]1337;File=width=<w>;height=<h>;inline=1:<base64-data>\x07
+	// iTerm2 inline image protocol (proper format):
+	// OSC 1337 ; File = [params] : base64 BEL
+	// Params: name, size (original bytes), width (chars), height (chars), inline=1
 	encoded := base64.StdEncoding.EncodeToString(imageData)
 
-	return fmt.Sprintf("\x1b]1337;File=width=%d;height=%d;inline=1:%s\x07\n",
-		width, height, encoded)
+	// Debug output
+	fmt.Fprintf(os.Stderr, "[DEBUG] ImageToITerm2: %d bytes -> %d chars encoded, w=%d h=%d\n",
+		len(imageData), len(encoded), width, height)
+
+	// Format: name=image.png;size=<bytes>;width=<chars>;height=<chars>;inline=1;preserveAspectRatio=1
+	return fmt.Sprintf("\x1b]1337;File=name=image.png;size=%d;width=%d;height=%d;inline=1;preserveAspectRatio=1:%s\x07",
+		len(imageData), width, height, encoded)
 }
 
 // ImageToKitty encodes image data as a Kitty graphics protocol sequence.
@@ -169,6 +176,14 @@ func ImageToTerminal(imageData []byte, imagePath, altText string, width, height 
 	}
 
 	protocol := DetectImageProtocol()
+	protocolNames := map[ImageProtocol]string{
+		ProtocolNone:    "None",
+		ProtocolITerm2:  "iTerm2",
+		ProtocolKitty:   "Kitty",
+		ProtocolSixel:   "Sixel",
+		ProtocolUnicode: "Unicode",
+	}
+	fmt.Fprintf(os.Stderr, "[DEBUG] ImageToTerminal: protocol=%s\n", protocolNames[protocol])
 
 	switch protocol {
 	case ProtocolKitty:

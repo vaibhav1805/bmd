@@ -1,6 +1,7 @@
 package renderer
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -237,7 +238,13 @@ func (r *Renderer) renderImage(img *ast.Image) string {
 	if basePath == "" {
 		basePath, _ = os.Getwd()
 	}
+
+	fmt.Fprintf(os.Stderr, "[DEBUG] renderImage: URL=%s, docDir=%s, basePath=%s\n",
+		imageURL, r.docDir, basePath)
+
 	resolvedPath, isLocal := ResolveImageURL(imageURL, basePath)
+
+	fmt.Fprintf(os.Stderr, "[DEBUG] resolved: %s (isLocal=%v)\n", resolvedPath, isLocal)
 
 	// Load image data
 	var imageData []byte
@@ -250,14 +257,28 @@ func (r *Renderer) renderImage(img *ast.Image) string {
 
 	// If image couldn't be loaded, fall back to alt text
 	if imageData == nil {
+		fmt.Fprintf(os.Stderr, "[DEBUG] imageData is nil for %s\n", resolvedPath)
 		return theme.FgCode(r.theme.LinkColor()) + "[img: " + alt + "]" + theme.Reset
 	}
 
-	// Render using terminal image protocol
-	imageStr := ImageToTerminal(imageData, resolvedPath, alt, r.termWidth, 20)
+	fmt.Fprintf(os.Stderr, "[DEBUG] imageData loaded: %d bytes\n", len(imageData))
 
-	// Wrap in theme colors and paragraph break for visual separation
-	return theme.FgCode(r.theme.LinkColor()) + imageStr + theme.Reset + "\n"
+	// Render using terminal image protocol
+	// Use reasonable dimensions: 60% of terminal width, aspect-ratio-preserved height
+	imageWidth := (r.termWidth * 60) / 100
+	if imageWidth < 20 {
+		imageWidth = 20
+	}
+	if imageWidth > 100 {
+		imageWidth = 100
+	}
+	imageHeight := (imageWidth * 2) / 3 // Rough aspect ratio for images
+
+	imageStr := ImageToTerminal(imageData, resolvedPath, alt, imageWidth, imageHeight)
+
+	// Don't wrap image with colors - the escape sequence needs to be clean
+	// Just add spacing
+	return imageStr + "\n"
 }
 
 // --- Wave 2 implementations ---
