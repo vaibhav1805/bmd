@@ -23,50 +23,63 @@ const (
 func DetectImageProtocol() ImageProtocol {
 	// Check TERM environment variable for protocol support
 	term := os.Getenv("TERM")
-	fmt.Fprintf(os.Stderr, "[DEBUG] DetectImageProtocol: TERM=%s\n", term)
+	termProgram := os.Getenv("TERM_PROGRAM")
 
-	// Kitty graphics protocol (priority: works in Alacritty, Kitty, WezTerm)
+	fmt.Fprintf(os.Stderr, "[DEBUG] DetectImageProtocol: TERM=%s, TERM_PROGRAM=%s, KITTY_WINDOW_ID=%s\n",
+		term, termProgram, os.Getenv("KITTY_WINDOW_ID"))
+
+	// Explicit Kitty window detection
 	if os.Getenv("KITTY_WINDOW_ID") != "" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: Kitty (KITTY_WINDOW_ID set)\n")
 		return ProtocolKitty
 	}
-	// Alacritty may advertise Kitty support via TERM
+
+	// TERM explicitly set to kitty
 	if strings.Contains(term, "kitty") {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: Kitty (TERM contains kitty)\n")
 		return ProtocolKitty
 	}
 
-	// iTerm2 support (macOS)
-	if os.Getenv("ITERM_PROGRAM") != "" {
-		return ProtocolITerm2
-	}
-	if os.Getenv("TERM_PROGRAM") == "iTerm.app" {
+	// macOS Terminal.app - supports iTerm2 protocol
+	if termProgram == "Apple_Terminal" || termProgram == "iTerm.app" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: %s (TERM_PROGRAM=%s)\n", termProgram, termProgram)
 		return ProtocolITerm2
 	}
 
-	// Sixel support (xterm-256color with sixel, mlterm, etc.)
+	// Explicit iTerm2 detection
+	if os.Getenv("ITERM_PROGRAM") != "" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: iTerm2 (ITERM_PROGRAM set)\n")
+		return ProtocolITerm2
+	}
+
+	// Alacritty - supports Kitty graphics protocol well
+	if strings.Contains(term, "alacritty") {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: Alacritty (TERM=alacritty, using Kitty protocol)\n")
+		return ProtocolKitty
+	}
+
+	// WezTerm - supports Kitty
+	if strings.Contains(term, "wezterm") {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: WezTerm (using Kitty protocol)\n")
+		return ProtocolKitty
+	}
+
+	// Sixel support (xterm variants with sixel)
 	if strings.Contains(term, "sixel") {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: Sixel support\n")
 		return ProtocolSixel
 	}
 	if strings.HasPrefix(term, "xterm") && os.Getenv("XTERM_VERSION") != "" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: xterm with Sixel support\n")
 		return ProtocolSixel
 	}
 	if strings.Contains(term, "mlterm") {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Detected: mlterm (Sixel support)\n")
 		return ProtocolSixel
 	}
 
-	// Alacritty detection - try iTerm2 protocol as fallback
-	// Alacritty supports iTerm2 escape sequences in many versions
-	if strings.Contains(term, "alacritty") {
-		return ProtocolITerm2
-	}
-
-	// If no specific protocol detected, try Kitty for most terminals
-	// Kitty is more standard than iTerm2 and supported by many modern terminals
-	// (including Kitty, WezTerm, and some Alacritty versions)
-	if term != "" && term != "dumb" && !strings.Contains(term, "linux") {
-		return ProtocolKitty
-	}
-
-	// Fallback: use Unicode blocks (works everywhere, safe default)
+	// Default fallback
+	fmt.Fprintf(os.Stderr, "[DEBUG] No image protocol detected, using Unicode fallback\n")
 	return ProtocolUnicode
 }
 
