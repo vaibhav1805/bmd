@@ -336,12 +336,18 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.jumpMode = true
 			v.jumpInput = ""
 
-		case "shift+t", "T", "ctrl+t":
-			// Open theme selection dialog
-			// Support multiple keybindings for robustness:
-			// - shift+t: explicit shift modifier (may not work on all terminals)
-			// - T: uppercase T (most terminals send Shift+T as uppercase)
-			// - ctrl+t: alternative keybinding
+		}
+
+		// Theme dialog keybinding: check for 't'/'T' or Ctrl+T
+		// Using rune-based matching for robustness across terminals
+		if len(msg.Runes) > 0 {
+			r := msg.Runes[0]
+			if r == 't' || r == 'T' {
+				v.themeDialog.Open(v.getCurrentThemeName())
+				return v, nil
+			}
+		}
+		if msg.Type == tea.KeyCtrlT {
 			v.themeDialog.Open(v.getCurrentThemeName())
 			return v, nil
 		}
