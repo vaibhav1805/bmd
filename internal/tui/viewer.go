@@ -19,7 +19,6 @@ import (
 	"github.com/bmd/bmd/internal/nav"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/renderer"
-	"github.com/bmd/bmd/internal/search"
 	"github.com/bmd/bmd/internal/theme"
 )
 
@@ -350,11 +349,18 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Toggle edit mode
 			v.editMode = !v.editMode
 			if v.editMode {
-				// Entering edit mode: create text buffer with stripped ANSI codes and clear search state
-				plainLines := make([]string, len(v.Lines))
-				for i, line := range v.Lines {
-					plainLines[i] = search.StripANSI(line)
+				// Entering edit mode: read raw file bytes so the buffer contains plain
+				// markdown, not the rendered output (which has decorative ━━━ borders,
+				// prefix markers, ANSI codes, etc.). Using v.Lines here would corrupt
+				// saves because rendering transforms headings and other elements into
+				// multi-line decorated output that is not valid markdown.
+				data, readErr := os.ReadFile(v.FilePath)
+				if readErr != nil {
+					v.errorMsg = fmt.Sprintf("Cannot open file for editing: %v", readErr)
+					v.editMode = false
+					return v, clearErrorAfter(statusTimeout)
 				}
+				plainLines := strings.Split(string(data), "\n")
 				v.editBuffer = editor.NewTextBuffer(plainLines)
 				v.searchMode = false
 				v.searchInput = ""
