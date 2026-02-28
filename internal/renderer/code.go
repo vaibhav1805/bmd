@@ -35,7 +35,7 @@ func (r *Renderer) RenderCodeBlock(cb *ast.CodeBlock) string {
 	// Build box
 	var sb strings.Builder
 
-	// Top border with language label
+	// Top border with language label (with extra top margin for breathing room)
 	if lang != "" {
 		// "┌─ python ─────────────────────┐"
 		label := "─ " + lang + " "

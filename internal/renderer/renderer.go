@@ -88,30 +88,50 @@ func (r *Renderer) RenderNode(node ast.Node) string {
 // renderDocument renders all children of a Document with consistent block spacing.
 // Block elements that embed a leading "\n" (headings, code blocks, blockquotes, tables)
 // are joined directly; others get a blank line separator.
+// Extra spacing is added around major elements (headings, code blocks) for better readability.
 func (r *Renderer) renderDocument(doc *ast.Document) string {
 	var sb strings.Builder
 	first := true
+	prevWasMajor := false // Track if previous element was a major block (heading, code block)
+
 	for _, child := range doc.Children() {
 		rendered := r.RenderNode(child)
 		if rendered == "" {
 			continue
 		}
+
+		// Determine if this is a major block element
+		isMajor := false
+		switch child.(type) {
+		case *ast.Heading, *ast.CodeBlock, *ast.BlockQuote:
+			isMajor = true
+		}
+
 		if first {
 			// Trim leading newline from the very first block (no blank line before document start)
 			rendered = strings.TrimPrefix(rendered, "\n")
 			sb.WriteString(rendered)
 			first = false
+			prevWasMajor = isMajor
 			continue
 		}
-		// If the block already starts with \n (provides its own spacing), join directly.
-		// Otherwise add a blank line separator.
+
+		// Add extra spacing around major elements for visual breathing room
+		spacing := "\n\n"
+		if prevWasMajor && isMajor {
+			spacing = "\n\n\n" // Extra blank line between major elements
+		}
+
+		// If the block already starts with \n (provides its own spacing), adjust spacing
 		if strings.HasPrefix(rendered, "\n") {
-			sb.WriteString("\n")
+			sb.WriteString(spacing)
 			sb.WriteString(rendered)
 		} else {
-			sb.WriteString("\n\n")
+			sb.WriteString(spacing)
 			sb.WriteString(rendered)
 		}
+
+		prevWasMajor = isMajor
 	}
 	sb.WriteString("\n")
 	return sb.String()
@@ -158,10 +178,11 @@ func (r *Renderer) renderText(t *ast.Text) string {
 	return RenderText(t)
 }
 
-// renderInlineCode applies inline code styling.
+// renderInlineCode applies inline code styling with enhanced padding.
 func (r *Renderer) renderInlineCode(c *ast.Code) string {
 	fg := theme.FgCode(r.theme.CodeColor())
 	bg := theme.BgCode(r.theme.CodeBgColor())
+	// Add padding around inline code for better visual separation
 	return bg + fg + " " + c.Content + " " + theme.Reset
 }
 

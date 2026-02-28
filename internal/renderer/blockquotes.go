@@ -9,6 +9,7 @@ import (
 
 // RenderBlockQuote renders a blockquote with a colored left border (│) on every line.
 // Content inside is rendered normally but prefixed with the border character.
+// Includes vertical padding for improved readability.
 func (r *Renderer) RenderBlockQuote(bq *ast.BlockQuote) string {
 	borderColor := theme.FgCode(r.theme.QuoteBorderColor())
 	textColor := theme.FgCode(r.theme.QuoteColor())
@@ -32,7 +33,8 @@ func (r *Renderer) RenderBlockQuote(bq *ast.BlockQuote) string {
 				// Empty line: still show border for visual continuity
 				sb.WriteString(border + "\n")
 			} else {
-				sb.WriteString(border + " " + textColor + line + reset + "\n")
+				// Add left padding after border for better visual spacing
+				sb.WriteString(border + "  " + textColor + line + reset + "\n")
 			}
 		}
 	}
