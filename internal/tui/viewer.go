@@ -223,6 +223,18 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.helpOpen = !v.helpOpen
 			return v, nil
 
+		case "e", "E":
+			// Toggle edit mode
+			v.editMode = !v.editMode
+			if v.editMode {
+				// Entering edit mode: clear search state and selection to avoid confusion
+				v.searchMode = false
+				v.searchInput = ""
+				v.isSelecting = false
+				v.selectedText = ""
+			}
+			return v, nil
+
 		case "q":
 			return v, tea.Quit
 
@@ -251,6 +263,11 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v, tea.Quit
 
 		case "esc":
+			// Exit edit mode, clear jump/search/browser if open
+			if v.editMode {
+				v.editMode = false
+				return v, nil
+			}
 			if v.HasSelection() {
 				v.ClearSelection()
 				return v, nil
