@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Polish & UX** - Headers, keyboard hints, scrolling — tool feels complete
 - [x] **Phase 4: Mouse & Copy Support** - Mouse cursor, click navigation, copy text with standard keyboard shortcuts
 - [x] **Phase 5: Enhanced UX & Images** - Color themes, text selection, and image rendering
-- [ ] **Phase 6: Agent Intelligence & Knowledge Graphs** - Agent-queryable markdown indexing, dependency detection, local knowledge graphs
+- [x] **Phase 6: Agent Intelligence & Knowledge Graphs** - Agent-queryable markdown indexing, dependency detection, local knowledge graphs (completed 2026-02-28)
 
 ## Phase Details
 
@@ -116,8 +116,8 @@ Plans:
 - [x] 06-02-PLAN.md — Knowledge graph construction: Parse relationships, build edge registry, detect mentions
 - [x] 06-03-PLAN.md — Dependency detection: Microservice patterns, API endpoint extraction, call chain analysis
 - [x] 06-04-PLAN.md — Local knowledge persistence: Sqlite-based memory, graph serialization, incremental updates
-- [ ] 06-05-PLAN.md — Agent query interface: Q&A endpoint, dependency queries, relationship traversal
-- [ ] 06-06-PLAN.md — Human verification checkpoint: all Phase 6 requirements confirmed
+- [x] 06-05-PLAN.md — Agent query interface: Q&A endpoint, dependency queries, relationship traversal
+- [x] 06-06-PLAN.md — Human verification checkpoint: all Phase 6 requirements confirmed — APPROVED 2026-02-28
 
 ## Progress
 
@@ -131,6 +131,6 @@ Phases execute in numeric order: 1 → 2 → 3
 | 3. Polish & UX | 3/3 | Complete    | 2026-02-27 |
 | 4. Mouse & Copy | 2/3 | Complete    | 2026-02-28 |
 | 5. Enhanced UX & Images | 4/4 | Complete    | 2026-02-28 |
-| 6. Agent Intelligence & Knowledge Graphs | 5/6 | In Progress | 2026-02-28 |
+| 6. Agent Intelligence & Knowledge Graphs | 6/6 | Complete   | 2026-02-28 |
 
-**Phase 6 In Progress: 5/6 plans complete (06-01 BM25 indexing, 06-02 knowledge graph, 06-03 microservice detection, 06-04 SQLite persistence done)**
+**ALL PHASES COMPLETE: Phase 6 verified and approved 2026-02-28 — all 6 phases of BMD Terminal Markdown Viewer delivered**
