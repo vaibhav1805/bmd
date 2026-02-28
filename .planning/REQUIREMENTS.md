@@ -45,6 +45,15 @@
 - **ADV-03**: Syntax highlighting for more languages
 - **ADV-04**: Theme customization (colors, fonts)
 
+## v3 Requirements (Phase 6)
+
+### Agent Intelligence & Knowledge Graphs
+
+- [x] **AGENT-01**: Index markdown directories for full-text search — BM25 ranking with recursive directory scanning (06-01)
+- [x] **AGENT-02**: Search API for agents — `Index.Search(query, topK) []SearchResult` with relevance scores and snippets (06-01)
+- [ ] **GRAPH-01**: Build knowledge graph from markdown link relationships and code references
+- [ ] **QUERY-01**: Query interface for dependency and relationship questions
+
 ## Out of Scope
 
 | Feature | Reason |
@@ -70,11 +79,16 @@
 | UX-01 | Phase 3 | Complete (03-01 — compact header bar with filename, folder, search state) |
 | UX-02 | Phase 3 | Complete (03-01 — '?' and 'h' toggle help overlay grouped by Scrolling/Navigation/Search) |
 | UX-03 | Phase 3 | Complete (03-02 — line counter, jump-to-line ':N', virtual rendering optimisation) |
+| AGENT-01 | Phase 6 | Complete (06-01 — BM25 indexing, recursive markdown scanner) |
+| AGENT-02 | Phase 6 | Complete (06-01 — Index.Search API with ranked results and snippets) |
+| GRAPH-01 | Phase 6 | Pending (06-02) |
+| QUERY-01 | Phase 6 | Pending (06-05) |
 
 **Coverage:**
 - v1 requirements: 13 total
-- Mapped to phases: 13
-- Unmapped: 0 ✓
+- v3 requirements: 4 total
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-26*

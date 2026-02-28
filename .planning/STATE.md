@@ -5,23 +5,24 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Render markdown files beautifully in the terminal so developers can read documentation without leaving their terminal.
-**Current focus:** Phase 4 - Mouse Copy Support (In Progress)
+**Current focus:** Phase 6 - Agent Intelligence (In Progress)
 
 ## Current Position
 
-Phase: 4 of 4 (Mouse Copy Support) — In Progress
-Plan: 2 of 3 in current phase
-Status: In Progress
-Last activity: 2026-02-27 — Plan 04-02 complete: Ctrl+C copy via OSC52 — COPY-01 complete
+Phase: 6 of 6 (Agent Intelligence) — IN PROGRESS
+Plan: 1 of 6 in current phase — 06-01 COMPLETE
+Status: Phase In Progress
+Last activity: 2026-02-28 — 06-01 Markdown Indexing & BM25 Search executed:
+  - 06-01: BM25 full-text search and markdown indexing ✓
 
-Progress: [██████████] 100%
+Progress: [██████████] Phase 5 complete — Phase 6 started (1/6)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
-- Average duration: 3 min
-- Total execution time: 0.65 hours
+- Total plans completed: 15
+- Average duration: 2 min
+- Total execution time: 0.50 hours (Phase 5 execution)
 
 **By Phase:**
 
@@ -31,13 +32,19 @@ Progress: [██████████] 100%
 | 02-navigation-search | 6 | 7 min | 1 min |
 | 03-polish-ux | 3 | 11 min | 4 min |
 | 04-mouse-copy-support | 1 | 5 min | 5 min |
+| 05-enhanced-ux-images | 4 | 30 min | 7.5 min |
+| 06-agent-intelligence | 1/6 | 25 min | 25 min |
+
+**Phase 6 Progress (2026-02-28):**
+- 06-01 (Markdown Indexing & BM25): 25 min (BM25 search, recursive scanner, tokenizer, persistence, 92% coverage)
 
 **Recent Trend:**
-- Last 5 plans: 3 min, 1 min, 8 min, 2 min, 1 min
+- Last 5 plans: 3 min, 1 min, 8 min, 2 min, 25 min
 - Trend: stable
 
 *Updated after each plan completion*
 | Phase 04-mouse-copy-support P02 | 5 | 2 tasks | 3 files |
+| Phase 06-agent-intelligence P01 | 25 | 9 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -91,6 +98,12 @@ Recent decisions affecting current work:
 - [04-01]: Cursor priority ordering: link focus > committed cursor (underline) > hover cursor (per-char reverse-video)
 - [Phase 04-02]: OSC52 written to stderr for clipboard — terminal clipboard channel; silently fails if terminal unsupported (acceptable Phase 4 tradeoff)
 - [Phase 04-02]: Split 'q' and 'ctrl+c' into separate key cases — Ctrl+C now branches on hasCursor to copy vs quit
+- [06-01]: BM25 k1=2.0, b=0.75 as configurable defaults via BM25Params struct — not hard-coded
+- [06-01]: MD5 used for content hashing (not security) — fast change detection, stdlib-only
+- [06-01]: Stop words configurable via TokenizerConfig.StopWords — nil uses built-in English list
+- [06-01]: Index serialised as JSON — human-readable, no external deps
+- [06-01]: Symlinks skipped unconditionally during scan — prevents circular link loops
+- [06-01]: IDF formula: log((N-df+0.5)/(df+0.5)+1) — +1 inside log ensures IDF >= 0 for all df
 
 ### Pending Todos
 
@@ -102,6 +115,11 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-27
-Stopped at: Completed 04-02-PLAN.md — Ctrl+C copy via OSC52 complete; COPY-01 satisfied
-Resume file: None
+Last session: 2026-02-28 — PHASE 6 EXECUTOR (06-01)
+Completed: 06-01 Markdown Indexing & BM25 full-text search
+  - Created internal/knowledge package (6 source files + 6 test files)
+  - BM25 Okapi ranking, recursive scanner, tokenizer, JSON persistence
+  - 92.2% test coverage, integration test on real BMD corpus
+
+Status: PHASE 6 IN PROGRESS — 1/6 plans complete
+Stopped at: Completed 06-01-PLAN.md
