@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -16,6 +17,7 @@ import (
 	"github.com/bmd/bmd/internal/ast"
 	"github.com/bmd/bmd/internal/config"
 	"github.com/bmd/bmd/internal/editor"
+	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/nav"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/renderer"
@@ -100,6 +102,61 @@ type Viewer struct {
 	editMode              bool                 // true when in edit mode, false when in read-only view mode
 	editBuffer            *editor.TextBuffer   // text buffer for editing
 	markdownSyntaxOpen    bool                 // true when markdown syntax help is displayed in edit mode
+
+	// Graph view state
+	graphMode  bool           // true when graph view is active
+	graphState GraphViewState // state for graph visualization
+
+	// Cross-document search state (DIR-03): search across all markdown files in the directory.
+	// This is distinct from searchState which searches within the current document.
+	crossSearchMode     bool                     // true when cross-document search input prompt is open
+	crossSearchInput    string                   // query being typed before Enter commits it
+	crossSearchActive   bool                     // true after a search has been executed
+	crossSearchQuery    string                   // last committed cross-search query
+	crossSearchResults  []knowledge.SearchResult // results from BM25 search across all files
+	crossSearchSelected int                      // index of highlighted result (-1 = none)
+
+	// Directory browser mode (DIR-01): interactive file listing when bmd is run with no args.
+	directoryMode  bool           // true when in directory listing mode
+	directoryState DirectoryState // state for directory listing view
+}
+
+// FileMetadata holds metadata for a single markdown file discovered during directory scan.
+type FileMetadata struct {
+	Path      string    // absolute path to the file
+	Name      string    // filename relative to the root directory (e.g. "docs/api.md")
+	Size      int64     // file size in bytes
+	LineCount int       // number of lines in the file
+	ModTime   time.Time // last modification time
+	Preview   string    // first 100 chars of file content (for tooltips)
+}
+
+// DirectoryState holds all state for the directory listing view (DIR-01).
+type DirectoryState struct {
+	RootPath      string         // directory being browsed
+	Files         []FileMetadata // all .md files found, sorted by name
+	SelectedIndex int            // currently highlighted file (0-based)
+}
+
+// GraphViewState holds all state for graph visualization.
+type GraphViewState struct {
+	// Graph is the loaded knowledge graph from Phase 6.
+	Graph *knowledge.Graph
+
+	// NodeOrder is the sorted list of node IDs for display/navigation.
+	NodeOrder []string
+
+	// SelectedNodeID is the currently selected node.
+	SelectedNodeID string
+
+	// NodeLayout maps nodeID to (col, row) grid position for ASCII rendering.
+	NodeLayout map[string][2]int
+
+	// RootPath is the directory the graph was loaded from.
+	RootPath string
+
+	// Loaded indicates if a graph has been loaded.
+	Loaded bool
 }
 
 // New creates a new Viewer for the given document and file path.
@@ -138,6 +195,158 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) Viewer {
 		currentThemeName: theme.ThemeDefault,
 		virtualMode:      len(lines) > virtualThreshold,
 	}
+}
+
+// NewDirectoryViewer creates a Viewer configured for directory browsing mode.
+// Call LoadDirectory() on the returned viewer to populate file metadata.
+func NewDirectoryViewer(dirPath string, th theme.Theme, width int) Viewer {
+	h := nav.New()
+	doc := &ast.Document{}
+
+	return Viewer{
+		Doc:              doc,
+		Height:           24,
+		Width:            width,
+		Theme:            th,
+		FilePath:         dirPath,
+		links:            BuildRegistry(nil),
+		history:          h,
+		startDir:         dirPath,
+		searchState:      NewSearchState(),
+		themeDialog:      NewThemeDialog(theme.ThemeDefault),
+		currentThemeName: theme.ThemeDefault,
+		directoryMode:    true,
+		directoryState:   DirectoryState{RootPath: dirPath},
+	}
+}
+
+// LoadDirectory scans the given directory for .md files and populates
+// the DirectoryState with FileMetadata (size, line count, mod time, preview).
+// It sets directoryMode = true on the viewer.
+func (v *Viewer) LoadDirectory(path string) error {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve path: %w", err)
+	}
+
+	var files []FileMetadata
+
+	walkErr := filepath.WalkDir(absPath, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip errors; don't abort walk
+		}
+		if d.IsDir() {
+			return nil
+		}
+		// Skip symlinks
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		if strings.ToLower(filepath.Ext(p)) != ".md" {
+			return nil
+		}
+
+		info, statErr := d.Info()
+		if statErr != nil {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(p)
+		if readErr != nil {
+			return nil
+		}
+
+		// Compute line count.
+		lineCount := strings.Count(string(data), "\n")
+		if len(data) > 0 && data[len(data)-1] != '\n' {
+			lineCount++ // last line with no trailing newline
+		}
+
+		// Compute preview: first 100 chars of text content.
+		preview := string(data)
+		if len(preview) > 100 {
+			preview = preview[:100]
+		}
+
+		// Name is relative to root (e.g. "docs/api.md").
+		relName, relErr := filepath.Rel(absPath, p)
+		if relErr != nil {
+			relName = filepath.Base(p)
+		}
+
+		files = append(files, FileMetadata{
+			Path:      p,
+			Name:      relName,
+			Size:      info.Size(),
+			LineCount: lineCount,
+			ModTime:   info.ModTime(),
+			Preview:   preview,
+		})
+		return nil
+	})
+	if walkErr != nil {
+		return fmt.Errorf("scan directory: %w", walkErr)
+	}
+
+	// Sort files alphabetically by relative name.
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Name < files[j].Name
+	})
+
+	v.directoryMode = true
+	v.directoryState = DirectoryState{
+		RootPath:      absPath,
+		Files:         files,
+		SelectedIndex: 0,
+	}
+	v.startDir = absPath
+	return nil
+}
+
+// LoadGraph loads the Phase 6 knowledge graph from the database at rootPath.
+// If the database doesn't exist, attempts to build it first.
+// Returns an error if graph loading fails.
+func (v *Viewer) LoadGraph(rootPath string) error {
+	dbPath := filepath.Join(rootPath, "knowledge.db")
+	db, err := knowledge.OpenDB(dbPath)
+	if err != nil {
+		return fmt.Errorf("open knowledge db: %w", err)
+	}
+	defer db.Close()
+
+	g := knowledge.NewGraph()
+	if err := db.LoadGraph(g); err != nil {
+		return fmt.Errorf("load graph: %w", err)
+	}
+
+	v.graphState.Graph = g
+	v.graphState.RootPath = rootPath
+	v.graphState.Loaded = true
+
+	// Build node order: sort by in-degree descending, then alphabetically.
+	nodeIDs := make([]string, 0, len(g.Nodes))
+	for id := range g.Nodes {
+		nodeIDs = append(nodeIDs, id)
+	}
+	sort.Slice(nodeIDs, func(i, j int) bool {
+		inI := len(g.GetIncoming(nodeIDs[i]))
+		inJ := len(g.GetIncoming(nodeIDs[j]))
+		if inI != inJ {
+			return inI > inJ // descending in-degree
+		}
+		return nodeIDs[i] < nodeIDs[j]
+	})
+	v.graphState.NodeOrder = nodeIDs
+
+	// Select first node by default (highest in-degree).
+	if len(nodeIDs) > 0 {
+		v.graphState.SelectedNodeID = nodeIDs[0]
+	}
+
+	// Compute layout using topological level-based ordering.
+	v.graphState.NodeLayout = computeNodeLayout(g)
+
+	return nil
 }
 
 // UpdateTheme switches the viewer to a new theme and re-renders the document.
@@ -212,6 +421,11 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v.updateBrowser(msg)
 		}
 
+		// When graph view is open, route keys to graph handling
+		if v.graphMode {
+			return v.updateGraph(msg)
+		}
+
 		// When jump-to-line prompt is open, route all input to jump handling.
 		if v.jumpMode {
 			return v.updateJump(msg)
@@ -220,6 +434,21 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// When search input prompt is open, route all input to search handling.
 		if v.searchMode {
 			return v.updateSearch(msg)
+		}
+
+		// When cross-document search input prompt is open, route all input there.
+		if v.crossSearchMode {
+			return v.updateCrossSearch(msg)
+		}
+
+		// When cross-document search results are active, route navigation there.
+		if v.crossSearchActive {
+			return v.updateCrossSearchNav(msg)
+		}
+
+		// When directory listing is active, route keys to directory handling.
+		if v.directoryMode {
+			return v.updateDirectory(msg)
 		}
 
 		// Edit mode key handlers (only when editMode is true)
@@ -430,9 +659,21 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.ClearSelection()
 			v.Offset = clamp(v.Offset+v.Height, 0, v.maxOffset())
 
-		case "home", "g":
+		case "home":
 			v.ClearSelection()
 			v.Offset = 0
+
+		case "g":
+			// Open graph view: load graph from startDir and enter graph mode.
+			v.graphMode = true
+			if !v.graphState.Loaded {
+				if err := v.LoadGraph(v.startDir); err != nil {
+					v.graphMode = false
+					v.errorMsg = fmt.Sprintf("Graph load error: %v", err)
+					return v, clearErrorAfter(statusTimeout)
+				}
+			}
+			return v, nil
 
 		case "end", "G":
 			v.ClearSelection()
@@ -473,9 +714,8 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.browserFiles = scanMdFiles(v.startDir)
 			v.browserSel = 0
 
-		// Ctrl+F = search (not forward nav; forward nav uses Ctrl+Right/Alt+Right per design decision)
-		// "/" is a vim-style shortcut that also opens search.
-		case "ctrl+f", "/":
+		// Ctrl+F = in-document search (not forward nav; forward nav uses Ctrl+Right/Alt+Right per design decision)
+		case "ctrl+f":
 			if v.searchState.Active {
 				// Toggle off: clear search state and highlights.
 				v.searchState = NewSearchState()
@@ -483,6 +723,15 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open the search input prompt.
 			v.searchMode = true
 			v.searchInput = ""
+
+		// "/" = cross-document search across all markdown files in the directory (DIR-03).
+		case "/":
+			// Open cross-document search input prompt.
+			v.crossSearchMode = true
+			v.crossSearchInput = ""
+			v.crossSearchActive = false
+			v.crossSearchResults = nil
+			v.crossSearchSelected = -1
 
 		// n / N: jump to next/previous match when a search is active.
 		case "n":
@@ -778,6 +1027,421 @@ func (v Viewer) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return v, nil
 }
 
+// updateDirectory handles keyboard input when directory listing mode is active.
+// Arrow keys move the cursor; Enter/'l' opens the selected file; 'q'/Ctrl+C quits.
+func (v Viewer) updateDirectory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	files := v.directoryState.Files
+	n := len(files)
+
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return v, tea.Quit
+
+	case "?", "h":
+		v.helpOpen = true
+		return v, nil
+
+	case "up", "k":
+		if n > 0 {
+			v.directoryState.SelectedIndex = (v.directoryState.SelectedIndex - 1 + n) % n
+		}
+		return v, nil
+
+	case "down", "j":
+		if n > 0 {
+			v.directoryState.SelectedIndex = (v.directoryState.SelectedIndex + 1) % n
+		}
+		return v, nil
+
+	case "enter", "l", "right":
+		if n > 0 {
+			selected := files[v.directoryState.SelectedIndex]
+			// Switch out of directory mode and into file mode.
+			v.directoryMode = false
+			return v.loadFile(selected.Path)
+		}
+		return v, nil
+
+	case "g":
+		// Open graph view from directory mode.
+		v.graphMode = true
+		v.directoryMode = false
+		if !v.graphState.Loaded {
+			if err := v.LoadGraph(v.directoryState.RootPath); err != nil {
+				v.graphMode = false
+				v.directoryMode = true
+				v.errorMsg = fmt.Sprintf("Graph load error: %v", err)
+				return v, clearErrorAfter(statusTimeout)
+			}
+		}
+		return v, nil
+
+	case "/", "ctrl+f":
+		// Switch to cross-document search from directory mode.
+		v.crossSearchMode = true
+		v.crossSearchInput = ""
+		v.directoryMode = false
+		return v, nil
+	}
+	return v, nil
+}
+
+// renderDirectoryListing renders the interactive file listing for directory mode.
+// Shows header with directory path, scrollable file list with metadata, and footer hints.
+func (v Viewer) renderDirectoryListing(contentHeight int) string {
+	ds := v.directoryState
+	files := ds.Files
+
+	// ANSI color helpers (consistent with existing codebase style)
+	headerBg := "\x1b[48;5;17m\x1b[1;38;5;51m"
+	selectedBg := "\x1b[48;5;22m\x1b[38;5;46m"  // green highlight for selected row
+	dimText := "\x1b[38;5;244m"
+	boldText := "\x1b[1;38;5;252m"
+	metaText := "\x1b[38;5;109m" // blue-gray for metadata
+	reset := "\x1b[0m"
+
+	var sb strings.Builder
+
+	// Header: directory path + file count
+	dirDisplay := ds.RootPath
+	if home, err := os.UserHomeDir(); err == nil {
+		if strings.HasPrefix(dirDisplay, home) {
+			dirDisplay = "~" + dirDisplay[len(home):]
+		}
+	}
+	fileCount := len(files)
+	var headerTitle string
+	if fileCount == 0 {
+		headerTitle = fmt.Sprintf(" Markdown Files in %s (none found)", dirDisplay)
+	} else {
+		headerTitle = fmt.Sprintf(" Markdown Files in %s (%d files)", dirDisplay, fileCount)
+	}
+	// Pad or truncate to width
+	headerRunes := []rune(headerTitle)
+	if len(headerRunes) > v.Width {
+		headerTitle = string(headerRunes[:v.Width-3]) + "..."
+	} else {
+		headerTitle = headerTitle + strings.Repeat(" ", v.Width-len(headerRunes))
+	}
+	sb.WriteString(headerBg + headerTitle + reset + "\n")
+
+	// Separator
+	sb.WriteString(dimText + strings.Repeat("─", v.Width) + reset + "\n")
+
+	// Compute visible window: keep selected index in view.
+	listHeight := contentHeight - 3 // header + separator + footer
+	if listHeight < 1 {
+		listHeight = 1
+	}
+
+	startIdx := 0
+	if fileCount > listHeight {
+		// Scroll so selected is centered.
+		startIdx = ds.SelectedIndex - listHeight/2
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		if startIdx+listHeight > fileCount {
+			startIdx = fileCount - listHeight
+		}
+	}
+
+	endIdx := startIdx + listHeight
+	if endIdx > fileCount {
+		endIdx = fileCount
+	}
+
+	if fileCount == 0 {
+		// Empty directory message
+		msg := " No markdown files found in this directory."
+		sb.WriteString(dimText + msg + reset + "\n")
+		for i := 1; i < listHeight; i++ {
+			sb.WriteString("\n")
+		}
+	} else {
+		for i := startIdx; i < endIdx; i++ {
+			f := files[i]
+			isSelected := i == ds.SelectedIndex
+
+			// Prefix: ">" for selected, " " for others
+			prefix := "  "
+			if isSelected {
+				prefix = "> "
+			}
+
+			// Format size
+			var sizeStr string
+			if f.Size < 1024 {
+				sizeStr = fmt.Sprintf("%d B", f.Size)
+			} else {
+				sizeStr = fmt.Sprintf("%d KB", f.Size/1024)
+			}
+
+			// Metadata string: [size, lines]
+			meta := fmt.Sprintf("[%s, %d lines]", sizeStr, f.LineCount)
+
+			// Build the line: "  filename.md              [12 KB, 234 lines]"
+			nameMaxWidth := v.Width - len(meta) - len(prefix) - 3
+			displayName := f.Name
+			nameRunes := []rune(displayName)
+			if len(nameRunes) > nameMaxWidth {
+				displayName = string(nameRunes[:nameMaxWidth-1]) + "…"
+				nameRunes = []rune(displayName)
+			}
+			padding := nameMaxWidth - len(nameRunes)
+			if padding < 1 {
+				padding = 1
+			}
+			line := prefix + displayName + strings.Repeat(" ", padding) + " " + meta
+
+			if isSelected {
+				// Pad line to full width for highlight
+				lineRunes := []rune(line)
+				if len(lineRunes) < v.Width {
+					line = line + strings.Repeat(" ", v.Width-len(lineRunes))
+				}
+				sb.WriteString(selectedBg + boldText + line + reset + "\n")
+			} else {
+				sb.WriteString(dimText + "  " + reset + boldText + f.Name + reset)
+				// Pad name area then write metadata
+				namePad := nameMaxWidth - len([]rune(f.Name)) + 1
+				if namePad < 1 {
+					namePad = 1
+				}
+				sb.WriteString(strings.Repeat(" ", namePad) + metaText + meta + reset + "\n")
+			}
+		}
+
+		// Fill remaining rows
+		rendered := endIdx - startIdx
+		for i := rendered; i < listHeight; i++ {
+			sb.WriteString("\n")
+		}
+	}
+
+	// Footer: keyboard hints
+	footerStr := dimText + " [↑/↓] Navigate  [Enter] Open  [/] Search  [g] Graph  [?] Help  [q] Quit" + reset
+	footerRunes := []rune(footerStr)
+	// The footer contains ANSI codes, so display length != byte length; truncate by visible chars.
+	// Approximate: strip ANSI for length calc but keep original string.
+	footerPlain := stripANSI(footerStr)
+	if len([]rune(footerPlain)) > v.Width {
+		// Trim the visible text
+		footerStr = dimText + " [↑/↓] Navigate  [Enter] Open  [/] Search  [q] Quit" + reset
+		_ = footerRunes // discard
+	}
+	sb.WriteString(footerStr)
+
+	return sb.String()
+}
+
+// updateCrossSearch handles keyboard input when the cross-document search
+// input prompt is open. Printable characters build the query; Enter executes
+// the search; Esc cancels.
+func (v Viewer) updateCrossSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		query := strings.TrimSpace(v.crossSearchInput)
+		v.crossSearchMode = false
+		if query == "" {
+			// Empty query: close prompt without doing anything.
+			v.crossSearchActive = false
+			return v, nil
+		}
+		// Execute cross-document BM25 search.
+		results, err := v.SearchAllFiles(query)
+		if err != nil {
+			v.errorMsg = "Search error: " + err.Error()
+			v.crossSearchActive = false
+			return v, clearErrorAfter(statusTimeout)
+		}
+		v.crossSearchQuery = query
+		v.crossSearchResults = results
+		v.crossSearchSelected = 0
+		if len(results) == 0 {
+			v.crossSearchSelected = -1
+		}
+		v.crossSearchActive = true
+		return v, nil
+
+	case "esc", "ctrl+f":
+		// Cancel cross-document search.
+		v.crossSearchMode = false
+		v.crossSearchInput = ""
+		v.crossSearchActive = false
+		v.crossSearchResults = nil
+		v.crossSearchSelected = -1
+
+	case "backspace":
+		if len(v.crossSearchInput) > 0 {
+			runes := []rune(v.crossSearchInput)
+			v.crossSearchInput = string(runes[:len(runes)-1])
+		}
+
+	default:
+		if len(msg.Runes) > 0 {
+			v.crossSearchInput += string(msg.Runes)
+		}
+	}
+	return v, nil
+}
+
+// updateCrossSearchNav handles keyboard navigation when cross-document search
+// results are shown: ↑/↓ to move through results, l/Enter to open, h/Esc to exit.
+func (v Viewer) updateCrossSearchNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	n := len(v.crossSearchResults)
+	switch msg.String() {
+	case "up", "k":
+		if n > 0 && v.crossSearchSelected > 0 {
+			v.crossSearchSelected--
+		}
+	case "down", "j":
+		if n > 0 && v.crossSearchSelected < n-1 {
+			v.crossSearchSelected++
+		}
+	case "l", "enter":
+		// Open the selected file.
+		if n > 0 && v.crossSearchSelected >= 0 && v.crossSearchSelected < n {
+			path := v.crossSearchResults[v.crossSearchSelected].Path
+			if path != "" {
+				v.crossSearchActive = false
+				v.crossSearchMode = false
+				return v.loadFile(path)
+			}
+		}
+	case "h", "esc", "q":
+		// Exit search results view.
+		v.crossSearchActive = false
+		v.crossSearchMode = false
+		v.crossSearchResults = nil
+		v.crossSearchSelected = -1
+		if msg.String() == "q" {
+			return v, tea.Quit
+		}
+	case "/":
+		// Re-open search prompt with the same or new query.
+		v.crossSearchMode = true
+		v.crossSearchInput = v.crossSearchQuery
+		v.crossSearchActive = false
+	}
+	return v, nil
+}
+
+// renderCrossSearchResults renders the cross-document search results view.
+// Shows a list of matching files with BM25 scores, with the selected result
+// highlighted. Keyboard hints are shown at the bottom.
+func (v Viewer) renderCrossSearchResults(contentHeight int) string {
+	var sb strings.Builder
+
+	// Header.
+	sb.WriteString(v.renderHeader())
+	sb.WriteString("\n")
+
+	results := v.crossSearchResults
+	query := v.crossSearchQuery
+
+	// Title line.
+	titleFg := "\x1b[1;38;5;226m" // bold yellow
+	reset := "\x1b[0m"
+	countStr := fmt.Sprintf("%d result", len(results))
+	if len(results) != 1 {
+		countStr += "s"
+	}
+	title := fmt.Sprintf("%sSearch Results for %q (%s)%s", titleFg, query, countStr, reset)
+	sb.WriteString(title + "\n")
+
+	// Box border top.
+	innerWidth := v.Width - 4
+	if innerWidth < 20 {
+		innerWidth = 20
+	}
+	borderFg := "\x1b[38;5;244m" // dim gray
+	sb.WriteString(fmt.Sprintf("%s%s%s\n", borderFg, "┌"+strings.Repeat("─", innerWidth+2)+"┐", reset))
+
+	// Available lines: contentHeight minus title line and box top/bottom/status = contentHeight - 3
+	available := contentHeight - 3
+	if available < 1 {
+		available = 1
+	}
+
+	// Determine scroll window for results.
+	start := 0
+	if v.crossSearchSelected >= available {
+		start = v.crossSearchSelected - available + 1
+	}
+	end := start + available
+	if end > len(results) {
+		end = len(results)
+	}
+
+	if len(results) == 0 {
+		noMatch := fmt.Sprintf("  No matches found for %q", query)
+		// Pad/truncate to innerWidth.
+		if len([]rune(noMatch)) < innerWidth+2 {
+			noMatch += strings.Repeat(" ", innerWidth+2-len([]rune(noMatch)))
+		}
+		sb.WriteString(fmt.Sprintf("%s│%s│%s\n", borderFg, noMatch, reset))
+	}
+
+	for i := start; i < end; i++ {
+		r := results[i]
+		selected := (i == v.crossSearchSelected)
+
+		// Format: "> N. filename [score]" or "  N. filename [score]"
+		// Filename: use RelPath if available, else base name.
+		name := r.RelPath
+		if name == "" {
+			name = filepath.Base(r.Path)
+		}
+		score := fmt.Sprintf("%.1f", r.Score)
+
+		// Build the row content.
+		prefix := "  "
+		if selected {
+			prefix = "> "
+		}
+		numStr := fmt.Sprintf("%d.", i+1)
+		scoreStr := "[" + score + "]"
+		// Available space for name: innerWidth - prefix(2) - numStr - space - space - scoreStr
+		nameWidth := innerWidth - len(prefix) - len(numStr) - 1 - 1 - len(scoreStr)
+		if nameWidth < 8 {
+			nameWidth = 8
+		}
+		nameRunes := []rune(name)
+		if len(nameRunes) > nameWidth {
+			name = string(nameRunes[:nameWidth-1]) + "…"
+		} else {
+			name = string(nameRunes) + strings.Repeat(" ", nameWidth-len(nameRunes))
+		}
+
+		rowContent := fmt.Sprintf("%s%s %s %s", prefix, numStr, name, scoreStr)
+		// Pad to innerWidth+2.
+		rowRunes := []rune(rowContent)
+		if len(rowRunes) < innerWidth+2 {
+			rowContent += strings.Repeat(" ", innerWidth+2-len(rowRunes))
+		} else if len(rowRunes) > innerWidth+2 {
+			rowContent = string(rowRunes[:innerWidth+2])
+		}
+
+		// Apply reverse-video for the selected result.
+		if selected {
+			sb.WriteString(fmt.Sprintf("%s│\x1b[7m%s\x1b[m%s│%s\n", borderFg, rowContent, borderFg, reset))
+		} else {
+			sb.WriteString(fmt.Sprintf("%s│%s%s│%s\n", borderFg, rowContent, borderFg, reset))
+		}
+	}
+
+	// Box border bottom.
+	sb.WriteString(fmt.Sprintf("%s%s%s\n", borderFg, "└"+strings.Repeat("─", innerWidth+2)+"┘", reset))
+
+	// Status bar / hints.
+	hintFg := "\x1b[38;5;244m"
+	hint := fmt.Sprintf("%s[↑/↓] Navigate  [l/Enter] Open  [h/Esc] Back  [/] New Search%s", hintFg, reset)
+	sb.WriteString(hint)
+
+	return sb.String()
+}
+
 // renderHelp returns a centered box overlay with grouped keyboard shortcuts.
 // The overlay replaces the full view while helpOpen is true.
 // Enhanced with better colors and visual hierarchy.
@@ -1045,6 +1709,18 @@ func (v Viewer) View() string {
 		return v.renderHeader() + "\n" + v.viewWithBrowser(contentHeight)
 	}
 
+	if v.crossSearchActive && !v.crossSearchMode {
+		return v.renderCrossSearchResults(contentHeight)
+	}
+
+	if v.graphMode {
+		return v.renderGraphView(contentHeight)
+	}
+
+	if v.directoryMode {
+		return v.renderDirectoryListing(contentHeight)
+	}
+
 	if v.editMode {
 		// If markdown syntax help is open in edit mode, show it instead
 		if v.markdownSyntaxOpen {
@@ -1227,6 +1903,16 @@ func (v Viewer) renderStatusBar() string {
 		bar := "🔍 Search: " + v.searchInput + "_"
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("226")).
+			Bold(true).
+			Width(v.Width).
+			Render(bar)
+	}
+
+	// Cross-document search input prompt.
+	if v.crossSearchMode {
+		bar := "🔍 Search all files: " + v.crossSearchInput + "_"
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("220")).
 			Bold(true).
 			Width(v.Width).
 			Render(bar)
@@ -1893,4 +2579,13 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// SearchAllFiles executes a BM25 cross-document search across all markdown
+// files in the viewer's startDir. It delegates to knowledge.SearchAllDocuments
+// which loads (or builds) the Phase 6 index and executes the query.
+//
+// Results are already sorted by BM25 score descending by the knowledge layer.
+func (v *Viewer) SearchAllFiles(query string) ([]knowledge.SearchResult, error) {
+	return knowledge.SearchAllDocuments(v.startDir, query, 50)
 }
