@@ -21,6 +21,17 @@ const (
 	Light ColorScheme = iota
 )
 
+// ThemeName identifies a specific color theme preset.
+type ThemeName string
+
+const (
+	ThemeDefault ThemeName = "default"
+	ThemeOcean   ThemeName = "ocean"
+	ThemeForest  ThemeName = "forest"
+	ThemeSunset  ThemeName = "sunset"
+	ThemeMidnight ThemeName = "midnight"
+)
+
 // Theme holds color mappings for all rendered markdown element types.
 type Theme struct {
 	scheme ColorScheme
@@ -167,10 +178,177 @@ func lightTheme() Theme {
 	}
 }
 
+// oceanTheme returns a calming ocean-inspired color theme for dark backgrounds.
+// Features: Teals, blues, and cyan accents reminiscent of ocean water.
+func oceanTheme() Theme {
+	return Theme{
+		scheme: Dark,
+		headingColors: [6]AnsiColor{
+			// h1: bright cyan (ocean blue)
+			51,
+			// h2: medium cyan
+			45,
+			// h3: turquoise
+			44,
+			// h4: light cyan
+			87,
+			// h5: powder blue
+			117,
+			// h6: pale turquoise
+			123,
+		},
+		codeColor:        87,   // light cyan code
+		codeBgColor:      23,   // dark teal background
+		quoteColor:       51,   // bright cyan quote
+		quoteBorderColor: 45,   // medium cyan border
+		textColor:        NoColor,
+		boldColor:        NoColor,
+		italicColor:      NoColor,
+		strikeColor:      23,   // dark teal
+		linkColor:        51,   // bright cyan links
+		hrColor:          23,   // dark teal rule
+		codeBlockFg:      87,   // light cyan text
+		codeBlockBg:      17,   // very dark blue
+		langLabelColor:   45,   // medium cyan label
+		listBulletColor:  51,   // bright cyan bullets
+		tableBorderColor: 45,   // medium cyan borders
+	}
+}
+
+// forestTheme returns an earthy forest-inspired color theme for dark backgrounds.
+// Features: Greens, olive, and natural earth tones.
+func forestTheme() Theme {
+	return Theme{
+		scheme: Dark,
+		headingColors: [6]AnsiColor{
+			// h1: bright green
+			82,
+			// h2: medium green
+			76,
+			// h3: olive green
+			142,
+			// h4: yellow-green
+			154,
+			// h5: light green
+			120,
+			// h6: pale green
+			157,
+		},
+		codeColor:        154,  // yellow-green
+		codeBgColor:      22,   // dark green
+		quoteColor:       142,  // olive quote
+		quoteBorderColor: 76,   // medium green border
+		textColor:        NoColor,
+		boldColor:        NoColor,
+		italicColor:      NoColor,
+		strikeColor:      58,   // dark olive
+		linkColor:        82,   // bright green links
+		hrColor:          58,   // dark olive rule
+		codeBlockFg:      157,  // pale green text
+		codeBlockBg:      16,   // very dark
+		langLabelColor:   76,   // medium green label
+		listBulletColor:  82,   // bright green bullets
+		tableBorderColor: 76,   // medium green borders
+	}
+}
+
+// sunsetTheme returns a warm sunset-inspired color theme for dark backgrounds.
+// Features: Oranges, reds, and warm yellows reminiscent of a sunset sky.
+func sunsetTheme() Theme {
+	return Theme{
+		scheme: Dark,
+		headingColors: [6]AnsiColor{
+			// h1: bright orange
+			214,
+			// h2: orange-red
+			202,
+			// h3: warm red
+			196,
+			// h4: yellow
+			226,
+			// h5: light orange
+			215,
+			// h6: coral
+			167,
+		},
+		codeColor:        226,  // bright yellow
+		codeBgColor:      52,   // dark red-brown
+		quoteColor:       214,  // bright orange
+		quoteBorderColor: 202,  // orange-red border
+		textColor:        NoColor,
+		boldColor:        NoColor,
+		italicColor:      NoColor,
+		strikeColor:      95,   // dark purple-brown
+		linkColor:        214,  // bright orange links
+		hrColor:          95,   // dark purple-brown rule
+		codeBlockFg:      215,  // light orange text
+		codeBlockBg:      52,   // dark red-brown
+		langLabelColor:   202,  // orange-red label
+		listBulletColor:  214,  // bright orange bullets
+		tableBorderColor: 202,  // orange-red borders
+	}
+}
+
+// midnightTheme returns a deep, dark midnight-inspired color theme.
+// Features: Deep purples, dark blues, and subtle accents for a sophisticated look.
+func midnightTheme() Theme {
+	return Theme{
+		scheme: Dark,
+		headingColors: [6]AnsiColor{
+			// h1: bright purple
+			141,
+			// h2: medium purple
+			135,
+			// h3: indigo
+			56,
+			// h4: bright magenta
+			201,
+			// h5: light purple
+			177,
+			// h6: violet
+			135,
+		},
+		codeColor:        177,  // light purple
+		codeBgColor:      17,   // very dark blue
+		quoteColor:       141,  // bright purple
+		quoteBorderColor: 56,   // indigo border
+		textColor:        NoColor,
+		boldColor:        NoColor,
+		italicColor:      NoColor,
+		strikeColor:      55,   // dark purple
+		linkColor:        141,  // bright purple links
+		hrColor:          55,   // dark purple rule
+		codeBlockFg:      177,  // light purple text
+		codeBlockBg:      16,   // black
+		langLabelColor:   135,  // medium purple label
+		listBulletColor:  141,  // bright purple bullets
+		tableBorderColor: 56,   // indigo borders
+	}
+}
+
 // NewTheme creates a new theme based on automatic terminal background detection.
 func NewTheme() Theme {
 	scheme := DetectColorScheme()
 	return NewThemeForScheme(scheme)
+}
+
+// NewThemeByName creates a theme with the specified name preset.
+// Falls back to NewTheme() if the name is not recognized.
+func NewThemeByName(name ThemeName) Theme {
+	switch name {
+	case ThemeOcean:
+		return oceanTheme()
+	case ThemeForest:
+		return forestTheme()
+	case ThemeSunset:
+		return sunsetTheme()
+	case ThemeMidnight:
+		return midnightTheme()
+	case ThemeDefault:
+		return NewTheme()
+	default:
+		return NewTheme()
+	}
 }
 
 // NewThemeForScheme creates a theme for the given color scheme.
