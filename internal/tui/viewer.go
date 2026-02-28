@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/bmd/bmd/internal/ast"
 	"github.com/bmd/bmd/internal/config"
+	"github.com/bmd/bmd/internal/editor"
 	"github.com/bmd/bmd/internal/nav"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/renderer"
@@ -95,7 +96,8 @@ type Viewer struct {
 	virtualMode bool // true when len(Lines) > virtualThreshold
 
 	// Edit mode state
-	editMode bool // true when in edit mode, false when in read-only view mode
+	editMode   bool                 // true when in edit mode, false when in read-only view mode
+	editBuffer *editor.TextBuffer   // text buffer for editing
 }
 
 // New creates a new Viewer for the given document and file path.
@@ -218,6 +220,60 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v.updateSearch(msg)
 		}
 
+		// Edit mode key handlers (only when editMode is true)
+		if v.editMode {
+			switch msg.Type {
+			case tea.KeyUp:
+				v.editBuffer.CursorUp()
+				return v, nil
+			case tea.KeyDown:
+				v.editBuffer.CursorDown()
+				return v, nil
+			case tea.KeyLeft:
+				v.editBuffer.CursorLeft()
+				return v, nil
+			case tea.KeyRight:
+				v.editBuffer.CursorRight()
+				return v, nil
+			case tea.KeyBackspace:
+				v.editBuffer.Backspace()
+				return v, nil
+			case tea.KeyDelete:
+				v.editBuffer.Delete()
+				return v, nil
+			case tea.KeyEnter:
+				v.editBuffer.EnterNewLine()
+				return v, nil
+			case tea.KeyCtrlS:
+				// Save the file
+				err := v.editBuffer.SaveToFile(v.FilePath)
+				if err != nil {
+					v.errorMsg = fmt.Sprintf("Save failed: %v", err)
+					// Schedule error message to clear after timeout
+					return v, tea.Tick(statusTimeout, func(t time.Time) tea.Msg {
+						return clearErrorMsg{}
+					})
+				} else {
+					v.errorMsg = "Saved"
+					// Clear the saved message after a shorter timeout
+					return v, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
+						return clearErrorMsg{}
+					})
+				}
+			case tea.KeyEsc:
+				// Exit edit mode
+				v.editMode = false
+				return v, nil
+			default:
+				// Character input (letter, number, symbol, space)
+				if len(msg.Runes) > 0 {
+					v.editBuffer.Insert(msg.Runes[0])
+					return v, nil
+				}
+			}
+			return v, nil
+		}
+
 		switch msg.String() {
 		case "?", "h":
 			v.helpOpen = !v.helpOpen
@@ -227,7 +283,8 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Toggle edit mode
 			v.editMode = !v.editMode
 			if v.editMode {
-				// Entering edit mode: clear search state and selection to avoid confusion
+				// Entering edit mode: create text buffer and clear search state
+				v.editBuffer = editor.NewTextBuffer(v.Lines)
 				v.searchMode = false
 				v.searchInput = ""
 				v.isSelecting = false
