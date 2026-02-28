@@ -59,15 +59,14 @@ func DetectImageProtocol() ImageProtocol {
 		return ProtocolITerm2
 	}
 
-	// Try iTerm2 as a fallback for modern terminals
-	// Many terminals now support iTerm2 inline images even if not advertised
-	// (VSCode, modern xterm variants, etc.)
-	if strings.Contains(term, "xterm") || strings.Contains(term, "screen") ||
-		strings.Contains(term, "tmux") || strings.HasPrefix(term, "linux") {
-		return ProtocolITerm2
+	// If no specific protocol detected, try Kitty for most terminals
+	// Kitty is more standard than iTerm2 and supported by many modern terminals
+	// (including Kitty, WezTerm, and some Alacritty versions)
+	if term != "" && term != "dumb" && !strings.Contains(term, "linux") {
+		return ProtocolKitty
 	}
 
-	// Fallback: use Unicode blocks (works everywhere)
+	// Fallback: use Unicode blocks (works everywhere, safe default)
 	return ProtocolUnicode
 }
 
