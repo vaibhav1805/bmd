@@ -128,7 +128,8 @@ func ImageToITerm2(imageData []byte, width, height int) string {
 		len(imageData), len(encoded), width, height)
 
 	// Format: name=image.png;size=<bytes>;width=<chars>;height=<chars>;inline=1;preserveAspectRatio=1
-	return fmt.Sprintf("\x1b]1337;File=name=image.png;size=%d;width=%d;height=%d;inline=1;preserveAspectRatio=1:%s\x07",
+	// Use \x1b\\ (ST) as terminator - more reliable than \x07 (BEL) on some terminals
+	return fmt.Sprintf("\x1b]1337;File=name=image.png;size=%d;width=%d;height=%d;inline=1;preserveAspectRatio=1:%s\x1b\\",
 		len(imageData), width, height, encoded)
 }
 
