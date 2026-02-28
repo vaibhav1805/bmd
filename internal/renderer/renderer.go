@@ -12,6 +12,7 @@ type Renderer struct {
 	theme             theme.Theme
 	termWidth         int
 	emitLinkSentinels bool // if true, wrap links with sentinel markers for LinkRegistry
+	leftMargin        int   // left margin (spaces) for elegant screen edge padding
 }
 
 // linkSentinelPrefix and related constants mirror tui/linkreg.go — kept here
@@ -92,7 +93,6 @@ func (r *Renderer) RenderNode(node ast.Node) string {
 func (r *Renderer) renderDocument(doc *ast.Document) string {
 	var sb strings.Builder
 	first := true
-	prevWasMajor := false // Track if previous element was a major block (heading, code block)
 
 	for _, child := range doc.Children() {
 		rendered := r.RenderNode(child)
@@ -100,27 +100,16 @@ func (r *Renderer) renderDocument(doc *ast.Document) string {
 			continue
 		}
 
-		// Determine if this is a major block element
-		isMajor := false
-		switch child.(type) {
-		case *ast.Heading, *ast.CodeBlock, *ast.BlockQuote:
-			isMajor = true
-		}
-
 		if first {
 			// Trim leading newline from the very first block (no blank line before document start)
 			rendered = strings.TrimPrefix(rendered, "\n")
 			sb.WriteString(rendered)
 			first = false
-			prevWasMajor = isMajor
 			continue
 		}
 
-		// Add extra spacing around major elements for visual breathing room
-		spacing := "\n\n"
-		if prevWasMajor && isMajor {
-			spacing = "\n\n\n" // Extra blank line between major elements
-		}
+		// Minimal elegant spacing between blocks (single newline)
+		spacing := "\n"
 
 		// If the block already starts with \n (provides its own spacing), adjust spacing
 		if strings.HasPrefix(rendered, "\n") {
@@ -130,8 +119,6 @@ func (r *Renderer) renderDocument(doc *ast.Document) string {
 			sb.WriteString(spacing)
 			sb.WriteString(rendered)
 		}
-
-		prevWasMajor = isMajor
 	}
 	sb.WriteString("\n")
 	return sb.String()
