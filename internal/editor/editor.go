@@ -258,6 +258,28 @@ func (tb *TextBuffer) EnterNewLine() {
 	tb.cursorCol = 0
 }
 
+// JumpToStart moves the cursor to the beginning of the document.
+func (tb *TextBuffer) JumpToStart() {
+	tb.cursorLine = 0
+	tb.cursorCol = 0
+}
+
+// JumpToEnd moves the cursor to the end of the document.
+func (tb *TextBuffer) JumpToEnd() {
+	if len(tb.lines) > 0 {
+		tb.cursorLine = len(tb.lines) - 1
+		tb.cursorCol = len(tb.lines[tb.cursorLine])
+	}
+}
+
+// JumpToLine moves the cursor to a specific line (0-based).
+func (tb *TextBuffer) JumpToLine(lineNum int) {
+	if lineNum >= 0 && lineNum < len(tb.lines) {
+		tb.cursorLine = lineNum
+		tb.cursorCol = 0
+	}
+}
+
 // Undo reverts to the previous state.
 func (tb *TextBuffer) Undo() {
 	undoState := tb.undoRedo.Undo()

@@ -268,16 +268,73 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Redo
 				v.editBuffer.Redo()
 				return v, nil
+			case tea.KeyCtrlF:
+				// Enter search mode (search the edited buffer)
+				v.searchMode = true
+				v.searchInput = ""
+				v.searchState = NewSearchState() // Clear previous search results
+				return v, nil
+			case tea.KeyCtrlG:
+				// Enter jump-to-line mode
+				v.jumpMode = true
+				v.jumpInput = ""
+				return v, nil
+			case tea.KeyCtrlHome:
+				// Jump to beginning of document
+				v.editBuffer.JumpToStart()
+				v.Offset = 0
+				return v, nil
+			case tea.KeyCtrlEnd:
+				// Jump to end of document
+				v.editBuffer.JumpToEnd()
+				// Scroll viewport to show the end
+				lines := v.editBuffer.GetLines()
+				if len(lines) > v.Height-2 {
+					v.Offset = len(lines) - (v.Height - 2)
+				} else {
+					v.Offset = 0
+				}
+				return v, nil
 			case tea.KeyEsc:
 				// Exit edit mode
 				v.editMode = false
 				return v, nil
-			default:
-				// Character input (letter, number, symbol, space)
-				if len(msg.Runes) > 0 {
-					v.editBuffer.Insert(msg.Runes[0])
-					return v, nil
+			}
+			// Handle Page Up/Down by string matching
+			keyStr := msg.String()
+			switch keyStr {
+			case "pgup":
+				// Scroll up one page (Height - 2 for header/status)
+				pageSize := v.Height - 2
+				if v.Offset > pageSize {
+					v.Offset -= pageSize
+				} else {
+					v.Offset = 0
 				}
+				// Move cursor up to keep it visible
+				for i := 0; i < pageSize && v.editBuffer.CursorLine() > 0; i++ {
+					v.editBuffer.CursorUp()
+				}
+				return v, nil
+			case "pgdn":
+				// Scroll down one page
+				pageSize := v.Height - 2
+				lines := v.editBuffer.GetLines()
+				if v.Offset+pageSize < len(lines) {
+					v.Offset += pageSize
+				} else {
+					v.Offset = max(0, len(lines)-pageSize)
+				}
+				// Move cursor down to keep it visible
+				for i := 0; i < pageSize && v.editBuffer.CursorLine() < len(lines)-1; i++ {
+					v.editBuffer.CursorDown()
+				}
+				return v, nil
+			}
+			// Character input (letter, number, symbol, space)
+			if len(msg.Runes) > 0 {
+				v.editBuffer.Insert(msg.Runes[0])
+				return v, nil
 			}
 			return v, nil
 		}
