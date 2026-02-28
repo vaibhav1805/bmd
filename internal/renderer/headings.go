@@ -27,6 +27,7 @@ func (r *Renderer) RenderHeading(h *ast.Heading) string {
 }
 
 // renderH1 renders a level-1 heading with a full-width decorative border above and below.
+// Enhanced with bold styling and visual prominence.
 func (r *Renderer) renderH1(content, colorCode string) string {
 	// Cap visual width at terminal width or 60, whichever is smaller
 	width := r.termWidth
@@ -49,7 +50,7 @@ func (r *Renderer) renderH1(content, colorCode string) string {
 	var sb strings.Builder
 	sb.WriteString("\n")
 	sb.WriteString(colorCode + bold + border + reset + "\n")
-	sb.WriteString(colorCode + bold + "  " + content + reset + "\n")
+	sb.WriteString(colorCode + bold + "  " + content + "  " + reset + "\n")
 	sb.WriteString(colorCode + bold + border + reset)
 	return sb.String()
 }
@@ -76,24 +77,37 @@ func (r *Renderer) renderH2(content, colorCode string) string {
 }
 
 // renderH3 renders a level-3 heading with a preceding marker.
+// Enhanced with visual indicator and better spacing.
 func (r *Renderer) renderH3(content, colorCode string) string {
 	bold := "\x1b[1m"
 	reset := theme.Reset
 
 	var sb strings.Builder
 	sb.WriteString("\n")
-	sb.WriteString(colorCode + bold + "### " + content + reset)
+	sb.WriteString(colorCode + bold + "▸ " + content + reset)
 	return sb.String()
 }
 
-// renderHN renders heading levels 4-6 with a hash prefix scaled to level.
+// renderHN renders heading levels 4-6 with a visual marker scaled to level.
+// Enhanced with better visual hierarchy and spacing.
 func (r *Renderer) renderHN(level int, content, colorCode string) string {
-	prefix := strings.Repeat("#", level) + " "
-	italic := "\x1b[3m"
+	// Use visual markers instead of hash symbols for a more polished look
+	var prefix string
+	switch level {
+	case 4:
+		prefix = "◆ "
+	case 5:
+		prefix = "◇ "
+	case 6:
+		prefix = "• "
+	default:
+		prefix = "◆ "
+	}
+
 	reset := theme.Reset
 
 	var sb strings.Builder
 	sb.WriteString("\n")
-	sb.WriteString(colorCode + italic + prefix + content + reset)
+	sb.WriteString(colorCode + prefix + content + reset)
 	return sb.String()
 }

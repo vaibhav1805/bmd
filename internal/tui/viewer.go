@@ -428,21 +428,15 @@ func (v Viewer) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // renderHelp returns a centered box overlay with grouped keyboard shortcuts.
 // The overlay replaces the full view while helpOpen is true.
+// Enhanced with better colors and visual hierarchy.
 func (v Viewer) renderHelp() string {
-	const boxWidth = 43 // inner content width
-	border := lipgloss.Color("244")
-	text := lipgloss.Color("252")
-	borderStyle := lipgloss.NewStyle().Foreground(border)
+	const boxWidth = 45 // inner content width
+	border := lipgloss.Color("51")    // bright cyan border
+	text := lipgloss.Color("252")     // light text
+	section := lipgloss.Color("87")   // section headers in cyan
+	borderStyle := lipgloss.NewStyle().Foreground(border).Bold(true)
 	textStyle := lipgloss.NewStyle().Foreground(text)
-
-	line := func(content string) string {
-		return borderStyle.Render("│") + textStyle.Render(content) + borderStyle.Render("│")
-	}
-	sectionSep := func() string {
-		return borderStyle.Render("├" + strings.Repeat("─", boxWidth) + "┤")
-	}
-	header := borderStyle.Render("┌" + strings.Repeat("─", boxWidth) + "┐")
-	footer := borderStyle.Render("└" + strings.Repeat("─", boxWidth) + "┘")
+	sectionStyle := lipgloss.NewStyle().Foreground(section).Bold(true)
 
 	padRight := func(s string, width int) string {
 		runeLen := len([]rune(s))
@@ -452,28 +446,40 @@ func (v Viewer) renderHelp() string {
 		return s + strings.Repeat(" ", width-runeLen)
 	}
 
+	line := func(content string) string {
+		return borderStyle.Render("│") + textStyle.Render(content) + borderStyle.Render("│")
+	}
+	sectionLine := func(content string) string {
+		return borderStyle.Render("│") + sectionStyle.Render(padRight(" "+content, boxWidth)) + borderStyle.Render("│")
+	}
+	sectionSep := func() string {
+		return borderStyle.Render("├" + strings.Repeat("─", boxWidth) + "┤")
+	}
+	header := borderStyle.Render("┌" + strings.Repeat("─", boxWidth) + "┐")
+	footer := borderStyle.Render("└" + strings.Repeat("─", boxWidth) + "┘")
+
 	lines := []string{
 		header,
-		line(padRight("         Keyboard Shortcuts", boxWidth)),
+		line(padRight("    ⌨ Keyboard Shortcuts", boxWidth)),
 		sectionSep(),
-		line(padRight(" Scrolling", boxWidth)),
+		sectionLine("Scrolling"),
 		line(padRight("  ↑/k ↓/j       Scroll up / down", boxWidth)),
 		line(padRight("  PgUp/PgDn     Page up / down", boxWidth)),
 		line(padRight("  g/Home G/End  Jump to top / bottom", boxWidth)),
 		sectionSep(),
-		line(padRight(" Navigation", boxWidth)),
+		sectionLine("Navigation"),
 		line(padRight("  Tab/Shift+Tab Focus next/prev link", boxWidth)),
 		line(padRight("  l / Enter     Follow focused link", boxWidth)),
 		line(padRight("  Ctrl+B        Back in history", boxWidth)),
 		line(padRight("  Alt+Right     Forward in history", boxWidth)),
 		line(padRight("  b             File browser", boxWidth)),
 		sectionSep(),
-		line(padRight(" Search", boxWidth)),
+		sectionLine("Search"),
 		line(padRight("  Ctrl+F / /    Open search", boxWidth)),
 		line(padRight("  n / N         Next / prev match", boxWidth)),
 		line(padRight("  Esc           Close search", boxWidth)),
 		sectionSep(),
-		line(padRight(" Mouse & Copy", boxWidth)),
+		sectionLine("Mouse & Copy"),
 		line(padRight("  Click         Move cursor / follow link", boxWidth)),
 		line(padRight("  Ctrl+C        Copy line at cursor", boxWidth)),
 		sectionSep(),
@@ -511,6 +517,7 @@ func (v Viewer) renderHelp() string {
 // renderHeader returns a compact single-line header bar showing the current
 // filename, parent folder, and context-sensitive right-side info (search
 // state, navigation back indicator, or error message).
+// Enhanced with colors, better visual hierarchy, and decorative elements.
 func (v Viewer) renderHeader() string {
 	// Left side: "filename  (parent/)"
 	filename := filepath.Base(v.FilePath)
@@ -520,15 +527,19 @@ func (v Viewer) renderHeader() string {
 	// Right side: context-sensitive
 	var right string
 	if v.errorMsg != "" {
-		right = "\x1b[31m✗ " + v.errorMsg + "\x1b[0m"
+		// Error message in red with bold for visual prominence
+		right = "\x1b[1;31m✗ " + v.errorMsg + "\x1b[0m"
 	} else if v.searchState.Active && len(v.searchState.Matches) > 0 {
+		// Search with highlights in bright colors
 		current := v.searchState.Current + 1
 		total := len(v.searchState.Matches)
-		right = fmt.Sprintf("Searching: %s (%d/%d)", v.searchState.Query, current, total)
+		right = fmt.Sprintf("\x1b[1;33m🔍 %s\x1b[0m (%d/%d)", v.searchState.Query, current, total)
 	} else if v.searchState.Active && v.searchState.Query != "" {
-		right = "Searching: " + v.searchState.Query + " (no matches)"
+		// No matches in muted color
+		right = "\x1b[33m🔍 " + v.searchState.Query + " (no matches)\x1b[0m"
 	} else if v.history.CanGoBack() {
-		right = "← Back (Ctrl+B)"
+		// Navigation hint in subtle color
+		right = "\x1b[38;5;117m← Back (Ctrl+B)\x1b[0m"
 	}
 
 	// Measure visible widths (strip ANSI for right side since it may contain color codes)
@@ -538,6 +549,10 @@ func (v Viewer) renderHeader() string {
 	// by stripping known escape sequences for width calculation.
 	if v.errorMsg != "" {
 		rightLen = len([]rune("✗ " + v.errorMsg))
+	} else if v.searchState.Active {
+		rightLen = len([]rune("🔍 " + v.searchState.Query + " (X/Y)"))
+	} else if v.history.CanGoBack() {
+		rightLen = len([]rune("← Back (Ctrl+B)"))
 	}
 
 	padding := v.Width - leftLen - rightLen
@@ -547,7 +562,8 @@ func (v Viewer) renderHeader() string {
 
 	bar := left + strings.Repeat(" ", padding) + right
 
-	return "\x1b[48;5;235m\x1b[38;5;244m" + bar + "\x1b[0m"
+	// Enhanced header with better contrast and subtle colors
+	return "\x1b[48;5;17m\x1b[1;38;5;51m" + bar + "\x1b[0m"
 }
 
 // View renders the visible portion of the document for display.
@@ -685,21 +701,24 @@ func (v Viewer) viewWithBrowser(contentHeight int) string {
 }
 
 // renderStatusBar returns the 1-line status bar displayed at the bottom.
+// Enhanced with colors, visual indicators, and better visual hierarchy.
 func (v Viewer) renderStatusBar() string {
-	// Jump-to-line prompt: show typing prompt and return early (checked before searchMode).
+	// Jump-to-line prompt: show typing prompt with enhanced colors and return early (checked before searchMode).
 	if v.jumpMode {
-		bar := "Jump to line: " + v.jumpInput + "_"
+		bar := "📍 Jump to line: " + v.jumpInput + "_"
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("226")).
+			Bold(true).
 			Width(v.Width).
 			Render(bar)
 	}
 
-	// Search input prompt: show the typing prompt and return early.
+	// Search input prompt: show the typing prompt with enhanced colors and return early.
 	if v.searchMode {
-		bar := "Search: " + v.searchInput + "_"
+		bar := "🔍 Search: " + v.searchInput + "_"
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("226")).
+			Bold(true).
 			Width(v.Width).
 			Render(bar)
 	}
@@ -707,13 +726,13 @@ func (v Viewer) renderStatusBar() string {
 	// File name (relative if possible)
 	name := filepath.Base(v.FilePath)
 
-	// If search is active with results, show match counter.
+	// If search is active with results, show match counter with colors.
 	if v.searchState.Active {
 		var matchInfo string
 		if len(v.searchState.Matches) > 0 && v.searchState.Current >= 0 {
-			matchInfo = fmt.Sprintf("Match %d of %d", v.searchState.Current+1, len(v.searchState.Matches))
+			matchInfo = fmt.Sprintf("\x1b[1;33m🔍 Match %d of %d\x1b[0m", v.searchState.Current+1, len(v.searchState.Matches))
 		} else if v.searchState.Query != "" {
-			matchInfo = fmt.Sprintf("No matches for %q", v.searchState.Query)
+			matchInfo = fmt.Sprintf("\x1b[33m🔍 No matches for %q\x1b[0m", v.searchState.Query)
 		}
 		if matchInfo != "" {
 			bar := matchInfo + "  |  " + name
@@ -724,33 +743,33 @@ func (v Viewer) renderStatusBar() string {
 		}
 	}
 
-	// Navigation hints
+	// Navigation hints with enhanced colors
 	var navHint string
 	back := v.history.CanGoBack()
 	fwd := v.history.CanGoForward()
 	if back && fwd {
-		navHint = "Ctrl+B:back  Alt+Right:fwd"
+		navHint = "\x1b[38;5;117m← Back • → Fwd\x1b[0m"
 	} else if back {
-		navHint = "Ctrl+B:back"
+		navHint = "\x1b[38;5;117m← Back\x1b[0m"
 	} else if fwd {
-		navHint = "Alt+Right:fwd"
+		navHint = "\x1b[38;5;117m→ Fwd\x1b[0m"
 	}
 
-	// Link count
+	// Link count with visual indicator
 	linkInfo := ""
 	if len(v.links.Links) > 0 {
 		idx := v.links.Focused()
 		if idx >= 0 {
-			linkInfo = fmt.Sprintf("Link %d/%d", idx+1, len(v.links.Links))
+			linkInfo = fmt.Sprintf("\x1b[1;51m🔗 %d/%d\x1b[0m", idx+1, len(v.links.Links))
 		} else {
-			linkInfo = fmt.Sprintf("%d links (Tab)", len(v.links.Links))
+			linkInfo = fmt.Sprintf("\x1b[38;5;51m🔗 %d links\x1b[0m", len(v.links.Links))
 		}
 	}
 
-	// Error message takes precedence in the middle
+	// Error message takes precedence in the middle with bold red
 	middle := linkInfo
 	if v.errorMsg != "" {
-		middle = "\x1b[31m" + v.errorMsg + "\x1b[0m"
+		middle = "\x1b[1;31m✗ " + v.errorMsg + "\x1b[0m"
 	}
 
 	// Line counter: "Line N of M" for small docs, "Line N" for large docs.
@@ -758,12 +777,12 @@ func (v Viewer) renderStatusBar() string {
 	currentLine := v.Offset + 1 // 1-based display
 	var lineInfo string
 	if totalLines <= virtualThreshold {
-		lineInfo = fmt.Sprintf("Line %d of %d", currentLine, totalLines)
+		lineInfo = fmt.Sprintf("\x1b[38;5;117m%d/%d\x1b[0m", currentLine, totalLines)
 	} else {
-		lineInfo = fmt.Sprintf("Line %d", currentLine)
+		lineInfo = fmt.Sprintf("\x1b[38;5;117m%d\x1b[0m", currentLine)
 	}
 
-	parts := []string{name}
+	parts := []string{"\x1b[1m" + name + "\x1b[0m"}
 	if lineInfo != "" {
 		parts = append(parts, lineInfo)
 	}
@@ -773,14 +792,14 @@ func (v Viewer) renderStatusBar() string {
 	if middle != "" {
 		parts = append(parts, middle)
 	}
-	// Always include search hint in default status bar
-	parts = append(parts, "/ search")
+	// Always include search hint in default status bar with icon
+	parts = append(parts, "\x1b[38;5;244m🔍 search\x1b[0m")
 	// Show copy hint when a cursor is committed
 	if v.hasCursor {
-		parts = append(parts, "Ctrl+C copy")
+		parts = append(parts, "\x1b[38;5;244m📋 copy\x1b[0m")
 	}
 
-	bar := strings.Join(parts, "  |  ")
+	bar := strings.Join(parts, "  ")
 
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("244")).
