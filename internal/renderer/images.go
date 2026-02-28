@@ -75,8 +75,25 @@ func DetectImageProtocol() ImageProtocol {
 		return ProtocolSixel
 	}
 
-	// xterm-256color: Try Kitty protocol (works on Alacritty, modern xterm, WezTerm)
-	if strings.Contains(term, "xterm") || strings.Contains(term, "screen") || strings.Contains(term, "tmux") {
+	// xterm-256color on macOS likely means Terminal.app (use iTerm2 protocol)
+	if strings.Contains(term, "xterm") {
+		// On macOS, prefer iTerm2 protocol for generic terminals (likely Terminal.app)
+		homeDir, _ := os.UserHomeDir()
+		if homeDir != "" {
+			// Check if running on macOS
+			if _, err := os.Stat("/System/Applications/Utilities/Terminal.app"); err == nil {
+				fmt.Fprintf(os.Stderr, "[DEBUG] → macOS xterm (likely Terminal.app, using iTerm2)\n")
+				return ProtocolITerm2
+			}
+		}
+
+		// On other systems, xterm-256color might support Kitty (Alacritty, etc)
+		fmt.Fprintf(os.Stderr, "[DEBUG] → xterm-256color (Kitty fallback)\n")
+		return ProtocolKitty
+	}
+
+	// screen/tmux: Try Kitty protocol
+	if strings.Contains(term, "screen") || strings.Contains(term, "tmux") {
 		fmt.Fprintf(os.Stderr, "[DEBUG] → Modern terminal (Kitty fallback for %s)\n", term)
 		return ProtocolKitty
 	}
