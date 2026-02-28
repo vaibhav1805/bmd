@@ -1,8 +1,9 @@
-# BMD — Beast Markdown Document
+# Beautiful Markdown Editor
 
-A powerful, beautiful, feature-rich markdown viewer for the terminal with integrated knowledge graph capabilities, full-text search, and agent-queryable documentation interface.
+A powerful, beautiful, feature-rich markdown editor for the terminal with integrated knowledge graph capabilities, full-text search, and agent-queryable documentation interface. Edit and view markdown files with stunning formatting, syntax highlighting, and semantic relationship analysis — all without leaving the CLI.
 
 **Features:**
+- ✏️ **Edit Mode** — Inline markdown editing with syntax highlighting and file persistence (coming Phase 7)
 - 🎨 **Beautiful rendering** — Syntax-highlighted code blocks, styled tables, colored text
 - 🖱️ **Mouse support** — Move cursor, click to navigate, select text
 - 📋 **Link navigation** — Click or use keyboard to follow markdown links between files
@@ -22,20 +23,24 @@ A powerful, beautiful, feature-rich markdown viewer for the terminal with integr
 
 ```bash
 # Clone the repository
-git clone https://github.com/flurryhead/bmd
+git clone https://github.com/vaibhav1805/bmd
 cd bmd
 
 # Build
-go build -o bmd ./cmd/bmd
+go build -o beautiful-markdown-editor ./cmd/bmd
 
 # Move to PATH
-sudo mv bmd /usr/local/bin/
+sudo mv beautiful-markdown-editor /usr/local/bin/
 ```
 
-### View a Markdown File
+### View/Edit a Markdown File
 
 ```bash
-bmd README.md
+# View mode
+beautiful-markdown-editor README.md
+
+# Edit mode (coming Phase 7)
+beautiful-markdown-editor README.md  # Press 'e' to enter edit mode
 ```
 
 **Keyboard shortcuts:**
