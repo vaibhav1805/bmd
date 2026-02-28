@@ -302,7 +302,7 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.editMode = false
 				v.markdownSyntaxOpen = false
 				return v.loadFileNoHistory(v.FilePath)
-			case '?':
+			case tea.KeyCtrlH:
 				// Toggle markdown syntax help in edit mode
 				v.markdownSyntaxOpen = !v.markdownSyntaxOpen
 				return v, nil
@@ -838,6 +838,11 @@ func (v Viewer) renderHelp() string {
 		line(padRight("  Click         Move cursor / follow link", boxWidth)),
 		line(padRight("  Ctrl+C        Copy line at cursor", boxWidth)),
 		sectionSep(),
+		sectionLine("Edit Mode (e)"),
+		line(padRight("  Ctrl+H        Show markdown syntax help", boxWidth)),
+		line(padRight("  Ctrl+S        Save file", boxWidth)),
+		line(padRight("  Ctrl+Z/Y      Undo / Redo", boxWidth)),
+		sectionSep(),
 		line(padRight("  ? / h         Toggle this help", boxWidth)),
 		line(padRight("  q             Quit", boxWidth)),
 		line(padRight("  Ctrl+C        Copy (cursor set) / Quit", boxWidth)),
@@ -940,7 +945,7 @@ func (v Viewer) renderMarkdownSyntax() string {
 		codeLine("| table | data |"),
 		codeLine("---"),
 		sectionSep(),
-		line(padRight("  ? to close this help", boxWidth)),
+		line(padRight("  Ctrl+H to close this help", boxWidth)),
 		footer,
 	}
 
