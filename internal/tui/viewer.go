@@ -1244,6 +1244,166 @@ func (v *Viewer) renderEditMode() string {
 	return strings.Join(lines, "\n")
 }
 
+// highlightMarkdownLine applies ANSI color codes to markdown syntax patterns in a line.
+// Returns the line with ANSI escape codes inserted for highlighting.
+func (v *Viewer) highlightMarkdownLine(line string) string {
+	if line == "" {
+		return line
+	}
+
+	// Use a simple state machine to track context (in code, in bold, in italic, etc.)
+	var result strings.Builder
+	runes := []rune(line)
+	i := 0
+
+	// Color constants (matching renderer.go palette)
+	headingColor := "\x1b[38;5;33m"   // bright blue
+	boldColor := "\x1b[38;5;226m"     // yellow (emphasis)
+	italicColor := "\x1b[38;5;48m"    // cyan (emphasis)
+	codeColor := "\x1b[38;5;240m"     // dim gray (code)
+	linkColor := "\x1b[38;5;44m"      // bright cyan (links)
+	listColor := "\x1b[38;5;250m"     // light gray (list markers)
+	resetColor := "\x1b[m"
+
+	// Track heading at line start
+	if len(runes) > 0 && runes[0] == '#' {
+		// Count heading level
+		level := 0
+		for i < len(runes) && runes[i] == '#' {
+			level++
+			i++
+		}
+		result.WriteString(headingColor)
+		for j := 0; j < level; j++ {
+			result.WriteRune('#')
+		}
+		result.WriteString(resetColor)
+		// Skip the space after heading markers if present
+		if i < len(runes) && runes[i] == ' ' {
+			result.WriteRune(' ')
+			i++
+		}
+	}
+
+	// Process the rest of the line for inline syntax
+	for i < len(runes) {
+		r := runes[i]
+
+		// Bold: ** ... **
+		if i+1 < len(runes) && r == '*' && runes[i+1] == '*' {
+			result.WriteString(boldColor)
+			result.WriteRune('*')
+			result.WriteRune('*')
+			i += 2
+			// Find closing **
+			for i < len(runes) {
+				if i+1 < len(runes) && runes[i] == '*' && runes[i+1] == '*' {
+					result.WriteRune('*')
+					result.WriteRune('*')
+					i += 2
+					result.WriteString(resetColor)
+					break
+				}
+				result.WriteRune(runes[i])
+				i++
+			}
+			continue
+		}
+
+		// Italic: * ... * (single asterisk)
+		if r == '*' && (i == 0 || runes[i-1] == ' ') && i+1 < len(runes) && runes[i+1] != '*' {
+			result.WriteString(italicColor)
+			result.WriteRune('*')
+			i++
+			// Find closing *
+			foundClose := false
+			for i < len(runes) {
+				if runes[i] == '*' {
+					result.WriteRune('*')
+					i++
+					result.WriteString(resetColor)
+					foundClose = true
+					break
+				}
+				result.WriteRune(runes[i])
+				i++
+			}
+			if !foundClose {
+				// No closing *, reset color
+				result.WriteString(resetColor)
+			}
+			continue
+		}
+
+		// Inline code: ` ... `
+		if r == '`' {
+			result.WriteString(codeColor)
+			result.WriteRune('`')
+			i++
+			// Find closing `
+			for i < len(runes) {
+				if runes[i] == '`' {
+					result.WriteRune('`')
+					i++
+					result.WriteString(resetColor)
+					break
+				}
+				result.WriteRune(runes[i])
+				i++
+			}
+			continue
+		}
+
+		// List markers: -, *, + at line start
+		if i == 0 && (r == '-' || r == '*' || r == '+') && i+1 < len(runes) && runes[i+1] == ' ' {
+			result.WriteString(listColor)
+			result.WriteRune(r)
+			i++
+			result.WriteRune(' ')
+			i++
+			result.WriteString(resetColor)
+			continue
+		}
+
+		// Link: [text](url)
+		if r == '[' {
+			result.WriteString(linkColor)
+			result.WriteRune('[')
+			i++
+			// Find ]
+			for i < len(runes) && runes[i] != ']' {
+				result.WriteRune(runes[i])
+				i++
+			}
+			if i < len(runes) && runes[i] == ']' {
+				result.WriteRune(']')
+				i++
+				// Check for (url)
+				if i < len(runes) && runes[i] == '(' {
+					result.WriteRune('(')
+					i++
+					for i < len(runes) && runes[i] != ')' {
+						result.WriteRune(runes[i])
+						i++
+					}
+					if i < len(runes) && runes[i] == ')' {
+						result.WriteRune(')')
+						i++
+					}
+				}
+			}
+			result.WriteString(resetColor)
+			continue
+		}
+
+		// Default: regular character
+		result.WriteRune(r)
+		i++
+	}
+
+	return result.String()
+}
+
 // min returns the minimum of two integers.
 func min(a, b int) int {
 	if a < b {
