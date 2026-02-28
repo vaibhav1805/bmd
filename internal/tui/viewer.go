@@ -336,8 +336,12 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.jumpMode = true
 			v.jumpInput = ""
 
-		case "shift+t":
+		case "shift+t", "T", "ctrl+t":
 			// Open theme selection dialog
+			// Support multiple keybindings for robustness:
+			// - shift+t: explicit shift modifier (may not work on all terminals)
+			// - T: uppercase T (most terminals send Shift+T as uppercase)
+			// - ctrl+t: alternative keybinding
 			v.themeDialog.Open(v.getCurrentThemeName())
 			return v, nil
 		}
@@ -606,7 +610,7 @@ func (v Viewer) renderHelp() string {
 		line(padRight("  Esc           Close search", boxWidth)),
 		sectionSep(),
 		sectionLine("Theme"),
-		line(padRight("  Shift+T       Select theme", boxWidth)),
+		line(padRight("  T/Shift+T     Select theme", boxWidth)),
 		sectionSep(),
 		sectionLine("Mouse & Copy"),
 		line(padRight("  Click         Move cursor / follow link", boxWidth)),
