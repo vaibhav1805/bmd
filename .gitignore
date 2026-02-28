@@ -1,7 +1,29 @@
+# Planning & Claude files
 .planning/
-node_modules/
+.claude/
+.continue-here.md
+
+# IDE & Editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+/bmd
 bin/
 vendor/
 *.test
 *.out
-/bmd
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# Database
+*.db
+knowledge.db
