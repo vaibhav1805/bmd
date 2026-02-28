@@ -1105,23 +1105,34 @@ func (v Viewer) View() string {
 			}
 		}
 
-		if docLine == focusedLine {
-			// Apply reverse video to the focused line so the link stands out.
-			// Link focus takes priority over other cursor indicators.
-			sb.WriteString("\x1b[7m" + line + "\x1b[m")
-		} else if v.hasCursor && docLine == v.cursorRow {
-			// Committed cursor (MOUSE-02): underline the clicked line.
-			sb.WriteString("\x1b[4m" + line + "\x1b[m")
-		} else {
-			// Mouse hover cursor (MOUSE-01): reverse-video the character at mouse position.
-			// v.mouseRow is 0-based screen row; Y=0 is header, Y=1 is first content row.
-			// So content index i corresponds to screen row i+1.
-			if v.mouseRow == i+1 {
-				line = insertCursorAt(line, v.mouseCol)
+		// Wrap long lines to terminal width (accounts for ANSI codes)
+		wrappedLines := wrapLineToWidth(line, v.Width)
+
+		for wrapIdx, wrappedLine := range wrappedLines {
+			// Only apply cursor/focus styling to the first wrapped line
+			if wrapIdx == 0 {
+				if docLine == focusedLine {
+					// Apply reverse video to the focused line so the link stands out.
+					// Link focus takes priority over other cursor indicators.
+					sb.WriteString("\x1b[7m" + wrappedLine + "\x1b[m")
+				} else if v.hasCursor && docLine == v.cursorRow {
+					// Committed cursor (MOUSE-02): underline the clicked line.
+					sb.WriteString("\x1b[4m" + wrappedLine + "\x1b[m")
+				} else {
+					// Mouse hover cursor (MOUSE-01): reverse-video the character at mouse position.
+					// v.mouseRow is 0-based screen row; Y=0 is header, Y=1 is first content row.
+					// So content index i corresponds to screen row i+1.
+					if v.mouseRow == i+1 {
+						wrappedLine = insertCursorAt(wrappedLine, v.mouseCol)
+					}
+					sb.WriteString(wrappedLine)
+				}
+			} else {
+				// Continuation lines: no special styling, just write the wrapped content
+				sb.WriteString(wrappedLine)
 			}
-			sb.WriteString(line)
+			sb.WriteString("\n")
 		}
-		sb.WriteString("\n")
 	}
 
 	sb.WriteString(v.renderStatusBar())
