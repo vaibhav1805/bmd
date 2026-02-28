@@ -141,3 +141,77 @@ func highlightTextRange(line string, start, end int) string {
 	// Apply selection highlight: dark grey background (238)
 	return before + "\x1b[48;5;238m" + selected + "\x1b[m" + after
 }
+
+// highlightTextRangeWithStripped applies selection highlighting to displayLine,
+// using rune indices from strippedLine. This handles cases where displayLine may
+// contain ANSI codes (from search highlights or other styling) but we need to
+// calculate selection ranges based on the stripped text.
+//
+// Strategy: extract the substring from displayLine at byte boundaries, then apply highlighting.
+// This preserves any existing ANSI codes in the display line.
+func highlightTextRangeWithStripped(displayLine, strippedLine string, start, end int) string {
+	strippedRunes := []rune(strippedLine)
+
+	if start < 0 {
+		start = 0
+	}
+	if end > len(strippedRunes) {
+		end = len(strippedRunes)
+	}
+	if start >= end {
+		return displayLine
+	}
+
+	// Extract the substring from displayLine using the same indices.
+	// Since displayLine and strippedLine are derived from the same content
+	// (but displayLine may have added ANSI codes), we need to be careful.
+	// We'll use the rune indices from strippedLine to guide us through displayLine.
+	//
+	// However, this is tricky because displayLine may have ANSI codes that shift positions.
+	// Simpler approach: highlight by working through displayLine and counting visual runes.
+
+	// For simplicity, strip ANSI from displayLine and use regular highlighting.
+	// Then re-apply any leading/trailing ANSI codes if needed.
+	plain := stripANSI(displayLine)
+	plainRunes := []rune(plain)
+
+	if start > len(plainRunes) {
+		start = len(plainRunes)
+	}
+	if end > len(plainRunes) {
+		end = len(plainRunes)
+	}
+	if start >= end {
+		return displayLine
+	}
+
+	before := string(plainRunes[:start])
+	selected := string(plainRunes[start:end])
+	after := string(plainRunes[end:])
+
+	// Apply selection highlight: dark grey background (238)
+	return before + "\x1b[48;5;238m" + selected + "\x1b[m" + after
+}
+
+// stripANSI removes all ANSI escape sequences from a string.
+func stripANSI(s string) string {
+	var result strings.Builder
+	i := 0
+	for i < len(s) {
+		if s[i] == '\x1b' {
+			// Find the end of this escape sequence
+			j := i + 1
+			for j < len(s) && s[j] != 'm' {
+				j++
+			}
+			if j < len(s) {
+				j++ // include the 'm'
+			}
+			i = j
+			continue
+		}
+		result.WriteByte(s[i])
+		i++
+	}
+	return result.String()
+}

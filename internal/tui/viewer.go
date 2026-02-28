@@ -758,15 +758,17 @@ func (v Viewer) View() string {
 
 			if docLine >= start.LineIndex && docLine <= end.LineIndex {
 				// This line is part of the selection
+				// Use v.Lines[docLine] for stripped text (rune count), but apply to displayLine (with ANSI)
+				strippedLine := v.Lines[docLine]
 				if docLine == start.LineIndex && docLine == end.LineIndex {
 					// Single-line selection: highlight from start to end column
-					line = highlightTextRange(line, start.ColumnIndex, end.ColumnIndex)
+					line = highlightTextRangeWithStripped(line, strippedLine, start.ColumnIndex, end.ColumnIndex)
 				} else if docLine == start.LineIndex {
-					// First line of multi-line selection: highlight from start to end
-					line = highlightTextRange(line, start.ColumnIndex, len([]rune(displayLines[docLine])))
+					// First line of multi-line selection: highlight from start to end of line
+					line = highlightTextRangeWithStripped(line, strippedLine, start.ColumnIndex, len([]rune(strippedLine)))
 				} else if docLine == end.LineIndex {
-					// Last line of multi-line selection: highlight from start to end
-					line = highlightTextRange(line, 0, end.ColumnIndex)
+					// Last line of multi-line selection: highlight from start to end column
+					line = highlightTextRangeWithStripped(line, strippedLine, 0, end.ColumnIndex)
 				} else {
 					// Middle line: highlight entire line
 					line = "\x1b[48;5;238m" + line + "\x1b[m"
