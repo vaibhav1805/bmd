@@ -6,6 +6,7 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Render markdown files beautifully in the terminal so developers can read documentation without leaving their terminal.
 **Current focus:** COMPLETE — All 6 phases delivered
+**Post-project improvements:** 3 enhancements completed (2026-02-28)
 
 ## Current Position
 
@@ -152,15 +153,25 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-28 — PHASE 6 EXECUTOR (06-06)
-Completed: 06-06 Human Verification Checkpoint (Wave 3)
-  - AGENT-01 verified: bmd query returns ranked results in <10ms
-  - AGENT-02 verified: JSON output machine-parseable, stdout/stderr split confirmed
-  - GRAPH-01 verified: 3 edge types (references=5, mentions=1, code=11 from integration test)
-  - QUERY-01 verified: dependency queries <17ms, zero network imports confirmed
-  - Binary: 16MB, pure Go, no CGO
-  - Tests: 253 passing, 87.9% coverage
-  - Created VERIFICATION.md with full test evidence and APPROVED signature
+Last session: 2026-02-28 — Post-Project Improvements (Yolo Mode)
+Completed: 3 bug fixes and enhancements
+  - FIX: Mouse text selection with search highlights active (c1e3870)
+    * Root cause: ANSI codes from search highlights caused position misalignment
+    * Solution: Separated coordinate calculation (stripped text) from display (styled text)
+    * Files: internal/tui/selection.go (+81 lines), internal/tui/viewer.go (fixed logic)
 
-Status: ALL PHASES COMPLETE — Phase 6 verified and approved
-Stopped at: Completed 06-06-PLAN.md
+  - FEAT: Persist theme preference across sessions (d30a176)
+    * New: internal/config/config.go (configuration system)
+    * Themes now saved to ~/.config/bmd/theme.json (Unix/macOS) or %APPDATA%\bmd\ (Windows)
+    * User preference loaded on startup, gracefully handles missing config
+    * Files: internal/config/config.go (new, 104 lines), main.go, viewer.go (updated)
+
+  - TEST: Add comprehensive e-commerce service documentation (d4e07f9)
+    * Created: test-data/ecommerce-service-docs/ (15 markdown files, 4,189 lines)
+    * Structure: 7 microservices, 3 protocol docs, 3 operations guides
+    * Content: Realistic examples with cross-references for link navigation testing
+    * Benefits knowledge graph and search functionality testing
+
+Status: ALL PHASES COMPLETE + 3 Post-Project Improvements
+Binary: Compiled successfully, 16MB Mach-O 64-bit (arm64)
+Stopped at: Post-project improvements complete and committed

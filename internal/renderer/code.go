@@ -39,7 +39,7 @@ func (r *Renderer) RenderCodeBlock(cb *ast.CodeBlock) string {
 	if lang != "" {
 		// "┌─ python ─────────────────────┐"
 		label := "─ " + lang + " "
-		remaining := boxWidth - 2 - len(label) // 2 for the corner chars
+		remaining := boxWidth - len(label) // No -2; corners are outside border width
 		if remaining < 0 {
 			remaining = 0
 		}
