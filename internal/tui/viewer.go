@@ -1560,14 +1560,20 @@ func (v *Viewer) renderEditMode() string {
 			displayLine = insertCursorAtVisual(displayLine, visualCursorCol)
 		}
 
-		// Truncate to width using rune counting to avoid cutting ANSI codes
-		displayRunes := []rune(displayLine)
-		if len(displayRunes) > v.Width {
-			displayRunes = displayRunes[:v.Width]
-			displayLine = string(displayRunes)
+		// Handle long lines by wrapping them to terminal width
+		// Account for ANSI codes which don't contribute to visual width
+		wrappedLines := wrapLineToWidth(displayLine, v.Width)
+		for j, wrappedLine := range wrappedLines {
+			// Only show continuation lines if we have room
+			if len(lines)-1 < v.Height-1 {
+				if j == 0 {
+					lines = append(lines, wrappedLine)
+				} else {
+					// Continuation lines don't have line numbers, just content
+					lines = append(lines, wrappedLine)
+				}
+			}
 		}
-
-		lines = append(lines, displayLine)
 	}
 
 	// Status bar: show edit hints and status message
@@ -1749,6 +1755,71 @@ func (v *Viewer) highlightMarkdownLine(line string) string {
 	}
 
 	return result.String()
+}
+
+// wrapLineToWidth wraps a line containing ANSI codes to fit within maxWidth visual characters.
+// Returns a slice of wrapped lines. ANSI codes are preserved in output.
+func wrapLineToWidth(line string, maxWidth int) []string {
+	if maxWidth <= 0 {
+		return []string{line}
+	}
+
+	// Strip ANSI codes to calculate visual positions
+	plain := stripANSI(line)
+
+	// If line fits, return as-is
+	if len([]rune(plain)) <= maxWidth {
+		return []string{line}
+	}
+
+	// Need to wrap: iterate through original line, tracking visual position
+	var result []string
+	var currentLine strings.Builder
+	visualPos := 0
+	i := 0
+	lineRunes := []rune(line)
+
+	for i < len(lineRunes) {
+		r := lineRunes[i]
+
+		// Check if we're at the start of an ANSI escape code
+		if r == '\x1b' && i+1 < len(lineRunes) && lineRunes[i+1] == '[' {
+			// Find end of escape code
+			j := i + 2
+			for j < len(lineRunes) && lineRunes[j] != 'm' {
+				j++
+			}
+			// Add entire escape code without incrementing visualPos
+			if j < len(lineRunes) {
+				currentLine.WriteRune(r)
+				i++
+				for i <= j && i < len(lineRunes) {
+					currentLine.WriteRune(lineRunes[i])
+					i++
+				}
+				continue
+			}
+		}
+
+		// Regular character: check if we need to wrap
+		if visualPos >= maxWidth {
+			// Start a new line
+			result = append(result, currentLine.String())
+			currentLine.Reset()
+			visualPos = 0
+		}
+
+		currentLine.WriteRune(r)
+		visualPos++
+		i++
+	}
+
+	// Add remaining content
+	if currentLine.Len() > 0 {
+		result = append(result, currentLine.String())
+	}
+
+	return result
 }
 
 // insertCursorAtVisual inserts reverse-video cursor at a visual column position in a line with ANSI codes.
