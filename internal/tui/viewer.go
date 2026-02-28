@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	osc52 "github.com/aymanbagabas/go-osc52/v2"
 	tea "github.com/charmbracelet/bubbletea"
@@ -1353,12 +1354,29 @@ func (v *Viewer) renderEditMode() string {
 		lineNum := i + 1
 		lineNumStr := fmt.Sprintf("%5d | ", lineNum)
 
+		// Get the content line
+		contentLine := v.Lines[i]
+
 		// Apply markdown syntax highlighting to the line
-		highlightedLine := v.highlightMarkdownLine(v.Lines[i])
+		highlightedLine := v.highlightMarkdownLine(contentLine)
+
 		displayLine := lineNumStr + highlightedLine
-		if len(displayLine) > v.Width {
-			displayLine = displayLine[:v.Width]
+
+		// Add cursor rendering if this is the cursor line
+		if v.editBuffer != nil && v.editBuffer.CursorLine() == i {
+			// The cursor should appear at position lineNumStr.length + editBuffer.CursorCol()
+			// Use insertCursorAtVisual to place cursor at visual column accounting for ANSI codes
+			visualCursorCol := v.editBuffer.CursorCol() + len([]rune(lineNumStr))
+			displayLine = insertCursorAtVisual(displayLine, visualCursorCol)
 		}
+
+		// Truncate to width using rune counting to avoid cutting ANSI codes
+		displayRunes := []rune(displayLine)
+		if len(displayRunes) > v.Width {
+			displayRunes = displayRunes[:v.Width]
+			displayLine = string(displayRunes)
+		}
+
 		lines = append(lines, displayLine)
 	}
 
@@ -1538,6 +1556,60 @@ func (v *Viewer) highlightMarkdownLine(line string) string {
 		// Default: regular character
 		result.WriteRune(r)
 		i++
+	}
+
+	return result.String()
+}
+
+// insertCursorAtVisual inserts reverse-video cursor at a visual column position in a line with ANSI codes.
+// It strips ANSI codes to find the visual position, then inserts the cursor while preserving the codes.
+func insertCursorAtVisual(line string, visualCol int) string {
+	// Strip ANSI codes to track visual positions
+	plain := stripANSI(line)
+	plainRunes := []rune(plain)
+
+	// If cursor is past end of line, append cursor space
+	if visualCol >= len(plainRunes) {
+		return line + "\x1b[7m \x1b[m"
+	}
+
+	// Build new line by processing character by character
+	// We rebuild the line with cursor at the right visual position
+	var result strings.Builder
+	visualPos := 0
+	lineIdx := 0
+
+	for lineIdx < len(line) {
+		if line[lineIdx] == '\x1b' {
+			// Found ANSI escape sequence: copy it as-is
+			j := lineIdx + 1
+			for j < len(line) && line[j] != 'm' {
+				j++
+			}
+			if j < len(line) {
+				j++ // include the 'm'
+			}
+			result.WriteString(line[lineIdx:j])
+			lineIdx = j
+		} else {
+			// Regular character: check if this is where cursor should be
+			if visualPos == visualCol {
+				// Insert cursor here
+				result.WriteString("\x1b[7m")
+				// Find and copy the rune
+				r, size := utf8.DecodeRuneInString(line[lineIdx:])
+				result.WriteRune(r)
+				result.WriteString("\x1b[m")
+				lineIdx += size
+				visualPos++
+			} else {
+				// Copy regular character
+				r, size := utf8.DecodeRuneInString(line[lineIdx:])
+				result.WriteRune(r)
+				lineIdx += size
+				visualPos++
+			}
+		}
 	}
 
 	return result.String()
