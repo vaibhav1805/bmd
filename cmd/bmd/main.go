@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -59,11 +61,29 @@ func main() {
 		case "-h", "--help", "help":
 			usage()
 			return
+		case "--browse":
+			// Explicit directory browse mode.
+			dir := "."
+			if len(args) > 1 {
+				dir = args[1]
+			}
+			runDirectoryViewer(dir)
+			return
 		}
 	}
 
-	// Legacy viewer mode: requires at least one argument.
-	if len(args) < 1 {
+	// No arguments: check if current directory has markdown files → directory mode.
+	if len(args) == 0 {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "bmd: cannot get current directory:", err)
+			os.Exit(1)
+		}
+		if directoryHasMdFiles(cwd) {
+			runDirectoryViewer(cwd)
+			return
+		}
+		// No markdown files: show usage.
 		usage()
 		os.Exit(1)
 	}
@@ -78,6 +98,46 @@ func main() {
 	fmt.Fprintf(os.Stderr, "bmd: unknown command %q\n\n", args[0])
 	usage()
 	os.Exit(1)
+}
+
+// directoryHasMdFiles returns true if path contains at least one .md file.
+func directoryHasMdFiles(path string) bool {
+	found := false
+	_ = filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || found {
+			return nil
+		}
+		if !d.IsDir() && strings.ToLower(filepath.Ext(p)) == ".md" {
+			found = true
+		}
+		return nil
+	})
+	return found
+}
+
+// runDirectoryViewer launches the directory browsing TUI for the given directory.
+func runDirectoryViewer(dir string) {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "bmd: cannot resolve directory:", err)
+		os.Exit(1)
+	}
+
+	termWidth := terminal.DetectTerminalWidth()
+	cfg, _ := config.Load()
+	th := theme.NewThemeByName(theme.ThemeName(cfg.Theme))
+
+	v := tui.NewDirectoryViewer(absDir, th, termWidth)
+	if err := v.LoadDirectory(absDir); err != nil {
+		fmt.Fprintln(os.Stderr, "bmd: error loading directory:", err)
+		os.Exit(1)
+	}
+
+	p := tea.NewProgram(v, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "bmd: error running TUI:", err)
+		os.Exit(1)
+	}
 }
 
 func runViewer(filePath string) {
@@ -120,7 +180,11 @@ func runViewer(filePath string) {
 func usage() {
 	fmt.Fprint(os.Stderr, `Usage: bmd COMMAND [OPTIONS]
 
-View a markdown file:
+Browse markdown files in current directory:
+  bmd                         (auto-detects if .md files exist)
+  bmd --browse [DIR]          Explicit directory browse mode
+
+View a single markdown file:
   bmd file.md
 
 Knowledge commands:
@@ -136,7 +200,9 @@ Knowledge commands:
                               Export knowledge graph
 
 Examples:
-  bmd README.md               View file
+  bmd                         Browse markdown files in current directory
+  bmd --browse ./docs         Browse specific directory
+  bmd README.md               View single file
   bmd index ./docs            Index directory
   bmd query "authentication"  Search
   bmd depends api-gateway     Show dependencies
