@@ -1297,8 +1297,22 @@ func (v *Viewer) renderEditMode() string {
 		lines = append(lines, displayLine)
 	}
 
-	// Status bar: show edit hint
-	statusLine := " [e] exit | [Ctrl+S] save (not yet implemented)"
+	// Status bar: show edit hints and status message
+	statusHint := "[e] exit | [Ctrl+S] save"
+	var statusLine string
+	if v.errorMsg != "" {
+		// Show error or success message
+		statusLine = fmt.Sprintf(" %s | %s", statusHint, v.errorMsg)
+	} else {
+		// Show cursor position normally
+		cursorLine := 1
+		cursorCol := 1
+		if v.editBuffer != nil {
+			cursorLine = v.editBuffer.CursorLine() + 1
+			cursorCol = v.editBuffer.CursorCol() + 1
+		}
+		statusLine = fmt.Sprintf(" %s | Line %d, Col %d", statusHint, cursorLine, cursorCol)
+	}
 	lines = append(lines, statusLine[:min(len(statusLine), v.Width)])
 
 	return strings.Join(lines, "\n")
