@@ -34,7 +34,7 @@
 - [x] **MOUSE-01**: Mouse cursor visible at text position (tracks mouse movement)
 - [x] **MOUSE-02**: Click on text to move cursor to clicked position
 - [x] **MOUSE-03**: Click on links to navigate (instead of keyboard-only)
-- [ ] **COPY-01**: Copy text with Ctrl+C (or Cmd+C on macOS)
+- [x] **COPY-01**: Copy text with Ctrl+C (or Cmd+C on macOS)
 
 ## v2 Requirements
 

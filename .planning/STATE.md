@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 4 of 4 (Mouse Copy Support) — In Progress
-Plan: 1 of 1 in current phase
+Plan: 2 of 3 in current phase
 Status: In Progress
-Last activity: 2026-02-27 — Plan 04-01 complete: Mouse cursor tracking and click navigation — MOUSE-01, MOUSE-02, MOUSE-03 complete
+Last activity: 2026-02-27 — Plan 04-02 complete: Ctrl+C copy via OSC52 — COPY-01 complete
 
 Progress: [██████████] 100%
 
@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 - Trend: stable
 
 *Updated after each plan completion*
+| Phase 04-mouse-copy-support P02 | 5 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,8 @@ Recent decisions affecting current work:
 - [04-01]: Header offset fix: msg.Y - 1 + v.Offset (Y=0 is header row, not content) — corrects prior link-click off-by-one
 - [04-01]: insertCursorAt uses rune slice for Unicode-safe indexing — ANSI codes still shift offsets (acceptable Phase 4 approximation)
 - [04-01]: Cursor priority ordering: link focus > committed cursor (underline) > hover cursor (per-char reverse-video)
+- [Phase 04-02]: OSC52 written to stderr for clipboard — terminal clipboard channel; silently fails if terminal unsupported (acceptable Phase 4 tradeoff)
+- [Phase 04-02]: Split 'q' and 'ctrl+c' into separate key cases — Ctrl+C now branches on hasCursor to copy vs quit
 
 ### Pending Todos
 
@@ -100,5 +103,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 04-01-PLAN.md — Mouse cursor tracking and click navigation complete; all MOUSE requirements (MOUSE-01, MOUSE-02, MOUSE-03) confirmed
+Stopped at: Completed 04-02-PLAN.md — Ctrl+C copy via OSC52 complete; COPY-01 satisfied
 Resume file: None

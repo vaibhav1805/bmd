@@ -78,7 +78,7 @@ Plans:
 
 Plans:
 - [x] 04-01-PLAN.md — Mouse cursor tracking + click-to-position (MOUSE-01, MOUSE-02, MOUSE-03)
-- [ ] 04-02-PLAN.md — Clipboard copy via Ctrl+C with OSC52 (COPY-01)
+- [x] 04-02-PLAN.md — Clipboard copy via Ctrl+C with OSC52 (COPY-01)
 - [ ] 04-03-PLAN.md — Human verification checkpoint: all Phase 4 requirements confirmed
 
 ## Progress
@@ -91,4 +91,4 @@ Phases execute in numeric order: 1 → 2 → 3
 | 1. Core Rendering | 3/3 | Complete    | 2026-02-26 |
 | 2. Navigation & Search | 6/6 | Complete    | 2026-02-27 |
 | 3. Polish & UX | 3/3 | Complete    | 2026-02-27 |
-| 4. Mouse & Copy | 1/3 | In Progress | - |
+| 4. Mouse & Copy | 2/3 | In Progress|  |
