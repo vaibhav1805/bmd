@@ -155,16 +155,19 @@ func ImageToKitty(imageData []byte, width, height int) string {
 		return ""
 	}
 
-	// Kitty graphics protocol:
-	// \x1b_Ga=T,f=100,s=WIDTH,v=HEIGHT,m=0:base64data\x1b\\
-	// a=T (transmit), f=100 (PNG format), s=width, v=height, m=0 (final chunk)
+	// Kitty graphics protocol with image ID:
+	// \x1b_Ga=T,i=ID,s=WIDTH,v=HEIGHT,f=100,m=0:base64data\x1b\\
+	// a=T (transmit), i=ID (unique image ID), s=width, v=height, f=100 (PNG), m=0 (final chunk)
 	encoded := base64.StdEncoding.EncodeToString(imageData)
 
 	fmt.Fprintf(os.Stderr, "[DEBUG] ImageToKitty: %d bytes -> %d chars, w=%d h=%d\n",
 		len(imageData), len(encoded), width, height)
 
+	// Generate unique ID based on data hash (simple approach)
+	imageID := 1 // Use static ID - Alacritty may need this
+
 	// m=0 means final chunk (no more data coming)
-	payload := fmt.Sprintf("\x1b_Ga=T,f=100,s=%d,v=%d,m=0:%s\x1b\\", width, height, encoded)
+	payload := fmt.Sprintf("\x1b_Ga=T,i=%d,s=%d,v=%d,f=100,m=0:%s\x1b\\", imageID, width, height, encoded)
 	return payload + "\n"
 }
 
