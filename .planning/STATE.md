@@ -64,6 +64,7 @@ Progress: [████████████████████] Phase 7
 | Phase 06-agent-intelligence P04 | 6 | 9 tasks | 4 files |
 | Phase 06-agent-intelligence P05 | 6 | 9 tasks | 4 files |
 | Phase 08-directory-browser P08-05 | 20 | 4 tasks | 2 files |
+| Phase 08-directory-browser P08-01 | 20 | 4 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -169,6 +170,8 @@ Recent decisions affecting current work:
 - [Phase 08-directory-browser]: maxAsciiNodes=40 threshold triggers list fallback for large graph readability
 - [Phase 08-directory-browser]: '/' for cross-document search; Ctrl+F for in-document search — global vs local search separation
 - [Phase 08-directory-browser]: SearchAllDocuments() reuses Phase 6 openOrBuildIndex — zero new indexing logic needed
+- [Phase 08-directory-browser]: directoryMode field in Viewer routes View/Update to directory handlers, consistent with editMode/graphMode pattern
+- [Phase 08-directory-browser]: Auto-detect directory mode: no args + at least 1 .md in cwd triggers directory browser
 
 ### Pending Todos
 
