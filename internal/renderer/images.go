@@ -153,14 +153,16 @@ func ImageToKitty(imageData []byte, width, height int) string {
 		return ""
 	}
 
-	// Kitty graphics protocol (simplified):
-	// \x1b_Ga=T,f=24,s=W,e=I,m=1;base64data\x1b\
-	// a=T (transmit), f=24 (RGBA format), s=width (size), e=I (end indicator), m=1 (more data)
+	// Kitty graphics protocol:
+	// \x1b_Ga=T,f=100,s=WIDTH,v=HEIGHT,m=0:base64data\x1b\\
+	// a=T (transmit), f=100 (PNG format), s=width, v=height, m=0 (final chunk)
 	encoded := base64.StdEncoding.EncodeToString(imageData)
 
-	// Kitty protocol: transmit image, PNG format (f=100)
-	// Split large base64 into chunks if needed (Kitty has a 4096-char payload limit per escape)
-	payload := fmt.Sprintf("\x1b_Ga=T,f=100,s=%d,e=I,m=1:%s\x1b\\", width, encoded)
+	fmt.Fprintf(os.Stderr, "[DEBUG] ImageToKitty: %d bytes -> %d chars, w=%d h=%d\n",
+		len(imageData), len(encoded), width, height)
+
+	// m=0 means final chunk (no more data coming)
+	payload := fmt.Sprintf("\x1b_Ga=T,f=100,s=%d,v=%d,m=0:%s\x1b\\", width, height, encoded)
 	return payload + "\n"
 }
 
