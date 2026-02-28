@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/bmd/bmd/internal/config"
 	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/terminal"
@@ -101,8 +102,9 @@ func runViewer(filePath string) {
 	// Step 3: Detect terminal width.
 	termWidth := terminal.DetectTerminalWidth()
 
-	// Step 4: Create theme based on terminal background detection.
-	th := theme.NewTheme()
+	// Step 4: Load saved theme preference or detect default.
+	cfg, _ := config.Load() // ignore errors; use default if config missing
+	th := theme.NewThemeByName(theme.ThemeName(cfg.Theme))
 
 	// Step 5: Create viewer model.
 	v := tui.New(doc, filePath, th, termWidth)

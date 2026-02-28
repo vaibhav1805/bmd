@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/bmd/bmd/internal/ast"
+	"github.com/bmd/bmd/internal/config"
 	"github.com/bmd/bmd/internal/nav"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/renderer"
@@ -134,7 +135,7 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) Viewer {
 
 // UpdateTheme switches the viewer to a new theme and re-renders the document.
 // The document is re-rendered with the new theme's colors without reloading the file.
-// Also updates the tracked current theme name.
+// Also updates the tracked current theme name and persists the choice to config.
 func (v *Viewer) UpdateTheme(newTheme theme.Theme, themeName theme.ThemeName) {
 	v.Theme = newTheme
 	v.currentThemeName = themeName
@@ -149,6 +150,10 @@ func (v *Viewer) UpdateTheme(newTheme theme.Theme, themeName theme.ThemeName) {
 
 	// Rebuild the link registry for the new rendering
 	v.links = BuildRegistry(v.rawLines)
+
+	// Persist the theme preference to config
+	cfg := config.Config{Theme: string(themeName)}
+	_ = cfg.Save() // ignore errors; theme selection still applies even if save fails
 }
 
 // getCurrentThemeName returns the currently applied theme name.
