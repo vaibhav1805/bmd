@@ -240,7 +240,7 @@ Phases execute in numeric order: 1 → 2 → 3
 | 9. Split-Pane Directory Browser | 3/3 | Complete   | 2026-03-01 |
 | 10. Agent Output Contracts & Chunk Search | 3/3 | Complete    | 2026-03-01 |
 | 11. PageIndex Integration | 3/3 | Complete    | 2026-03-01 |
-| 12. MCP Server & Live Indexing | TBD | Planned    | — |
+| 12. MCP Server & Live Indexing | 2/3 | In Progress|  |
 
 **Current Status: 10 phases COMPLETE, Phase 11 IN PROGRESS, Phase 12 PLANNED**
 **Previous Completion: All 9 phases complete (2026-03-01)**

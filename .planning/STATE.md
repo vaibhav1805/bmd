@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 
 ## Current Position
 
-Phase: 11 of 12 (PageIndex Integration & Reasoning-Based Retrieval) — IN PROGRESS
-Plan: 2 of 3 complete (11-02 bmd context command delivered)
-Status: IN PROGRESS — Plans 11-01 and 11-02 complete, 11-03 remaining
-Last activity: 2026-03-01 — Phase 11 Plan 02 complete (bmd context command)
+Phase: 12 of 12 (MCP Infrastructure & OpenClaw Deployment) — COMPLETE
+Plan: 3 of 3 complete (12-03 OpenClaw Plugin & Fleet Deployment delivered)
+Status: COMPLETE — All 12 phases delivered
+Last activity: 2026-03-01 — Phase 12 Plan 03 complete (OpenClaw plugin descriptor, Docker image, fleet deployment)
 
 Previous completion:
   - Phase 9 (Split-Pane Directory Browser): All 3 plans complete ✓
@@ -70,6 +70,8 @@ Progress: [███████████████████████
 | Phase 11-pageindex-integration P01 | 3 | 3 tasks | 6 files |
 | Phase 11-pageindex-integration P02 | 10 | 3 tasks | 3 files |
 | Phase 11-pageindex-integration P03 | 12 | 3 tasks | 3 files |
+| Phase 12 P03 | 3 | 5 tasks | 5 files |
+| Phase 12 P01 | 3 | 4 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -196,6 +198,9 @@ Recent decisions affecting current work:
 - [Phase 11-pageindex-integration]: bmd context --format json returns CONTRACT-01 ContractResponse envelope consistent with all other agent commands
 - [Phase 11-pageindex-integration]: Strategy routing added at top of CmdQuery (before BM25 path) for zero overhead on default callers; empty strategy and 'bm25' both use BM25 path
 - [Phase 11-pageindex-integration]: ErrCodePageIndexNotAvailable returned when pageindex binary absent; INDEX_NOT_FOUND when .bmd-tree.json files missing
+- [Phase 12]: Docker image requires explicit python3+py3-pip on alpine for PageIndex; pip install uses --break-system-packages per PEP 668
+- [Phase 12]: OpenClaw tests use static file validation (no Docker daemon required) for CI portability
+- [Phase 12]: SearchAllDocumentsPageIndex falls back to BM25 on any PageIndex error (missing trees or binary); actual strategy returned from SearchAllFiles so header always reflects truth
 
 ### Pending Todos
 
@@ -207,8 +212,9 @@ None.
 
 ## Session Continuity
 
-Current session: 2026-03-01 (continued, resumed) — Bug fixes + documentation
-Status: All 9 phases complete + bug fixes + docs updated, project PRODUCTION READY
+Current session: 2026-03-01 (resumed again, 20:30Z) — Phase 12 Planning & PageIndex-Go Evaluation
+Status: Phases 1-11 COMPLETE, Phase 12 planning initiated with YOLO mode + team agents
+Special focus: Evaluate pageindex-go (https://github.com/matiasinsaurralde/pageindex-go) as native alternative to subprocess wrapper
 
 **Post-Phase 9 Refinements (2026-03-01 resumed):**
 - **Bug fix: Debug logs removed**: Removed 4 [DEBUG] statements from renderImage() that were printing to stderr
