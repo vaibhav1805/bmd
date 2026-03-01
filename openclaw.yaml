@@ -1,0 +1,66 @@
+apiVersion: openclaw.ai/v1
+kind: Plugin
+metadata:
+  name: bmd-documentation-service
+  version: 1.0.0
+  author: BMD Project
+  description: "Terminal markdown documentation service with knowledge graphs, semantic search, and agent integration"
+
+spec:
+  type: documentation-service
+  commands:
+    - name: query
+      description: Search documentation by keyword or semantic intent
+      args:
+        - name: query
+          type: string
+          required: true
+        - name: dir
+          type: string
+          default: .
+        - name: strategy
+          type: string
+          enum: [bm25, pageindex]
+          default: bm25
+
+    - name: index
+      description: Build knowledge index for documentation directory
+      args:
+        - name: dir
+          type: string
+          required: true
+        - name: strategy
+          type: string
+          enum: [bm25, pageindex]
+
+    - name: context
+      description: Assemble RAG-ready context blocks
+      args:
+        - name: query
+          type: string
+          required: true
+        - name: dir
+          type: string
+          default: .
+
+    - name: depends
+      description: Analyze service dependencies
+      args:
+        - name: service
+          type: string
+          required: true
+        - name: dir
+          type: string
+          default: .
+
+  mcp:
+    enabled: true
+    protocol: stdio
+    command: ["bmd", "serve", "--mcp"]
+
+  capabilities:
+    - semantic-search
+    - knowledge-graphs
+    - service-detection
+    - documentation-indexing
+    - rag-assembly
