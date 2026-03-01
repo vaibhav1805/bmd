@@ -4,7 +4,7 @@ A powerful, beautiful terminal-based markdown editor with integrated knowledge g
 
 **For humans:** Edit and view markdown files with stunning formatting, syntax highlighting, and semantic relationship analysis — all without leaving the CLI.
 
-**For agents:** Query, search, and analyze documentation programmatically. Build knowledge graphs, detect microservices, understand architecture relationships, and integrate with agent frameworks via MCP.
+**For agents:** Query, search, and analyze documentation programmatically. Build knowledge graphs, detect components, understand architecture relationships, and integrate with agent frameworks via MCP.
 
 ---
 
@@ -117,8 +117,8 @@ bmd index ./docs
 bmd query "async patterns" --dir ./docs
 
 # Analyze service architecture
-bmd depends auth-service
-bmd services
+bmd depends auth-component
+bmd components
 ```
 
 ![Split-Pane Directory Browser](docs/screenshots/01-split-pane-browser.png)
@@ -136,10 +136,10 @@ bmd services
 - 🎨 **Color themes** — 5 built-in themes (Default, Ocean, Forest, Sunset, Midnight)
 
 **Agent Tools:**
-- 🤖 **Knowledge graphs** — Build dependency graphs, query microservice architecture
+- 🤖 **Knowledge graphs** — Build dependency graphs, query component architecture
 - 📊 **Full-text indexing** — BM25 search across documentation
 - 🧠 **Semantic search** — LLM-powered intent-based retrieval (PageIndex)
-- 🔗 **Service detection** — Automatically identify services and dependencies
+- 🔗 **Component detection** — Automatically identify services and dependencies
 - 💾 **Local persistence** — SQLite-based indexing for fast queries
 - 📤 **Multiple formats** — JSON, text, CSV, Graphviz output
 
@@ -203,7 +203,7 @@ bmd query "database patterns" --dir ./docs
 bmd query "how are databases configured?" --dir ./docs --strategy pageindex
 
 # JSON output for agents
-bmd query "microservices" --dir ./docs --format json
+bmd query "components" --dir ./docs --format json
 
 # Show top 10 results
 bmd query "authentication" --dir ./docs --top 10
@@ -216,29 +216,29 @@ bmd query "authentication" --dir ./docs --top 10
 - `heading_path`: Full heading hierarchy (e.g., "API Gateway > Authentication")
 - `start_line`, `end_line`: Location in source file
 
-#### `bmd services` — Detect Microservices
-Automatically identifies all microservices in your documentation and their dependencies.
+#### `bmd components` — Detect Components
+Automatically identifies all components in your documentation and their dependencies.
 
 **How it detects services:**
-1. **Filename pattern**: Looks for `*-service.md` files (e.g., `auth-service.md`)
-2. **Heading pattern**: Looks for headings containing "Service" (e.g., `# User Service`)
+1. **Filename pattern**: Looks for `*-component.md` files (e.g., `auth-component.md`)
+2. **Heading pattern**: Looks for headings containing "Component" (e.g., `# User Component`)
 3. **High in-degree**: Documents heavily referenced by others (hub services)
 4. **Configuration**: Custom patterns defined in `.bmd-config.yaml` (highest confidence)
 
 **Usage:**
 ```bash
 # List all detected services with dependencies
-bmd services --dir ./docs
+bmd components --dir ./docs
 
 # JSON output (for agents)
-bmd services --dir ./docs --format json
+bmd components --dir ./docs --format json
 
 # Example output:
 # [
 #   {
-#     "id": "auth-service",
+#     "id": "auth-component",
 #     "name": "Auth Service",
-#     "file": "services/auth-service.md",
+#     "file": "services/auth-component.md",
 #     "confidence": 0.9,
 #     "dependency_count": 5
 #   }
@@ -247,14 +247,14 @@ bmd services --dir ./docs --format json
 
 **Finding dependencies:**
 ```bash
-# Show services that auth-service depends on
-bmd depends auth-service --dir ./docs
+# Show services that auth-component depends on
+bmd depends auth-component --dir ./docs
 
-# Show what depends on auth-service
-bmd depends auth-service --dir ./docs --reverse
+# Show what depends on auth-component
+bmd depends auth-component --dir ./docs --reverse
 
 # JSON with full dependency paths
-bmd depends auth-service --dir ./docs --format json --transitive
+bmd depends auth-component --dir ./docs --format json --transitive
 ```
 
 #### `bmd graph` — Visualize Architecture
@@ -293,7 +293,7 @@ bmd graph --dir ./docs --format text
 bmd index ./docs --strategy pageindex
 
 # 2. Analyze services
-bmd services --dir ./docs
+bmd components --dir ./docs
 
 # 3. Check specific service
 bmd depends payment-service --transitive
@@ -406,11 +406,11 @@ ignore_patterns:
   - "*.tmp"
   - "*.log"
 
-# Service detection (for bmd depends, bmd services)
+# Component detection (for bmd depends, bmd components)
 services:
   auto_detect: true              # Detect services from file/heading names
   heuristics:
-    filename_suffix: "-service"  # e.g., auth-service.md
+    filename_suffix: "-service"  # e.g., auth-component.md
     heading_patterns:            # Regex for heading-based detection
       - "## Service: (\\w+)"
       - "# (\\w+-service)"
@@ -566,7 +566,7 @@ Creates `.bmd-index.json` and `.bmd-graph.json` with:
 | `query TERM [--dir PATH] --strategy pageindex` | Semantic search with reasoning | `bmd query "how do we handle errors?" --dir ./docs --strategy pageindex` |
 | `context TERM [--dir PATH]` | Assemble RAG context blocks | `bmd context "auth flow" --dir ./docs` |
 | `depends SERVICE [--format json\|text\|dot]` | Find dependencies | `bmd depends api-gateway` |
-| `services [--format json\|text]` | List detected services | `bmd services` |
+| `services [--format json\|text]` | List detected services | `bmd components` |
 | `graph [--format json\|dot]` | Export relationship graph | `bmd graph --format dot` |
 
 ## Semantic Search (PageIndex)
@@ -639,7 +639,7 @@ This starts bmd as an MCP (Model Context Protocol) server on stdin/stdout, expos
 | `bmd/query` | Full-text (BM25) or semantic (PageIndex) search | `{ "query": string, "dir": string?, "strategy": "bm25"\|"pageindex"?, "top": number? }` |
 | `bmd/index` | Index a documentation directory | `{ "dir": string, "strategy": "bm25"\|"pageindex"? }` |
 | `bmd/depends` | Query service dependencies | `{ "service": string, "transitive": bool?, "format": "json"\|"text"\|"dot"? }` |
-| `bmd/services` | List detected microservices | `{ "format": "json"\|"text"?, "dir": string? }` |
+| `bmd/services` | List detected components | `{ "format": "json"\|"text"?, "dir": string? }` |
 | `bmd/graph` | Export the knowledge graph | `{ "format": "json"\|"dot"?, "dir": string? }` |
 | `bmd/context` | Assemble RAG-ready context blocks | `{ "query": string, "dir": string?, "top": number?, "strategy": "bm25"\|"pageindex"? }` |
 
@@ -1188,7 +1188,7 @@ BMD renders all markdown elements beautifully:
 - **Images** — Rendered in compatible terminals
 
 ![Service Dependency Graph](docs/screenshots/04-graph-view.png)
-*Visualize document relationships and microservice dependencies with interactive graphs*
+*Visualize document relationships and component dependencies with interactive graphs*
 
 ## Theme Switching
 
@@ -1236,7 +1236,7 @@ Benchmarks on 100-document corpus:
 | Index build | 44ms |
 | Full-text search | <8ms |
 | Keyword lookup | 3ms |
-| Service detection | 18ms |
+| Component detection | 18ms |
 | Dependency query | 17ms |
 | Split-pane rendering | <3ms |
 
@@ -1255,7 +1255,7 @@ bmd index ./docs           # Build index (required once)
 bmd query "topic"          # Search (defaults to BM25)
 bmd context "topic"        # Get RAG context
 bmd depends service-name   # Find dependencies
-bmd services               # List all services
+bmd components               # List all services
 bmd graph --format dot     # Graphviz output
 
 # === AGENT SERVER ===

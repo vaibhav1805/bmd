@@ -92,18 +92,18 @@ func (s *Server) handleDepends(ctx context.Context, req mcpsdk.CallToolRequest) 
 	return mcpsdk.NewToolResultText(output), nil
 }
 
-// handleServices handles the bmd/services MCP tool invocation.
-// It delegates to knowledge.CmdServices with JSON output format.
-func (s *Server) handleServices(ctx context.Context, req mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+// handleComponents handles the bmd/components MCP tool invocation.
+// It delegates to knowledge.CmdComponents with JSON output format.
+func (s *Server) handleComponents(ctx context.Context, req mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
 	dir := mcpsdk.ParseString(req, "dir", s.baseDir)
 
 	args := []string{"--dir", dir, "--format", "json"}
 
 	output, err := captureOutput(func() error {
-		return knowledge.CmdServices(args)
+		return knowledge.CmdComponents(args)
 	})
 	if err != nil {
-		return mcpsdk.NewToolResultError(fmt.Sprintf("services failed: %v", err)), nil
+		return mcpsdk.NewToolResultError(fmt.Sprintf("components failed: %v", err)), nil
 	}
 
 	return mcpsdk.NewToolResultText(output), nil

@@ -8,11 +8,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// ServiceDetector — IsService heuristic tests
+// ComponentDetector — IsComponent heuristic tests
 // ---------------------------------------------------------------------------
 
-func TestIsService_FilenameHeuristic(t *testing.T) {
-	sd := NewServiceDetector()
+func TestIsComponent_FilenameHeuristic(t *testing.T) {
+	sd := NewComponentDetector()
 
 	tests := []struct {
 		nodeID     string
@@ -20,61 +20,61 @@ func TestIsService_FilenameHeuristic(t *testing.T) {
 		wantDetect bool
 		wantConf   float64
 	}{
-		{"services/auth-service.md", "Auth Service", true, ConfidenceServiceFilename},
-		{"user-service.md", "User Service", true, ConfidenceServiceFilename},
-		{"payment-service.md", "Payment", true, ConfidenceServiceFilename},
-		{"services/gateway-service.md", "Gateway", true, ConfidenceServiceFilename},
+		{"services/auth-service.md", "Auth Service", true, ConfidenceComponentFilename},
+		{"user-service.md", "User Service", true, ConfidenceComponentFilename},
+		{"payment-service.md", "Payment", true, ConfidenceComponentFilename},
+		{"services/gateway-service.md", "Gateway", true, ConfidenceComponentFilename},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.nodeID, func(t *testing.T) {
 			node := &Node{ID: tc.nodeID, Title: tc.title, Type: "document"}
-			svc, conf := sd.IsService(node)
+			svc, conf := sd.IsComponent(node)
 			if tc.wantDetect && conf <= 0 {
-				t.Errorf("IsService(%q): expected detection, got confidence=%.2f", tc.nodeID, conf)
+				t.Errorf("IsComponent(%q): expected detection, got confidence=%.2f", tc.nodeID, conf)
 			}
 			if tc.wantDetect && conf != tc.wantConf {
-				t.Errorf("IsService(%q): confidence=%.2f, want %.2f", tc.nodeID, conf, tc.wantConf)
+				t.Errorf("IsComponent(%q): confidence=%.2f, want %.2f", tc.nodeID, conf, tc.wantConf)
 			}
 			if tc.wantDetect && svc.File != tc.nodeID {
-				t.Errorf("IsService(%q): svc.File=%q, want %q", tc.nodeID, svc.File, tc.nodeID)
+				t.Errorf("IsComponent(%q): svc.File=%q, want %q", tc.nodeID, svc.File, tc.nodeID)
 			}
 		})
 	}
 }
 
-func TestIsService_HeadingHeuristic(t *testing.T) {
-	sd := NewServiceDetector()
+func TestIsComponent_HeadingHeuristic(t *testing.T) {
+	sd := NewComponentDetector()
 
 	tests := []struct {
 		nodeID   string
 		title    string
 		wantConf float64
 	}{
-		{"docs/auth.md", "Auth Service", ConfidenceServiceHeading},
-		{"gateway.md", "API Gateway Service", ConfidenceServiceHeading},
-		{"docs/users.md", "User Service", ConfidenceServiceHeading},
+		{"docs/auth.md", "Auth Service", ConfidenceComponentHeading},
+		{"gateway.md", "API Gateway Service", ConfidenceComponentHeading},
+		{"docs/users.md", "User Service", ConfidenceComponentHeading},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.title, func(t *testing.T) {
 			node := &Node{ID: tc.nodeID, Title: tc.title, Type: "document"}
-			svc, conf := sd.IsService(node)
+			svc, conf := sd.IsComponent(node)
 			if conf == 0 {
-				t.Errorf("IsService: heading %q should be detected as service", tc.title)
+				t.Errorf("IsComponent: heading %q should be detected as service", tc.title)
 			}
 			if conf != tc.wantConf {
-				t.Errorf("IsService: heading heuristic confidence=%.2f, want %.2f", conf, tc.wantConf)
+				t.Errorf("IsComponent: heading heuristic confidence=%.2f, want %.2f", conf, tc.wantConf)
 			}
 			if svc.Name != tc.title {
-				t.Errorf("IsService: svc.Name=%q, want %q", svc.Name, tc.title)
+				t.Errorf("IsComponent: svc.Name=%q, want %q", svc.Name, tc.title)
 			}
 		})
 	}
 }
 
-func TestIsService_NoFalsePositives(t *testing.T) {
-	sd := NewServiceDetector()
+func TestIsComponent_NoFalsePositives(t *testing.T) {
+	sd := NewComponentDetector()
 
 	nonServices := []struct {
 		nodeID string
@@ -90,16 +90,16 @@ func TestIsService_NoFalsePositives(t *testing.T) {
 	for _, tc := range nonServices {
 		t.Run(tc.nodeID, func(t *testing.T) {
 			node := &Node{ID: tc.nodeID, Title: tc.title, Type: "document"}
-			_, conf := sd.IsService(node)
+			_, conf := sd.IsComponent(node)
 			if conf >= ConfidenceHighInDegree {
-				t.Errorf("IsService(%q, %q): false positive, confidence=%.2f", tc.nodeID, tc.title, conf)
+				t.Errorf("IsComponent(%q, %q): false positive, confidence=%.2f", tc.nodeID, tc.title, conf)
 			}
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// ServiceDetector — DetectServices tests
+// ComponentDetector — DetectComponents tests
 // ---------------------------------------------------------------------------
 
 func makeServiceGraph(t *testing.T, nodes []struct{ id, title string }) *Graph {
@@ -111,17 +111,17 @@ func makeServiceGraph(t *testing.T, nodes []struct{ id, title string }) *Graph {
 	return g
 }
 
-func TestDetectServices_FilenamePattern(t *testing.T) {
-	sd := NewServiceDetector()
+func TestDetectComponents_FilenamePattern(t *testing.T) {
+	sd := NewComponentDetector()
 	g := makeServiceGraph(t, []struct{ id, title string }{
 		{"auth-service.md", "Auth Service"},
 		{"user-service.md", "User Service"},
 		{"overview.md", "Overview"},
 	})
 
-	services := sd.DetectServices(g, nil)
+	services := sd.DetectComponents(g, nil)
 	if len(services) < 2 {
-		t.Errorf("DetectServices: expected >=2 services, got %d", len(services))
+		t.Errorf("DetectComponents: expected >=2 services, got %d", len(services))
 	}
 
 	// Verify services have expected IDs.
@@ -137,8 +137,8 @@ func TestDetectServices_FilenamePattern(t *testing.T) {
 	}
 }
 
-func TestDetectServices_HighInDegree(t *testing.T) {
-	sd := NewServiceDetector()
+func TestDetectComponents_HighInDegree(t *testing.T) {
+	sd := NewComponentDetector()
 	g := NewGraph()
 
 	// db-adapter.md is referenced by 4 other docs — high in-degree.
@@ -150,7 +150,7 @@ func TestDetectServices_HighInDegree(t *testing.T) {
 		_ = g.AddEdge(e)
 	}
 
-	services := sd.DetectServices(g, nil)
+	services := sd.DetectComponents(g, nil)
 	byFile := make(map[string]Service)
 	for _, s := range services {
 		byFile[s.File] = s
@@ -160,14 +160,14 @@ func TestDetectServices_HighInDegree(t *testing.T) {
 	}
 }
 
-func TestDetectServices_RankedByConfidence(t *testing.T) {
-	sd := NewServiceDetector()
+func TestDetectComponents_RankedByConfidence(t *testing.T) {
+	sd := NewComponentDetector()
 	g := makeServiceGraph(t, []struct{ id, title string }{
 		{"auth-service.md", "Auth Service"},   // filename heuristic (0.9)
 		{"docs/gateway.md", "API Gateway Service"}, // heading heuristic (0.7)
 	})
 
-	services := sd.DetectServices(g, nil)
+	services := sd.DetectComponents(g, nil)
 	if len(services) < 2 {
 		t.Fatalf("expected >=2 services, got %d", len(services))
 	}
@@ -180,11 +180,11 @@ func TestDetectServices_RankedByConfidence(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ServiceDetector — DetectEndpoints tests
+// ComponentDetector — DetectEndpoints tests
 // ---------------------------------------------------------------------------
 
 func TestDetectEndpoints_BasicPatterns(t *testing.T) {
-	sd := NewServiceDetector()
+	sd := NewComponentDetector()
 
 	tests := []struct {
 		name      string
@@ -236,7 +236,7 @@ func TestDetectEndpoints_BasicPatterns(t *testing.T) {
 }
 
 func TestDetectEndpoints_Deduplication(t *testing.T) {
-	sd := NewServiceDetector()
+	sd := NewComponentDetector()
 	// Same endpoint mentioned twice.
 	doc := &Document{
 		ID:      "svc.md",
@@ -255,7 +255,7 @@ func TestDetectEndpoints_Deduplication(t *testing.T) {
 }
 
 func TestDetectEndpoints_EmptyDoc(t *testing.T) {
-	sd := NewServiceDetector()
+	sd := NewComponentDetector()
 	doc := &Document{ID: "svc.md", Content: "# No endpoints here\n"}
 	eps := sd.DetectEndpoints(doc)
 	if len(eps) != 0 {
@@ -264,44 +264,44 @@ func TestDetectEndpoints_EmptyDoc(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ServiceDetector — RankServices tests
+// ComponentDetector — RankComponents tests
 // ---------------------------------------------------------------------------
 
-func TestRankServices_OrderedByConfidence(t *testing.T) {
-	sd := NewServiceDetector()
+func TestRankComponents_OrderedByConfidence(t *testing.T) {
+	sd := NewComponentDetector()
 	candidates := []Service{
 		{ID: "c", Confidence: 0.4},
 		{ID: "a", Confidence: 0.9},
 		{ID: "b", Confidence: 0.7},
 	}
-	ranked := sd.RankServices(candidates)
+	ranked := sd.RankComponents(candidates)
 	if ranked[0].Confidence < ranked[1].Confidence {
-		t.Errorf("RankServices: first=%.2f should be >= second=%.2f",
+		t.Errorf("RankComponents: first=%.2f should be >= second=%.2f",
 			ranked[0].Confidence, ranked[1].Confidence)
 	}
 	if ranked[1].Confidence < ranked[2].Confidence {
-		t.Errorf("RankServices: second=%.2f should be >= third=%.2f",
+		t.Errorf("RankComponents: second=%.2f should be >= third=%.2f",
 			ranked[1].Confidence, ranked[2].Confidence)
 	}
 }
 
-func TestRankServices_StableByID(t *testing.T) {
-	sd := NewServiceDetector()
+func TestRankComponents_StableByID(t *testing.T) {
+	sd := NewComponentDetector()
 	// Same confidence: alphabetical by ID.
 	candidates := []Service{
 		{ID: "z-svc", Confidence: 0.9},
 		{ID: "a-svc", Confidence: 0.9},
 		{ID: "m-svc", Confidence: 0.9},
 	}
-	ranked := sd.RankServices(candidates)
+	ranked := sd.RankComponents(candidates)
 	if ranked[0].ID != "a-svc" || ranked[1].ID != "m-svc" || ranked[2].ID != "z-svc" {
-		t.Errorf("RankServices same confidence: want a,m,z got %v,%v,%v",
+		t.Errorf("RankComponents same confidence: want a,m,z got %v,%v,%v",
 			ranked[0].ID, ranked[1].ID, ranked[2].ID)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// ServiceConfig — LoadServiceConfig tests
+// ServiceConfig — LoadComponentConfig tests
 // ---------------------------------------------------------------------------
 
 func writeTemp(t *testing.T, content string) string {
@@ -314,17 +314,17 @@ func writeTemp(t *testing.T, content string) string {
 	return p
 }
 
-func TestLoadServiceConfig_MissingFile(t *testing.T) {
-	cfg, err := LoadServiceConfig("/tmp/does-not-exist-999/services.yaml")
+func TestLoadComponentConfig_MissingFile(t *testing.T) {
+	cfg, err := LoadComponentConfig("/tmp/does-not-exist-999/services.yaml")
 	if err != nil {
-		t.Errorf("LoadServiceConfig missing file: expected nil error, got %v", err)
+		t.Errorf("LoadComponentConfig missing file: expected nil error, got %v", err)
 	}
 	if cfg != nil {
-		t.Errorf("LoadServiceConfig missing file: expected nil config, got %v", cfg)
+		t.Errorf("LoadComponentConfig missing file: expected nil config, got %v", cfg)
 	}
 }
 
-func TestLoadServiceConfig_ValidYAML(t *testing.T) {
+func TestLoadComponentConfig_ValidYAML(t *testing.T) {
 	content := `services:
   - id: api-gateway
     patterns: ["api-gateway", "API Gateway"]
@@ -334,12 +334,12 @@ func TestLoadServiceConfig_ValidYAML(t *testing.T) {
     type: microservice
 `
 	p := writeTemp(t, content)
-	cfg, err := LoadServiceConfig(p)
+	cfg, err := LoadComponentConfig(p)
 	if err != nil {
-		t.Fatalf("LoadServiceConfig: %v", err)
+		t.Fatalf("LoadComponentConfig: %v", err)
 	}
 	if cfg == nil {
-		t.Fatal("LoadServiceConfig: expected non-nil config")
+		t.Fatal("LoadComponentConfig: expected non-nil config")
 	}
 	if len(cfg.Services) != 2 {
 		t.Errorf("Services count = %d, want 2", len(cfg.Services))
@@ -355,16 +355,16 @@ func TestLoadServiceConfig_ValidYAML(t *testing.T) {
 	}
 }
 
-func TestLoadServiceConfig_CaseInsensitivePatterns(t *testing.T) {
+func TestLoadComponentConfig_CaseInsensitivePatterns(t *testing.T) {
 	content := `services:
   - id: auth
     patterns: ["AUTH-SERVICE", "Auth Service"]
     type: microservice
 `
 	p := writeTemp(t, content)
-	cfg, err := LoadServiceConfig(p)
+	cfg, err := LoadComponentConfig(p)
 	if err != nil || cfg == nil {
-		t.Fatalf("LoadServiceConfig: %v, cfg=%v", err, cfg)
+		t.Fatalf("LoadComponentConfig: %v, cfg=%v", err, cfg)
 	}
 
 	// Test that pattern matching is case-insensitive.
@@ -374,24 +374,24 @@ func TestLoadServiceConfig_CaseInsensitivePatterns(t *testing.T) {
 	}
 }
 
-func TestLoadServiceConfig_ConfiguredServicesHighConfidence(t *testing.T) {
+func TestLoadComponentConfig_ConfiguredServicesHighConfidence(t *testing.T) {
 	content := `services:
   - id: gateway
     patterns: ["gateway"]
     type: microservice
 `
 	p := writeTemp(t, content)
-	cfg, err := LoadServiceConfig(p)
+	cfg, err := LoadComponentConfig(p)
 	if err != nil || cfg == nil {
-		t.Fatalf("LoadServiceConfig: %v", err)
+		t.Fatalf("LoadComponentConfig: %v", err)
 	}
 
-	sd := NewServiceDetectorWithConfig(cfg)
+	sd := NewComponentDetectorWithConfig(cfg)
 	g := makeServiceGraph(t, []struct{ id, title string }{
 		{"api-gateway.md", "API Gateway"},
 	})
 
-	services := sd.DetectServices(g, nil)
+	services := sd.DetectComponents(g, nil)
 	if len(services) == 0 {
 		t.Fatal("expected at least one service from configured pattern")
 	}

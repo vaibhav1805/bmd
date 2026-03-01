@@ -93,14 +93,14 @@ func FormatSearchResults(results []SearchResult, query string, format string, qu
 	}
 }
 
-// FormatServices formats a slice of Service values in the requested output
+// FormatComponents formats a slice of Service values in the requested output
 // format.  Supported formats: "json" (default), "text".
-func FormatServices(services []Service, depCounts map[string]int, format string) string {
+func FormatComponents(services []Component, depCounts map[string]int, format string) string {
 	switch strings.ToLower(format) {
 	case "text":
-		return formatServicesText(services, depCounts)
+		return formatComponentsText(services, depCounts)
 	default:
-		return formatServicesJSON(services, depCounts)
+		return formatComponentsJSON(services, depCounts)
 	}
 }
 
@@ -109,7 +109,7 @@ func FormatServices(services []Service, depCounts map[string]int, format string)
 // When transitive is true, transitivePaths is expected; otherwise refs is used.
 func FormatDependencies(
 	serviceID string,
-	refs []ServiceRef,
+	refs []ComponentRef,
 	transitive bool,
 	transitivePaths [][]string,
 	cycles [][]string,
@@ -221,7 +221,7 @@ func formatSearchResultsCSV(results []SearchResult) string {
 
 // ─── services formatters ──────────────────────────────────────────────────────
 
-type serviceEntryJSON struct {
+type componentEntryJSON struct {
 	ID              string  `json:"id"`
 	Name            string  `json:"name"`
 	File            string  `json:"file"`
@@ -229,46 +229,46 @@ type serviceEntryJSON struct {
 	DependencyCount int     `json:"dependency_count"`
 }
 
-type servicesResponseJSON struct {
-	Services []serviceEntryJSON `json:"services"`
+type componentsResponseJSON struct {
+	Components []componentEntryJSON `json:"components"`
 }
 
-func formatServicesJSON(services []Service, depCounts map[string]int) string {
-	items := make([]serviceEntryJSON, len(services))
-	for i, s := range services {
+func formatComponentsJSON(components []Component, depCounts map[string]int) string {
+	items := make([]componentEntryJSON, len(components))
+	for i, c := range components {
 		cnt := 0
 		if depCounts != nil {
-			cnt = depCounts[s.ID]
+			cnt = depCounts[c.ID]
 		}
-		items[i] = serviceEntryJSON{
-			ID:              s.ID,
-			Name:            s.Name,
-			File:            s.File,
-			Confidence:      roundFloat(s.Confidence, 2),
+		items[i] = componentEntryJSON{
+			ID:              c.ID,
+			Name:            c.Name,
+			File:            c.File,
+			Confidence:      roundFloat(c.Confidence, 2),
 			DependencyCount: cnt,
 		}
 	}
-	resp := servicesResponseJSON{Services: items}
+	resp := componentsResponseJSON{Components: items}
 	data, _ := json.MarshalIndent(resp, "", "  ")
 	return string(data)
 }
 
-func formatServicesText(services []Service, depCounts map[string]int) string {
-	if len(services) == 0 {
-		return "No services detected."
+func formatComponentsText(components []Component, depCounts map[string]int) string {
+	if len(components) == 0 {
+		return "No components detected."
 	}
 	var sb strings.Builder
-	for i, s := range services {
+	for i, c := range components {
 		cnt := 0
 		if depCounts != nil {
-			cnt = depCounts[s.ID]
+			cnt = depCounts[c.ID]
 		}
-		fmt.Fprintf(&sb, "%s (%.2f)\n", s.ID, s.Confidence)
-		if s.File != "" {
-			fmt.Fprintf(&sb, "  File: %s\n", s.File)
+		fmt.Fprintf(&sb, "%s (%.2f)\n", c.ID, c.Confidence)
+		if c.File != "" {
+			fmt.Fprintf(&sb, "  File: %s\n", c.File)
 		}
 		fmt.Fprintf(&sb, "  Dependencies: %d\n", cnt)
-		if i < len(services)-1 {
+		if i < len(components)-1 {
 			sb.WriteByte('\n')
 		}
 	}
@@ -302,7 +302,7 @@ type depsTransitiveResponseJSON struct {
 
 func formatDependenciesJSON(
 	serviceID string,
-	refs []ServiceRef,
+	refs []ComponentRef,
 	transitive bool,
 	transitivePaths [][]string,
 	cycles [][]string,
@@ -332,7 +332,7 @@ func formatDependenciesJSON(
 	items := make([]depRefJSON, len(refs))
 	for i, r := range refs {
 		items[i] = depRefJSON{
-			Service:    r.ServiceID,
+			Service:    r.ComponentID,
 			Type:       r.Type,
 			Confidence: roundFloat(r.Confidence, 2),
 		}
@@ -348,7 +348,7 @@ func formatDependenciesJSON(
 
 func formatDependenciesText(
 	serviceID string,
-	refs []ServiceRef,
+	refs []ComponentRef,
 	transitive bool,
 	transitivePaths [][]string,
 	cycles [][]string,
@@ -377,7 +377,7 @@ func formatDependenciesText(
 			sb.WriteString("  No dependencies found.\n")
 		}
 		for _, r := range refs {
-			fmt.Fprintf(&sb, "  -> %s (%.2f)\n", r.ServiceID, r.Confidence)
+			fmt.Fprintf(&sb, "  -> %s (%.2f)\n", r.ComponentID, r.Confidence)
 		}
 	}
 
@@ -391,7 +391,7 @@ func formatDependenciesText(
 	return sb.String()
 }
 
-func formatDependenciesDOT(serviceID string, refs []ServiceRef, transitivePaths [][]string) string {
+func formatDependenciesDOT(serviceID string, refs []ComponentRef, transitivePaths [][]string) string {
 	var sb strings.Builder
 	sb.WriteString("digraph dependencies {\n")
 	fmt.Fprintf(&sb, "  %q;\n", serviceID)
@@ -408,10 +408,10 @@ func formatDependenciesDOT(serviceID string, refs []ServiceRef, transitivePaths 
 		}
 	} else {
 		for _, r := range refs {
-			key := serviceID + "->" + r.ServiceID
+			key := serviceID + "->" + r.ComponentID
 			if !added[key] {
 				added[key] = true
-				fmt.Fprintf(&sb, "  %q -> %q [label=%q];\n", serviceID, r.ServiceID, r.Type)
+				fmt.Fprintf(&sb, "  %q -> %q [label=%q];\n", serviceID, r.ComponentID, r.Type)
 			}
 		}
 	}

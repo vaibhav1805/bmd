@@ -35,7 +35,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.registerQueryTool(mcpServer)
 	s.registerIndexTool(mcpServer)
 	s.registerDependsTool(mcpServer)
-	s.registerServicesTool(mcpServer)
+	s.registerComponentsTool(mcpServer)
 	s.registerGraphTool(mcpServer)
 	s.registerContextTool(mcpServer)
 
@@ -104,17 +104,17 @@ func (s *Server) registerDependsTool(mcpServer *server.MCPServer) {
 	mcpServer.AddTool(tool, s.handleDepends)
 }
 
-// registerServicesTool registers the bmd/services tool for listing detected services.
-func (s *Server) registerServicesTool(mcpServer *server.MCPServer) {
+// registerComponentsTool registers the bmd/components tool for listing detected components.
+func (s *Server) registerComponentsTool(mcpServer *server.MCPServer) {
 	tool := mcpsdk.NewTool(
-		"bmd/services",
-		mcpsdk.WithDescription("List all microservices detected in the documentation knowledge graph, with confidence scores and dependency counts."),
+		"bmd/components",
+		mcpsdk.WithDescription("List all components detected in the documentation knowledge graph, with confidence scores and dependency counts."),
 		mcpsdk.WithString("dir",
 			mcpsdk.Description("Directory that was indexed (default: configured baseDir)"),
 		),
 	)
 
-	mcpServer.AddTool(tool, s.handleServices)
+	mcpServer.AddTool(tool, s.handleComponents)
 }
 
 // registerGraphTool registers the bmd/graph tool for exporting dependency graphs.

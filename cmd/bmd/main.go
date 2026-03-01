@@ -46,10 +46,10 @@ func main() {
 				os.Exit(1)
 			}
 			return
-		case "services":
-			cmdErr = knowledge.CmdServices(args[1:])
+		case "components":
+			cmdErr = knowledge.CmdComponents(args[1:])
 			if cmdErr != nil {
-				fmt.Fprintln(os.Stderr, "bmd services:", cmdErr)
+				fmt.Fprintln(os.Stderr, "bmd components:", cmdErr)
 				os.Exit(1)
 			}
 			return

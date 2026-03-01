@@ -378,8 +378,8 @@ func TestParseDependsArgs_AllFlags(t *testing.T) {
 	}
 }
 
-func TestParseServicesArgs_Defaults(t *testing.T) {
-	a, err := ParseServicesArgs([]string{})
+func TestParseComponentsArgs_Defaults(t *testing.T) {
+	a, err := ParseComponentsArgs([]string{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -391,8 +391,8 @@ func TestParseServicesArgs_Defaults(t *testing.T) {
 	}
 }
 
-func TestParseServicesArgs_Flags(t *testing.T) {
-	a, err := ParseServicesArgs([]string{"--dir", "/docs", "--format", "text"})
+func TestParseComponentsArgs_Flags(t *testing.T) {
+	a, err := ParseComponentsArgs([]string{"--dir", "/docs", "--format", "text"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -619,20 +619,20 @@ func TestCmdQuery_TextFormat(t *testing.T) {
 	}
 }
 
-func TestCmdServices_JSON(t *testing.T) {
+func TestCmdComponents_JSON(t *testing.T) {
 	dir := setupTestDocs(t)
 
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	err := CmdServices([]string{"--dir", dir, "--format", "json"})
+	err := CmdComponents([]string{"--dir", dir, "--format", "json"})
 
 	_ = w.Close()
 	os.Stdout = old
 
 	if err != nil {
-		t.Fatalf("CmdServices error: %v", err)
+		t.Fatalf("CmdComponents error: %v", err)
 	}
 
 	buf := make([]byte, 4096)
@@ -663,20 +663,20 @@ func TestCmdServices_JSON(t *testing.T) {
 	}
 }
 
-func TestCmdServices_TextFormat(t *testing.T) {
+func TestCmdComponents_TextFormat(t *testing.T) {
 	dir := setupTestDocs(t)
 
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	err := CmdServices([]string{"--dir", dir, "--format", "text"})
+	err := CmdComponents([]string{"--dir", dir, "--format", "text"})
 
 	_ = w.Close()
 	os.Stdout = old
 
 	if err != nil {
-		t.Fatalf("CmdServices error: %v", err)
+		t.Fatalf("CmdComponents error: %v", err)
 	}
 
 	buf := make([]byte, 4096)

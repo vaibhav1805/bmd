@@ -97,23 +97,23 @@ bmd query "authentication" --dir ./docs
 # Output: Ranked results with file paths
 ```
 
-### Find Service Dependencies
+### Find Component Dependencies
 
-If your docs describe microservices:
+If your docs describe components:
 
 ```bash
-# What services depend on the auth service?
-bmd depends auth-service
+# What components depend on the auth component?
+bmd depends auth-component
 
-# Output: auth-service → [users-api, payments-api, admin-panel]
+# Output: auth-component → [users-api, payments-api, admin-panel]
 ```
 
-### List All Detected Services
+### List All Detected Components
 
 ```bash
-bmd services
+bmd components
 
-# Output: auth-service, users-api, payments-api, admin-panel, database
+# Output: auth-component, users-api, payments-api, admin-panel, database
 ```
 
 ### Export Architecture Diagram

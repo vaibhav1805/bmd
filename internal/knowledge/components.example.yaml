@@ -1,0 +1,41 @@
+# components.yaml — Optional component configuration for BMD component detection.
+#
+# Place this file in the root of your documentation directory (alongside bmd.db)
+# to configure explicit component definitions.  Configured components take priority
+# over auto-detected components and receive confidence=1.0.
+#
+# Format:
+#   components:
+#     - id: <component-id>        # URL-safe identifier (kebab-case)
+#       patterns: ["...", "..."]  # Case-insensitive patterns matched against
+#                                 # filenames and H1 headings
+#       type: <component-type>    # microservice | database | cache | queue | gateway
+
+components:
+  - id: api-gateway
+    patterns: ["api-gateway", "API Gateway"]
+    type: gateway
+
+  - id: auth-component
+    patterns: ["auth-component", "Auth Component", "Authentication Component"]
+    type: microservice
+
+  - id: user-component
+    patterns: ["user-component", "User Component"]
+    type: microservice
+
+  - id: payment-component
+    patterns: ["payment-component", "Payment Component"]
+    type: microservice
+
+  - id: notification-component
+    patterns: ["notification-component", "Notification Component"]
+    type: microservice
+
+  - id: postgres
+    patterns: ["postgres", "PostgreSQL", "database"]
+    type: database
+
+  - id: redis-cache
+    patterns: ["redis", "Redis Cache"]
+    type: cache

@@ -50,10 +50,10 @@ Technical deep-dive into BMD's design, components, and features.
 
 - **Full-Text Indexing:** BM25 index with configurable tokenization
 - **Knowledge Graph:** Document relationships and dependency detection
-- **Microservice Detection:** Identifies services from documentation structure
+- **Component Detection:** Identifies components from documentation structure
 - **Dependency Analysis:** Transitive dependency chains, cycles, depth analysis
 - **Persistence:** SQLite database with WAL mode for concurrent access
-- **CLI Interface:** Programmatic query commands (query, depends, services, graph)
+- **CLI Interface:** Programmatic query commands (query, depends, components, graph)
 
 **Files:** `internal/knowledge/`, search/BM25, graph detection
 
@@ -85,7 +85,7 @@ Technical deep-dive into BMD's design, components, and features.
 
 - **Protocol:** Model Context Protocol (MCP) via stdin/stdout
 - **SDK:** mark3labs/mcp-go (community MCP SDK for Go)
-- **Tools:** bmd/query, bmd/index, bmd/depends, bmd/services, bmd/graph, bmd/context
+- **Tools:** bmd/query, bmd/index, bmd/depends, bmd/components, bmd/graph, bmd/context
 - **Zero subprocess overhead:** Single process handles all agent requests
 - **CONTRACT-01 compliance:** All responses wrapped in JSON envelope (status/code/message/data)
 - **Startup:** `bmd serve --mcp` — blocks until process is killed
@@ -148,7 +148,7 @@ BM25 Indexing (full-text)
     ↓
 Graph Builder (relationships)
     ↓
-Service Detection (microservices)
+Component Detection (microservices)
     ↓
 SQLite Persistence
     ↓
@@ -190,7 +190,7 @@ Benchmarks on 100-document corpus:
 | Index build | 44ms |
 | Full-text search | <8ms |
 | Keyword lookup | 3ms |
-| Service detection | 18ms |
+| Component detection | 18ms |
 | Dependency query | 17ms |
 | Split-pane rendering | <3ms |
 
@@ -201,7 +201,7 @@ All core features complete and production-ready:
 - ✅ Full editor with persistence and undo/redo
 - ✅ Navigation and link following
 - ✅ Full-text search and BM25 indexing
-- ✅ Knowledge graph and microservice detection
+- ✅ Knowledge graph and component detection
 - ✅ Directory browser with split-pane view (Beta)
 - ✅ Image rendering support
 - ✅ MCP server (`bmd serve --mcp`) for native agent integration

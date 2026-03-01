@@ -5,12 +5,12 @@ import (
 	"strings"
 )
 
-// ServiceRef describes a dependency that one service has on another.
-// It captures not only the target service but also how the dependency was
+// ComponentRef describes a dependency that one component has on another.
+// It captures not only the target component but also how the dependency was
 // discovered and how confident the system is in it.
-type ServiceRef struct {
-	// ServiceID is the ID of the depended-upon service.
-	ServiceID string
+type ComponentRef struct {
+	// ComponentID is the ID of the depended-upon component.
+	ComponentID string
 
 	// Type describes the nature of the dependency.  Common values:
 	//   "direct-call" — synchronous RPC / HTTP call
@@ -28,22 +28,22 @@ type ServiceRef struct {
 	Confidence float64
 }
 
-// ServiceGraph is a directed dependency graph whose nodes are Services
-// (detected or configured) and whose edges represent service-to-service
+// ComponentGraph is a directed dependency graph whose nodes are Components
+// (detected or configured) and whose edges represent component-to-component
 // dependencies.
-type ServiceGraph struct {
-	// Services maps service ID → *Service.
-	Services map[string]*Service
+type ComponentGraph struct {
+	// Components maps component ID → *Component.
+	Components map[string]*Component
 
-	// Dependencies maps service ID → list of its outgoing ServiceRefs.
-	Dependencies map[string][]ServiceRef
+	// Dependencies maps component ID → list of its outgoing ComponentRefs.
+	Dependencies map[string][]ComponentRef
 }
 
-// newServiceGraph returns an empty, ready-to-use ServiceGraph.
-func newServiceGraph() *ServiceGraph {
-	return &ServiceGraph{
-		Services:     make(map[string]*Service),
-		Dependencies: make(map[string][]ServiceRef),
+// newComponentGraph returns an empty, ready-to-use ComponentGraph.
+func newComponentGraph() *ComponentGraph {
+	return &ComponentGraph{
+		Components:   make(map[string]*Component),
+		Dependencies: make(map[string][]ComponentRef),
 	}
 }
 
@@ -67,114 +67,114 @@ type DependencyChain struct {
 	Evidence string
 }
 
-// DependencyAnalyzer extracts and queries service-to-service dependencies
-// from a knowledge Graph and a set of detected Services.
+// DependencyAnalyzer extracts and queries component-to-component dependencies
+// from a knowledge Graph and a set of detected Components.
 //
-// It operates on the service-level view of the graph: only nodes that
-// correspond to known services are included in the analysis.
+// It operates on the component-level view of the graph: only nodes that
+// correspond to known components are included in the analysis.
 type DependencyAnalyzer struct {
-	// serviceGraph is the computed service-level dependency graph.
-	serviceGraph *ServiceGraph
+	// componentGraph is the computed component-level dependency graph.
+	componentGraph *ComponentGraph
 }
 
-// NewDependencyAnalyzer creates a DependencyAnalyzer and builds the service
-// dependency graph from graph and services.
+// NewDependencyAnalyzer creates a DependencyAnalyzer and builds the component
+// dependency graph from graph and components.
 //
 // This is the primary entry point.  All subsequent query methods operate on
-// the pre-built ServiceGraph so they run in O(degree) time.
-func NewDependencyAnalyzer(graph *Graph, services []Service) *DependencyAnalyzer {
+// the pre-built ComponentGraph so they run in O(degree) time.
+func NewDependencyAnalyzer(graph *Graph, components []Component) *DependencyAnalyzer {
 	da := &DependencyAnalyzer{}
-	da.serviceGraph = da.BuildServiceGraph(graph, services)
+	da.componentGraph = da.BuildComponentGraph(graph, components)
 	return da
 }
 
-// BuildServiceGraph extracts a service-only subgraph from graph using services
-// as the set of known service nodes.
+// BuildComponentGraph extracts a component-only subgraph from graph using components
+// as the set of known component nodes.
 //
 // Algorithm:
-//  1. Index services by file path (Node ID).
+//  1. Index components by file path (Node ID).
 //  2. For each edge in the full graph, check whether both Source and Target
-//     map to known services.
-//  3. Add qualifying edges to the ServiceGraph with appropriate type/confidence.
-func (da *DependencyAnalyzer) BuildServiceGraph(graph *Graph, services []Service) *ServiceGraph {
-	sg := newServiceGraph()
+//     map to known components.
+//  3. Add qualifying edges to the ComponentGraph with appropriate type/confidence.
+func (da *DependencyAnalyzer) BuildComponentGraph(graph *Graph, components []Component) *ComponentGraph {
+	sg := newComponentGraph()
 
-	// Index services by their document file path.
-	byFile := make(map[string]*Service, len(services))
-	for i := range services {
-		s := &services[i]
-		sg.Services[s.ID] = s
-		byFile[s.File] = s
+	// Index components by their document file path.
+	byFile := make(map[string]*Component, len(components))
+	for i := range components {
+		c := &components[i]
+		sg.Components[c.ID] = c
+		byFile[c.File] = c
 	}
 
 	// Iterate every edge in the full knowledge graph and check whether both
-	// endpoints correspond to known services.
+	// endpoints correspond to known components.
 	for _, edge := range graph.Edges {
-		srcSvc, srcOK := byFile[edge.Source]
-		tgtSvc, tgtOK := byFile[edge.Target]
+		srcComp, srcOK := byFile[edge.Source]
+		tgtComp, tgtOK := byFile[edge.Target]
 		if !srcOK || !tgtOK {
 			continue
 		}
 
-		ref := ServiceRef{
-			ServiceID:  tgtSvc.ID,
-			Type:       edgeTypeToDepType(edge.Type),
-			Evidence:   edge.Evidence,
-			Confidence: edge.Confidence,
+		ref := ComponentRef{
+			ComponentID: tgtComp.ID,
+			Type:        edgeTypeToDepType(edge.Type),
+			Evidence:    edge.Evidence,
+			Confidence:  edge.Confidence,
 		}
 
 		// Avoid duplicating refs for the same (src, tgt, type) triple.
-		if !hasRef(sg.Dependencies[srcSvc.ID], ref) {
-			sg.Dependencies[srcSvc.ID] = append(sg.Dependencies[srcSvc.ID], ref)
+		if !hasRef(sg.Dependencies[srcComp.ID], ref) {
+			sg.Dependencies[srcComp.ID] = append(sg.Dependencies[srcComp.ID], ref)
 		}
 	}
 
 	return sg
 }
 
-// GetDirectDeps returns the IDs of services that serviceID directly depends on.
-// Returns nil when serviceID is unknown or has no dependencies.
-func (da *DependencyAnalyzer) GetDirectDeps(serviceID string) []string {
-	refs, ok := da.serviceGraph.Dependencies[serviceID]
+// GetDirectDeps returns the IDs of components that componentID directly depends on.
+// Returns nil when componentID is unknown or has no dependencies.
+func (da *DependencyAnalyzer) GetDirectDeps(componentID string) []string {
+	refs, ok := da.componentGraph.Dependencies[componentID]
 	if !ok {
 		return nil
 	}
 	ids := make([]string, 0, len(refs))
 	seen := make(map[string]bool, len(refs))
 	for _, ref := range refs {
-		if !seen[ref.ServiceID] {
-			seen[ref.ServiceID] = true
-			ids = append(ids, ref.ServiceID)
+		if !seen[ref.ComponentID] {
+			seen[ref.ComponentID] = true
+			ids = append(ids, ref.ComponentID)
 		}
 	}
 	sort.Strings(ids)
 	return ids
 }
 
-// GetTransitiveDeps returns the IDs of all services reachable from serviceID
+// GetTransitiveDeps returns the IDs of all services reachable from componentID
 // by following dependency edges (BFS, no depth limit).
 //
-// The starting service itself is NOT included.  Returns nil when serviceID is
+// The starting service itself is NOT included.  Returns nil when componentID is
 // unknown or has no outgoing dependencies.
-func (da *DependencyAnalyzer) GetTransitiveDeps(serviceID string) []string {
-	if _, ok := da.serviceGraph.Services[serviceID]; !ok {
+func (da *DependencyAnalyzer) GetTransitiveDeps(componentID string) []string {
+	if _, ok := da.componentGraph.Components[componentID]; !ok {
 		return nil
 	}
 
 	visited := make(map[string]bool)
-	visited[serviceID] = true
-	queue := []string{serviceID}
+	visited[componentID] = true
+	queue := []string{componentID}
 	var result []string
 
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
 
-		for _, ref := range da.serviceGraph.Dependencies[cur] {
-			if !visited[ref.ServiceID] {
-				visited[ref.ServiceID] = true
-				result = append(result, ref.ServiceID)
-				queue = append(queue, ref.ServiceID)
+		for _, ref := range da.componentGraph.Dependencies[cur] {
+			if !visited[ref.ComponentID] {
+				visited[ref.ComponentID] = true
+				result = append(result, ref.ComponentID)
+				queue = append(queue, ref.ComponentID)
 			}
 		}
 	}
@@ -193,10 +193,10 @@ func (da *DependencyAnalyzer) FindPath(from, to string) [][]string {
 	if from == to {
 		return nil
 	}
-	if _, ok := da.serviceGraph.Services[from]; !ok {
+	if _, ok := da.componentGraph.Components[from]; !ok {
 		return nil
 	}
-	if _, ok := da.serviceGraph.Services[to]; !ok {
+	if _, ok := da.componentGraph.Components[to]; !ok {
 		return nil
 	}
 
@@ -208,8 +208,8 @@ func (da *DependencyAnalyzer) FindPath(from, to string) [][]string {
 		if len(path)-1 >= maxDepth {
 			return
 		}
-		for _, ref := range da.serviceGraph.Dependencies[cur] {
-			next := ref.ServiceID
+		for _, ref := range da.componentGraph.Dependencies[cur] {
+			next := ref.ComponentID
 			if visited[next] {
 				continue
 			}
@@ -242,8 +242,8 @@ func (da *DependencyAnalyzer) DetectCycles() [][]string {
 		black = 2
 	)
 
-	colour := make(map[string]int, len(da.serviceGraph.Services))
-	parent := make(map[string]string, len(da.serviceGraph.Services))
+	colour := make(map[string]int, len(da.componentGraph.Components))
+	parent := make(map[string]string, len(da.componentGraph.Components))
 
 	var cycles [][]string
 	seen := make(map[string]bool) // dedup identical cycles
@@ -252,8 +252,8 @@ func (da *DependencyAnalyzer) DetectCycles() [][]string {
 	dfs = func(u string) {
 		colour[u] = gray
 
-		for _, ref := range da.serviceGraph.Dependencies[u] {
-			v := ref.ServiceID
+		for _, ref := range da.componentGraph.Dependencies[u] {
+			v := ref.ComponentID
 			switch colour[v] {
 			case white:
 				parent[v] = u
@@ -272,7 +272,7 @@ func (da *DependencyAnalyzer) DetectCycles() [][]string {
 		colour[u] = black
 	}
 
-	for id := range da.serviceGraph.Services {
+	for id := range da.componentGraph.Components {
 		if colour[id] == white {
 			dfs(id)
 		}
@@ -292,10 +292,10 @@ func (da *DependencyAnalyzer) FindDependencyChain(from, to string) DependencyCha
 	if from == to {
 		return DependencyChain{}
 	}
-	if _, ok := da.serviceGraph.Services[from]; !ok {
+	if _, ok := da.componentGraph.Components[from]; !ok {
 		return DependencyChain{}
 	}
-	if _, ok := da.serviceGraph.Services[to]; !ok {
+	if _, ok := da.componentGraph.Components[to]; !ok {
 		return DependencyChain{}
 	}
 
@@ -317,23 +317,23 @@ func (da *DependencyAnalyzer) FindDependencyChain(from, to string) DependencyCha
 			continue
 		}
 
-		for _, ref := range da.serviceGraph.Dependencies[cur.id] {
-			if visited[ref.ServiceID] {
+		for _, ref := range da.componentGraph.Dependencies[cur.id] {
+			if visited[ref.ComponentID] {
 				continue
 			}
-			newPath := append(append([]string{}, cur.path...), ref.ServiceID)
+			newPath := append(append([]string{}, cur.path...), ref.ComponentID)
 			newEvidence := append(append([]string{}, cur.evidence...), ref.Evidence)
 
-			if ref.ServiceID == to {
+			if ref.ComponentID == to {
 				return DependencyChain{
 					Path:     newPath,
 					Distance: len(newPath) - 1,
 					Evidence: strings.Join(newEvidence, " -> "),
 				}
 			}
-			visited[ref.ServiceID] = true
+			visited[ref.ComponentID] = true
 			queue = append(queue, bfsEntry{
-				id:       ref.ServiceID,
+				id:       ref.ComponentID,
 				path:     newPath,
 				evidence: newEvidence,
 			})
@@ -344,16 +344,16 @@ func (da *DependencyAnalyzer) FindDependencyChain(from, to string) DependencyCha
 	return DependencyChain{}
 }
 
-// ServiceGraph returns a read-only view of the computed service dependency
+// ComponentGraph returns a read-only view of the computed service dependency
 // graph.  Callers should not mutate the returned value.
-func (da *DependencyAnalyzer) GetServiceGraph() *ServiceGraph {
-	return da.serviceGraph
+func (da *DependencyAnalyzer) GetComponentGraph() *ComponentGraph {
+	return da.componentGraph
 }
 
 // --- helpers ----------------------------------------------------------------
 
 // edgeTypeToDepType maps knowledge graph EdgeType values to dependency type
-// strings used in ServiceRef.Type.
+// strings used in ComponentRef.Type.
 func edgeTypeToDepType(et EdgeType) string {
 	switch et {
 	case EdgeCalls:
@@ -371,11 +371,11 @@ func edgeTypeToDepType(et EdgeType) string {
 	}
 }
 
-// hasRef returns true when refs already contains a ServiceRef with the same
-// ServiceID and Type as ref.
-func hasRef(refs []ServiceRef, ref ServiceRef) bool {
+// hasRef returns true when refs already contains a ComponentRef with the same
+// ComponentID and Type as ref.
+func hasRef(refs []ComponentRef, ref ComponentRef) bool {
 	for _, r := range refs {
-		if r.ServiceID == ref.ServiceID && r.Type == ref.Type {
+		if r.ComponentID == ref.ComponentID && r.Type == ref.Type {
 			return true
 		}
 	}

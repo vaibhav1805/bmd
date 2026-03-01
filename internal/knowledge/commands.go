@@ -43,8 +43,8 @@ type DependsArgs struct {
 	Format     string
 }
 
-// ServicesArgs holds parsed arguments for CmdServices.
-type ServicesArgs struct {
+// ComponentsArgs holds parsed arguments for CmdComponents.
+type ComponentsArgs struct {
 	Dir    string
 	Format string
 }
@@ -174,16 +174,16 @@ func ParseDependsArgs(args []string) (*DependsArgs, error) {
 	return &a, nil
 }
 
-// ParseServicesArgs parses raw CLI arguments for the services command.
+// ParseComponentsArgs parses raw CLI arguments for the components command.
 //
 // Usage: bmd services [--dir DIR] [--format json|text]
-func ParseServicesArgs(args []string) (*ServicesArgs, error) {
+func ParseComponentsArgs(args []string) (*ComponentsArgs, error) {
 	positionals, flags := splitPositionalsAndFlags(args)
 
 	fs := flag.NewFlagSet("services", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
-	var a ServicesArgs
+	var a ComponentsArgs
 	fs.StringVar(&a.Dir, "dir", ".", "Directory that was indexed")
 	fs.StringVar(&a.Format, "format", "json", "Output format (json|text)")
 
@@ -278,8 +278,8 @@ func CmdIndex(args []string) error {
 	fmt.Fprintf(os.Stderr, "  %d edges (relationships)\n", graph.EdgeCount())
 
 	// Detect services.
-	sd := NewServiceDetector()
-	services := sd.DetectServices(graph, docs)
+	sd := NewComponentDetector()
+	services := sd.DetectComponents(graph, docs)
 	fmt.Fprintf(os.Stderr, "  %d microservices detected\n", len(services))
 
 	// Open / create database.
@@ -614,13 +614,13 @@ func CmdDepends(args []string) error {
 
 	// Build dependency analyzer.
 	da := NewDependencyAnalyzer(graph, services)
-	sg := da.GetServiceGraph()
+	sg := da.GetComponentGraph()
 
-	// Validate service exists.
-	if _, ok := sg.Services[a.Service]; !ok {
+	// Validate component exists.
+	if _, ok := sg.Components[a.Service]; !ok {
 		// Try case-insensitive match.
 		matched := ""
-		for id := range sg.Services {
+		for id := range sg.Components {
 			if strings.EqualFold(id, a.Service) {
 				matched = id
 				break
@@ -683,7 +683,7 @@ func CmdDepends(args []string) error {
 		items := make([]depRefJSON, len(refs))
 		for i, r := range refs {
 			items[i] = depRefJSON{
-				Service:    r.ServiceID,
+				Service:    r.ComponentID,
 				Type:       r.Type,
 				Confidence: roundFloat(r.Confidence, 2),
 			}
@@ -698,10 +698,10 @@ func CmdDepends(args []string) error {
 	return nil
 }
 
-// CmdServices implements `bmd services`.  It loads the knowledge graph and
+// CmdComponents implements `bmd services`.  It loads the knowledge graph and
 // prints all detected services.
-func CmdServices(args []string) error {
-	a, err := ParseServicesArgs(args)
+func CmdComponents(args []string) error {
+	a, err := ParseComponentsArgs(args)
 	if err != nil {
 		return err
 	}
@@ -729,7 +729,7 @@ func CmdServices(args []string) error {
 
 	// Build dependency counts.
 	da := NewDependencyAnalyzer(graph, services)
-	sg := da.GetServiceGraph()
+	sg := da.GetComponentGraph()
 
 	depCounts := make(map[string]int, len(services))
 	for id, refs := range sg.Dependencies {
@@ -738,16 +738,16 @@ func CmdServices(args []string) error {
 
 	if !isJSON {
 		// Text path is unchanged.
-		output := FormatServices(services, depCounts, a.Format)
+		output := FormatComponents(services, depCounts, a.Format)
 		fmt.Println(output)
 		return nil
 	}
 
 	// JSON path: build payload and wrap in envelope.
-	items := make([]serviceEntryJSON, len(services))
+	items := make([]componentEntryJSON, len(services))
 	for i, s := range services {
 		cnt := depCounts[s.ID]
-		items[i] = serviceEntryJSON{
+		items[i] = componentEntryJSON{
 			ID:              s.ID,
 			Name:            s.Name,
 			File:            s.File,
@@ -755,8 +755,8 @@ func CmdServices(args []string) error {
 			DependencyCount: cnt,
 		}
 	}
-	payload := servicesResponseJSON{Services: items}
-	fmt.Println(marshalContract(NewOKResponse("Services detected", payload)))
+	payload := componentsResponseJSON{Components: items}
+	fmt.Println(marshalContract(NewOKResponse("Components detected", payload)))
 	return nil
 }
 
@@ -967,7 +967,7 @@ func openOrBuildIndex(absDir, dbPath string) (*Database, error) {
 
 // loadGraphAndServices is a convenience helper that opens the database,
 // loads the graph, re-scans for documents, and detects services.
-func loadGraphAndServices(absDir string) (*Database, *Graph, []Service, error) {
+func loadGraphAndServices(absDir string) (*Database, *Graph, []Component, error) {
 	dbPath := defaultDBPath(absDir)
 	db, err := openOrBuildIndex(absDir, dbPath)
 	if err != nil {
@@ -987,15 +987,15 @@ func loadGraphAndServices(absDir string) (*Database, *Graph, []Service, error) {
 		docs = nil
 	}
 
-	sd := NewServiceDetector()
+	sd := NewComponentDetector()
 
-	// Try to load optional services.yaml config.
-	cfgPath := filepath.Join(absDir, "services.yaml")
-	if cfg, cfgErr := LoadServiceConfig(cfgPath); cfgErr == nil && cfg != nil {
-		sd = NewServiceDetectorWithConfig(cfg)
+	// Try to load optional components.yaml config.
+	cfgPath := filepath.Join(absDir, "components.yaml")
+	if cfg, cfgErr := LoadComponentConfig(cfgPath); cfgErr == nil && cfg != nil {
+		sd = NewComponentDetectorWithConfig(cfg)
 	}
 
-	services := sd.DetectServices(graph, docs)
+	services := sd.DetectComponents(graph, docs)
 	return db, graph, services, nil
 }
 

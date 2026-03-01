@@ -8,24 +8,24 @@ import (
 	"strings"
 )
 
-// Service represents a detected microservice in the documentation graph.
-// Services are identified using heuristic scoring applied to Node metadata
+// Component represents a detected component in the documentation graph.
+// Components are identified using heuristic scoring applied to Node metadata
 // and document content.
-type Service struct {
-	// ID is a normalised, URL-safe identifier derived from the service name
-	// (e.g. "auth-service", "api-gateway").
+type Component struct {
+	// ID is a normalised, URL-safe identifier derived from the component name
+	// (e.g. "auth-component", "api-gateway").
 	ID string
 
-	// Name is the human-readable service label extracted from headings or
-	// filenames (e.g. "Auth Service", "API Gateway").
+	// Name is the human-readable component label extracted from headings or
+	// filenames (e.g. "Auth Component", "API Gateway").
 	Name string
 
 	// File is the relative path of the primary documentation file for this
-	// service (matches Node.ID / Document.ID).
+	// component (matches Node.ID / Document.ID).
 	File string
 
 	// Confidence is a normalised [0.0, 1.0] score reflecting how certain the
-	// detector is that this node represents a real microservice.
+	// detector is that this node represents a real component.
 	//
 	// Heuristic thresholds:
 	//   0.9 — filename contains "service" / configured service name
@@ -50,31 +50,31 @@ type Endpoint struct {
 	Evidence string
 }
 
-// ServiceConfig holds the optional, user-supplied service configuration loaded
-// from a services.yaml file.  Configured services override auto-detection.
-type ServiceConfig struct {
-	// Services is the list of explicitly configured service definitions.
-	Services []ServiceConfigEntry
+// ComponentConfig holds the optional, user-supplied component configuration loaded
+// from a components.yaml file.  Configured components override auto-detection.
+type ComponentConfig struct {
+	// Components is the list of explicitly configured component definitions.
+	Components []ComponentConfigEntry
 }
 
-// ServiceConfigEntry is a single entry in services.yaml.
-type ServiceConfigEntry struct {
-	// ID is the canonical service ID (e.g. "api-gateway").
+// ComponentConfigEntry is a single entry in components.yaml.
+type ComponentConfigEntry struct {
+	// ID is the canonical component ID (e.g. "api-gateway").
 	ID string
 
 	// Patterns is the list of case-insensitive strings to match against
 	// filenames and H1 headings.
 	Patterns []string
 
-	// Type describes the service category (e.g. "microservice", "database").
+	// Type describes the component category (e.g. "microservice", "database").
 	Type string
 }
 
-// ConfidenceServiceFilename is assigned when the filename contains "service".
-const ConfidenceServiceFilename float64 = 0.9
+// ConfidenceComponentFilename is assigned when the filename contains "component".
+const ConfidenceComponentFilename float64 = 0.9
 
-// ConfidenceServiceHeading is assigned when the H1 heading contains "Service".
-const ConfidenceServiceHeading float64 = 0.7
+// ConfidenceComponentHeading is assigned when the H1 heading contains "Component".
+const ConfidenceComponentHeading float64 = 0.7
 
 // ConfidenceHighInDegree is assigned to frequently-referenced nodes that do
 // not match the filename or heading heuristics.
@@ -88,36 +88,36 @@ const ConfidenceConfigured float64 = 1.0
 // high-traffic service based on reference count alone.
 const inDegreeThreshold = 3
 
-// ServiceDetector identifies microservices from a knowledge graph using
-// multiple heuristics.  An optional ServiceConfig can be loaded from a
-// services.yaml file to supplement or override auto-detection.
-type ServiceDetector struct {
-	// config holds the optional user-supplied service configuration.
+// ComponentDetector identifies components from a knowledge graph using
+// multiple heuristics.  An optional ComponentConfig can be loaded from a
+// components.yaml file to supplement or override auto-detection.
+type ComponentDetector struct {
+	// config holds the optional user-supplied component configuration.
 	// nil means no config file was loaded.
-	config *ServiceConfig
+	config *ComponentConfig
 }
 
-// NewServiceDetector creates a ServiceDetector with no configuration.
-// Call LoadServiceConfig separately if you want to use a services.yaml file.
-func NewServiceDetector() *ServiceDetector {
-	return &ServiceDetector{}
+// NewComponentDetector creates a ComponentDetector with no configuration.
+// Call LoadComponentConfig separately if you want to use a components.yaml file.
+func NewComponentDetector() *ComponentDetector {
+	return &ComponentDetector{}
 }
 
-// NewServiceDetectorWithConfig creates a ServiceDetector using the supplied
-// configuration.  Configured services override auto-detection results.
-func NewServiceDetectorWithConfig(cfg *ServiceConfig) *ServiceDetector {
-	return &ServiceDetector{config: cfg}
+// NewComponentDetectorWithConfig creates a ComponentDetector using the supplied
+// configuration.  Configured components override auto-detection results.
+func NewComponentDetectorWithConfig(cfg *ComponentConfig) *ComponentDetector {
+	return &ComponentDetector{config: cfg}
 }
 
-// DetectServices identifies all microservices in graph and returns them ranked
+// DetectComponents identifies all components in graph and returns them ranked
 // by confidence score (highest first).
 //
 // The detection pipeline:
 //  1. Apply per-node heuristics (filename, heading, in-degree) to collect
-//     service candidates.
-//  2. Merge with configured services (if a ServiceConfig is present).
+//     component candidates.
+//  2. Merge with configured components (if a ComponentConfig is present).
 //  3. Rank by confidence score.
-func (sd *ServiceDetector) DetectServices(graph *Graph, docs []Document) []Service {
+func (cd *ComponentDetector) DetectComponents(graph *Graph, docs []Document) []Component {
 	// Build a lookup from node ID to Document for endpoint extraction.
 	docByID := make(map[string]*Document, len(docs))
 	for i := range docs {
@@ -133,17 +133,17 @@ func (sd *ServiceDetector) DetectServices(graph *Graph, docs []Document) []Servi
 	}
 
 	// candidateMap collects the best candidate for each node ID.
-	candidateMap := make(map[string]Service, graph.NodeCount())
+	candidateMap := make(map[string]Component, graph.NodeCount())
 
 	for id, node := range graph.Nodes {
-		svc, confidence := sd.IsService(node)
+		comp, confidence := cd.IsComponent(node)
 
 		// High in-degree heuristic: apply when no other heuristic matched OR
 		// when the node is highly referenced and didn't score yet.
 		if confidence <= 0 && inDegree[id] >= inDegreeThreshold {
 			confidence = ConfidenceHighInDegree
-			svc = Service{
-				ID:   nodeToServiceID(node.ID),
+			comp = Component{
+				ID:   nodeToComponentID(node.ID),
 				Name: node.Title,
 				File: id,
 			}
@@ -155,17 +155,17 @@ func (sd *ServiceDetector) DetectServices(graph *Graph, docs []Document) []Servi
 
 		// Extract endpoints if we have the document.
 		if doc, ok := docByID[id]; ok {
-			svc.Endpoints = sd.DetectEndpoints(doc)
+			comp.Endpoints = cd.DetectEndpoints(doc)
 		}
 
-		svc.Confidence = confidence
-		candidateMap[id] = svc
+		comp.Confidence = confidence
+		candidateMap[id] = comp
 	}
 
-	// Merge with configured services (override auto-detected entries).
-	if sd.config != nil {
+	// Merge with configured components (override auto-detected entries).
+	if cd.config != nil {
 		for id, node := range graph.Nodes {
-			for _, entry := range sd.config.Services {
+			for _, entry := range cd.config.Components {
 				if matchesPatterns(node.ID, node.Title, entry.Patterns) {
 					existing := candidateMap[id]
 					existing.ID = entry.ID
@@ -173,7 +173,7 @@ func (sd *ServiceDetector) DetectServices(graph *Graph, docs []Document) []Servi
 					existing.File = id
 					existing.Confidence = ConfidenceConfigured
 					if doc, ok := docByID[id]; ok {
-						existing.Endpoints = sd.DetectEndpoints(doc)
+						existing.Endpoints = cd.DetectEndpoints(doc)
 					}
 					candidateMap[id] = existing
 					break
@@ -183,46 +183,46 @@ func (sd *ServiceDetector) DetectServices(graph *Graph, docs []Document) []Servi
 	}
 
 	// Collect and rank candidates.
-	services := make([]Service, 0, len(candidateMap))
-	for _, svc := range candidateMap {
-		services = append(services, svc)
+	components := make([]Component, 0, len(candidateMap))
+	for _, comp := range candidateMap {
+		components = append(components, comp)
 	}
-	return sd.RankServices(services)
+	return cd.RankComponents(components)
 }
 
-// IsService applies heuristic scoring to a single Node and returns the
-// candidate Service and its confidence score.
+// IsComponent applies heuristic scoring to a single Node and returns the
+// candidate Component and its confidence score.
 //
-// Returns (Service{}, 0) when the node does not appear to be a service.
-func (sd *ServiceDetector) IsService(node *Node) (Service, float64) {
+// Returns (Component{}, 0) when the node does not appear to be a component.
+func (cd *ComponentDetector) IsComponent(node *Node) (Component, float64) {
 	lowerID := strings.ToLower(node.ID)
 	lowerTitle := strings.ToLower(node.Title)
 
-	// Heuristic 1: filename contains "service".
-	// Examples: auth-service.md, user-service.md, payment-service.md
+	// Heuristic 1: filename contains "component".
+	// Examples: auth-component.md, user-component.md, payment-component.md
 	stem := filenameStem(node.ID)
-	if strings.Contains(strings.ToLower(stem), "service") {
-		return Service{
-			ID:   nodeToServiceID(node.ID),
+	if strings.Contains(strings.ToLower(stem), "component") {
+		return Component{
+			ID:   nodeToComponentID(node.ID),
 			Name: node.Title,
 			File: node.ID,
-		}, ConfidenceServiceFilename
+		}, ConfidenceComponentFilename
 	}
 
-	// Heuristic 2: H1 heading contains "Service".
-	// Examples: "# User Service", "# Auth Service"
-	if strings.Contains(lowerTitle, "service") {
-		return Service{
-			ID:   nodeToServiceID(node.ID),
+	// Heuristic 2: H1 heading contains "Component".
+	// Examples: "# User Component", "# Auth Component"
+	if strings.Contains(lowerTitle, "component") {
+		return Component{
+			ID:   nodeToComponentID(node.ID),
 			Name: node.Title,
 			File: node.ID,
-		}, ConfidenceServiceHeading
+		}, ConfidenceComponentHeading
 	}
 
-	// Heuristic 3: Optional — check configured patterns via IsService API.
-	// High in-degree detection is handled in DetectServices (requires graph).
+	// Heuristic 3: Optional — check configured patterns via IsComponent API.
+	// High in-degree detection is handled in DetectComponents (requires graph).
 	_ = lowerID
-	return Service{}, 0
+	return Component{}, 0
 }
 
 // DetectEndpoints scans a Document for REST API endpoint patterns and returns
@@ -233,7 +233,7 @@ func (sd *ServiceDetector) IsService(node *Node) (Service, float64) {
 //   - "# POST /users endpoint" — heading pattern
 //   - "`POST /users`" — inline code pattern
 //   - Code blocks containing "METHOD /path" lines
-func (sd *ServiceDetector) DetectEndpoints(doc *Document) []Endpoint {
+func (cd *ComponentDetector) DetectEndpoints(doc *Document) []Endpoint {
 	var endpoints []Endpoint
 	seen := make(map[string]bool)
 
@@ -253,9 +253,9 @@ func (sd *ServiceDetector) DetectEndpoints(doc *Document) []Endpoint {
 	return endpoints
 }
 
-// RankServices sorts services by confidence (descending) and then by ID
+// RankComponents sorts components by confidence (descending) and then by ID
 // (ascending) for stable ordering within the same confidence tier.
-func (sd *ServiceDetector) RankServices(candidates []Service) []Service {
+func (cd *ComponentDetector) RankComponents(candidates []Component) []Component {
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].Confidence != candidates[j].Confidence {
 			return candidates[i].Confidence > candidates[j].Confidence
@@ -265,17 +265,17 @@ func (sd *ServiceDetector) RankServices(candidates []Service) []Service {
 	return candidates
 }
 
-// LoadServiceConfig reads a services.yaml file from path and returns the
-// parsed ServiceConfig.  Returns nil, nil when the file does not exist
+// LoadComponentConfig reads a components.yaml file from path and returns the
+// parsed ComponentConfig.  Returns nil, nil when the file does not exist
 // (graceful fallback — config is optional).
 //
 // The YAML format supported is a strict subset:
 //
-//	services:
+//	components:
 //	  - id: api-gateway
 //	    patterns: ["api-gateway", "API Gateway"]
 //	    type: microservice
-func LoadServiceConfig(path string) (*ServiceConfig, error) {
+func LoadComponentConfig(path string) (*ComponentConfig, error) {
 	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -286,7 +286,7 @@ func LoadServiceConfig(path string) (*ServiceConfig, error) {
 	}
 	defer f.Close() //nolint:errcheck
 
-	return parseServiceYAML(f)
+	return parseComponentYAML(f)
 }
 
 // --- endpoint extraction helpers --------------------------------------------
@@ -364,22 +364,22 @@ func extractFromCleanedLine(cleaned, evidence string) []Endpoint {
 
 // --- YAML config parser (minimal subset) ------------------------------------
 
-// parseServiceYAML parses the simple services.yaml format using a line-based
-// state machine.  It supports only the specific structure needed for service
+// parseComponentYAML parses the simple components.yaml format using a line-based
+// state machine.  It supports only the specific structure needed for component
 // configuration.
-func parseServiceYAML(r *os.File) (*ServiceConfig, error) {
-	cfg := &ServiceConfig{}
+func parseComponentYAML(r *os.File) (*ComponentConfig, error) {
+	cfg := &ComponentConfig{}
 	scanner := bufio.NewScanner(r)
 
 	type state int
 	const (
 		stateRoot state = iota
-		stateServices
+		stateComponents
 		stateEntry
 	)
 
 	current := stateRoot
-	var currentEntry *ServiceConfigEntry
+	var currentEntry *ComponentConfigEntry
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -392,17 +392,17 @@ func parseServiceYAML(r *os.File) (*ServiceConfig, error) {
 
 		switch current {
 		case stateRoot:
-			if strings.TrimRight(trimmed, ":") == "services" {
-				current = stateServices
+			if strings.TrimRight(trimmed, ":") == "components" {
+				current = stateComponents
 			}
 
-		case stateServices, stateEntry:
+		case stateComponents, stateEntry:
 			if strings.HasPrefix(trimmed, "- ") {
 				// New list entry.
 				if currentEntry != nil {
-					cfg.Services = append(cfg.Services, *currentEntry)
+					cfg.Components = append(cfg.Components, *currentEntry)
 				}
-				currentEntry = &ServiceConfigEntry{}
+				currentEntry = &ComponentConfigEntry{}
 				current = stateEntry
 				rest := strings.TrimPrefix(trimmed, "- ")
 				trimmed = rest
@@ -415,7 +415,7 @@ func parseServiceYAML(r *os.File) (*ServiceConfig, error) {
 	}
 
 	if currentEntry != nil {
-		cfg.Services = append(cfg.Services, *currentEntry)
+		cfg.Components = append(cfg.Components, *currentEntry)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -427,7 +427,7 @@ func parseServiceYAML(r *os.File) (*ServiceConfig, error) {
 
 // parseYAMLKeyValue parses a single "key: value" or "key: [val1, val2]" line
 // and sets the corresponding field on entry.
-func parseYAMLKeyValue(entry *ServiceConfigEntry, line string) {
+func parseYAMLKeyValue(entry *ComponentConfigEntry, line string) {
 	idx := strings.Index(line, ":")
 	if idx < 0 {
 		return
@@ -472,11 +472,11 @@ func parseYAMLStringList(s string) []string {
 
 // --- utility helpers --------------------------------------------------------
 
-// nodeToServiceID converts a node ID (relative file path) into a kebab-case
-// service ID.  Examples:
-//   - "services/auth-service.md"  → "auth-service"
-//   - "docs/UserService.md"       → "userservice"
-func nodeToServiceID(nodeID string) string {
+// nodeToComponentID converts a node ID (relative file path) into a kebab-case
+// component ID.  Examples:
+//   - "components/auth-component.md"  → "auth-component"
+//   - "docs/UserComponent.md"       → "usercomponent"
+func nodeToComponentID(nodeID string) string {
 	stem := filenameStem(nodeID)
 	return strings.ToLower(stem)
 }

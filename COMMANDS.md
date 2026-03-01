@@ -245,11 +245,11 @@ digraph dependencies {
 
 ## Command: `services`
 
-List all detected microservices.
+List all detected components.
 
 ### Syntax
 ```bash
-bmd services [--format FORMAT]
+bmd components [--format FORMAT]
 ```
 
 ### Arguments
@@ -261,29 +261,29 @@ bmd services [--format FORMAT]
 ### Examples
 
 ```bash
-# List all services
-bmd services
+# List all components
+bmd components
 
 # Get as JSON
-bmd services --format json
+bmd components --format json
 
 # Pipe to jq for filtering
-bmd services --format json | jq '.services[] | select(.confidence > 0.8)'
+bmd components --format json | jq '.components[] | select(.confidence > 0.8)'
 ```
 
 ### Output Formats
 
 **Text (default):**
 ```
-Detected Services (8 total):
+Detected Components (8 total):
 
-1. auth-service (confidence: 0.95)
+1. auth-component (confidence: 0.95)
    - Endpoints: POST /auth/login, POST /auth/logout, GET /auth/verify
    - Dependencies: postgresql, redis
 
 2. users-api (confidence: 0.92)
    - Endpoints: GET /users, POST /users, GET /users/:id
-   - Dependencies: auth-service, postgresql
+   - Dependencies: auth-component, postgresql
 
 3. payments-api (confidence: 0.88)
    - Endpoints: POST /payments, GET /payments/:id
@@ -295,9 +295,9 @@ Detected Services (8 total):
 **JSON:**
 ```json
 {
-  "services": [
+  "components": [
     {
-      "name": "auth-service",
+      "name": "auth-component",
       "confidence": 0.95,
       "type": "api",
       "endpoints": [
@@ -314,11 +314,11 @@ Detected Services (8 total):
 ### Notes
 
 - Confidence score indicates detection reliability
-- Services are detected from:
-  - Filename patterns (e.g., `services/auth-service/`)
-  - Headings (e.g., "## Auth Service")
+- Components are detected from:
+  - Filename patterns (e.g., `components/auth-component/`)
+  - Headings (e.g., "## Auth Component")
   - In-degree in dependency graph
-  - Optional `services.yaml` config
+  - Optional `components.yaml` config
 - Confidence >0.8 is high confidence
 - Confidence <0.5 may be false positives
 
@@ -458,14 +458,14 @@ Error: Directory not found: /nonexistent/path
 
 ## Integration Examples
 
-### Bash Script: List All Services and Count Dependencies
+### Bash Script: List All Components and Count Dependencies
 
 ```bash
 #!/bin/bash
-bmd services --format json | jq -r '.services[] | "\(.name): \(.dependencies | length) deps"'
+bmd components --format json | jq -r '.components[] | "\(.name): \(.dependencies | length) deps"'
 ```
 
-### Python: Find Services with High In-Degree
+### Python: Find Components with High In-Degree
 
 ```python
 import json

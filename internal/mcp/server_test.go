@@ -163,8 +163,8 @@ func TestMCPServer_ContractCompliance(t *testing.T) {
 			args:    map[string]interface{}{"query": "authentication", "dir": dir},
 		},
 		{
-			name:    "services",
-			handler: srv.handleServices,
+			name:    "components",
+			handler: srv.handleComponents,
 			args:    map[string]interface{}{"dir": dir},
 		},
 		{
