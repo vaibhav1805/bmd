@@ -107,7 +107,6 @@ func (v Viewer) renderGraphView(contentHeight int) string {
 	}
 
 	g := v.graphState.Graph
-	layout := v.graphState.NodeLayout
 
 	// Render ASCII art or list fallback.
 	graphHeight := contentHeight - 2 // header + footer
@@ -115,15 +114,14 @@ func (v Viewer) renderGraphView(contentHeight int) string {
 		graphHeight = 1
 	}
 
-	// Force list view if graph is too large or ASCII rendering would be empty
-	asciiOutput := RenderGraphASCII(g, layout, v.graphState.SelectedNodeID, v.Width, graphHeight)
-	// If ASCII rendering is minimal or empty, fall back to list view
-	asciiLines := strings.Split(strings.TrimSpace(asciiOutput), "\n")
-	if len(asciiLines) < 2 || (len(g.Nodes) > 0 && len(asciiLines) < 3) {
-		// ASCII art not producing good output, use list fallback
+	// For any graph, prefer list view for reliable display of all nodes
+	// ASCII art can fail to render properly when space is limited or layout is complex
+	if len(g.Nodes) > 0 {
+		// Use list fallback which always shows all nodes clearly
 		sb.WriteString(renderGraphListFallback(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
 	} else {
-		sb.WriteString(asciiOutput)
+		// Empty graph - show placeholder
+		sb.WriteString(renderGraphEmptyFallback(v.Width))
 	}
 
 	// Footer: show selected node details and key hints.
