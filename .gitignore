@@ -18,6 +18,14 @@ vendor/
 *.test
 *.out
 
+# Build artifacts (named binaries — not covered by /bmd root-only pattern)
+bmd-final
+bmd-test
+
+# Index and graph export files
+*.bmd-tree.json
+*.bmd-index.json
+
 # Dependencies
 node_modules/
 
