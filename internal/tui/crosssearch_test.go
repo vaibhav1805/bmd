@@ -300,7 +300,7 @@ func TestSearchAllFilesMethod(t *testing.T) {
 	})
 	v := newTestViewerWithDir(t, dir)
 
-	results, err := v.SearchAllFiles("payment")
+	results, _, err := v.SearchAllFiles("payment")
 	if err != nil {
 		t.Fatalf("SearchAllFiles error: %v", err)
 	}

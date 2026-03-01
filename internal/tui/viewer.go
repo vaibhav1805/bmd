@@ -115,6 +115,7 @@ type Viewer struct {
 	crossSearchQuery    string                   // last committed cross-search query
 	crossSearchResults  []knowledge.SearchResult // results from BM25 search across all files
 	crossSearchSelected int                      // index of highlighted result (-1 = none)
+	crossSearchStrategy string                   // strategy used for the last search ("bm25" or "pageindex")
 
 	// Directory browser mode (DIR-01): interactive file listing when bmd is run with no args.
 	directoryMode  bool           // true when in directory listing mode
@@ -1648,8 +1649,8 @@ func (v Viewer) updateCrossSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			v.crossSearchActive = false
 			return v, nil
 		}
-		// Execute cross-document BM25 search.
-		results, err := v.SearchAllFiles(query)
+		// Execute cross-document search.
+		results, strategy, err := v.SearchAllFiles(query)
 		if err != nil {
 			v.errorMsg = "Search error: " + err.Error()
 			v.crossSearchActive = false
@@ -1657,6 +1658,7 @@ func (v Viewer) updateCrossSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		v.crossSearchQuery = query
 		v.crossSearchResults = results
+		v.crossSearchStrategy = strategy
 		v.crossSearchSelected = 0
 		if len(results) == 0 {
 			v.crossSearchSelected = -1
@@ -1748,14 +1750,18 @@ func (v Viewer) renderCrossSearchResults(contentHeight int) string {
 	results := v.crossSearchResults
 	query := v.crossSearchQuery
 
-	// Title line.
+	// Title line with strategy indicator.
 	titleFg := "\x1b[1;38;5;226m" // bold yellow
 	reset := "\x1b[0m"
 	countStr := fmt.Sprintf("%d result", len(results))
 	if len(results) != 1 {
 		countStr += "s"
 	}
-	title := fmt.Sprintf("%sSearch Results for %q (%s)%s", titleFg, query, countStr, reset)
+	strategyStr := ""
+	if v.crossSearchStrategy != "" {
+		strategyStr = fmt.Sprintf(" [%s]", v.crossSearchStrategy)
+	}
+	title := fmt.Sprintf("%sSearch Results for %q (%s)%s%s", titleFg, query, countStr, strategyStr, reset)
 	sb.WriteString(title + "\n")
 
 	// Box border top.
@@ -3160,6 +3166,15 @@ func min(a, b int) int {
 // which loads (or builds) the Phase 6 index and executes the query.
 //
 // Results are already sorted by BM25 score descending by the knowledge layer.
-func (v *Viewer) SearchAllFiles(query string) ([]knowledge.SearchResult, error) {
-	return knowledge.SearchAllDocuments(v.startDir, query, 50)
+func (v *Viewer) SearchAllFiles(query string) ([]knowledge.SearchResult, string, error) {
+	// Determine which strategy to use (check environment variable, default to bm25)
+	strategy := os.Getenv("BMD_STRATEGY")
+	if strategy == "" {
+		strategy = "bm25"
+	}
+
+	// Currently the UI viewer only supports BM25 search through SearchAllDocuments
+	// Strategy tracking is for display purposes; actual semantic search via CLI commands
+	results, err := knowledge.SearchAllDocuments(v.startDir, query, 50)
+	return results, strategy, err
 }

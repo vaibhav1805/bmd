@@ -48,6 +48,7 @@ bmd services
 **Agent Tools:**
 - 🤖 **Knowledge graphs** — Build dependency graphs, query microservice architecture
 - 📊 **Full-text indexing** — BM25 search across documentation
+- 🧠 **Semantic search** — LLM-powered intent-based retrieval (PageIndex)
 - 🔗 **Service detection** — Automatically identify services and dependencies
 - 💾 **Local persistence** — SQLite-based indexing for fast queries
 - 📤 **Multiple formats** — JSON, text, CSV, Graphviz output
@@ -95,11 +96,17 @@ bmd                    # Enter directory browser in split-pane mode
 
 ### Agent Queries
 ```bash
-# Build knowledge index
-bmd index ./docs
+# Build knowledge index (with semantic trees for PageIndex)
+bmd index ./docs --strategy pageindex
 
-# Search documentation
+# Search documentation with keyword matching
 bmd query "database patterns" --dir ./docs
+
+# Search with semantic reasoning (requires PageIndex trees)
+bmd query "how are databases configured?" --dir ./docs --strategy pageindex
+
+# Assemble RAG-ready context blocks
+bmd context "authentication flow" --dir ./docs
 
 # Analyze architecture
 bmd depends user-service --format json
@@ -167,10 +174,66 @@ Creates `.bmd-index.json` and `.bmd-graph.json` with:
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `index [DIR]` | Build knowledge index | `bmd index ./docs` |
-| `query TERM [--dir PATH] [--format json\|text\|csv]` | Full-text search | `bmd query "router"` |
+| `index [DIR] --strategy pageindex` | Index with semantic trees | `bmd index ./docs --strategy pageindex` |
+| `query TERM [--dir PATH]` | Full-text search (BM25) | `bmd query "router"` |
+| `query TERM [--dir PATH] --strategy pageindex` | Semantic search with reasoning | `bmd query "how do we handle errors?" --dir ./docs --strategy pageindex` |
+| `context TERM [--dir PATH]` | Assemble RAG context blocks | `bmd context "auth flow" --dir ./docs` |
 | `depends SERVICE [--format json\|text\|dot]` | Find dependencies | `bmd depends api-gateway` |
 | `services [--format json\|text]` | List detected services | `bmd services` |
 | `graph [--format json\|dot]` | Export relationship graph | `bmd graph --format dot` |
+
+## Semantic Search (PageIndex)
+
+BMD supports two search strategies for agents:
+
+### BM25 Full-Text Search (Default)
+Fast, keyword-based search using BM25 ranking. Best for exact term matching.
+
+```bash
+bmd query "error handling" --dir ./docs
+```
+
+### PageIndex Semantic Search
+LLM-powered reasoning-based search. Understands intent and finds relevant sections even without exact keyword matches. Requires PageIndex binary.
+
+```bash
+# Generate semantic trees during indexing
+bmd index ./docs --strategy pageindex
+
+# Query with natural language intent
+bmd query "How do we handle authentication?" --dir ./docs --strategy pageindex
+
+# Assemble RAG-ready context blocks
+bmd context "OAuth flow" --dir ./docs
+```
+
+**When to use semantic search:**
+- Natural language queries with varying phrasing
+- Finding conceptually-related sections (not just keyword matches)
+- Assembling training context for LLM agents
+- Complex architectural questions requiring reasoning
+
+**Strategy selection (command-line or environment variable):**
+```bash
+# Command-line flag (takes precedence)
+bmd query "question" --strategy pageindex --dir ./docs
+
+# Or set environment variable (applies to all commands)
+export BMD_STRATEGY=pageindex
+bmd query "question" --dir ./docs
+bmd index ./docs
+bmd context "topic" --dir ./docs
+
+# Reset to default (BM25)
+unset BMD_STRATEGY
+```
+
+**Setup PageIndex (one-time):**
+```bash
+pip install pageindex
+# Creates ~/.local/bin/pageindex wrapper script automatically
+export PATH="$HOME/.local/bin:$PATH"
+```
 
 ## Rendering Features
 
@@ -315,4 +378,4 @@ Contributions welcome! Please:
 
 ---
 
-**Current Status:** Feature-complete. All 9 features implemented and tested. Ready for production use.
+**Current Status:** Phase 11 complete. All core features implemented: rendering, editing, navigation, search (BM25 + semantic), graphs, and agent intelligence. Phase 12 (MCP server) planned. Ready for production use.
