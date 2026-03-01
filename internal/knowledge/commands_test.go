@@ -908,3 +908,93 @@ func TestFindNodeForService(t *testing.T) {
 		t.Errorf("not-found: got %q, want empty", got)
 	}
 }
+
+// ─── ContractResponse unit tests ──────────────────────────────────────────────
+
+func TestContractResponsePaths(t *testing.T) {
+	t.Run("ok response has nil code", func(t *testing.T) {
+		resp := NewOKResponse("done", map[string]int{"count": 1})
+		if resp.Status != "ok" {
+			t.Errorf("expected status=ok, got %q", resp.Status)
+		}
+		if resp.Code != nil {
+			t.Errorf("expected nil code, got %q", *resp.Code)
+		}
+		if resp.Data == nil {
+			t.Error("expected non-nil data")
+		}
+	})
+
+	t.Run("empty response has nil code", func(t *testing.T) {
+		resp := NewEmptyResponse("no results", nil)
+		if resp.Status != "empty" {
+			t.Errorf("expected status=empty, got %q", resp.Status)
+		}
+		if resp.Code != nil {
+			t.Errorf("expected nil code, got %q", *resp.Code)
+		}
+	})
+
+	t.Run("error response INDEX_NOT_FOUND", func(t *testing.T) {
+		resp := NewErrorResponse(ErrCodeIndexNotFound, "no index")
+		if resp.Status != "error" {
+			t.Errorf("expected status=error, got %q", resp.Status)
+		}
+		if resp.Code == nil || *resp.Code != ErrCodeIndexNotFound {
+			t.Errorf("expected code=INDEX_NOT_FOUND, got %v", resp.Code)
+		}
+		if resp.Data != nil {
+			t.Error("expected nil data for error response")
+		}
+	})
+
+	t.Run("error response FILE_NOT_FOUND", func(t *testing.T) {
+		resp := NewErrorResponse(ErrCodeFileNotFound, "not found")
+		if resp.Status != "error" {
+			t.Errorf("expected status=error, got %q", resp.Status)
+		}
+		if resp.Code == nil || *resp.Code != ErrCodeFileNotFound {
+			t.Errorf("expected code=FILE_NOT_FOUND, got %v", resp.Code)
+		}
+	})
+
+	t.Run("error response INVALID_QUERY", func(t *testing.T) {
+		resp := NewErrorResponse(ErrCodeInvalidQuery, "bad query")
+		if resp.Status != "error" {
+			t.Errorf("expected status=error, got %q", resp.Status)
+		}
+		if resp.Code == nil || *resp.Code != ErrCodeInvalidQuery {
+			t.Errorf("expected code=INVALID_QUERY, got %v", resp.Code)
+		}
+	})
+
+	t.Run("error response INTERNAL_ERROR", func(t *testing.T) {
+		resp := NewErrorResponse(ErrCodeInternalError, "unexpected failure")
+		if resp.Status != "error" {
+			t.Errorf("expected status=error, got %q", resp.Status)
+		}
+		if resp.Code == nil || *resp.Code != ErrCodeInternalError {
+			t.Errorf("expected code=INTERNAL_ERROR, got %v", resp.Code)
+		}
+	})
+
+	t.Run("marshalContract produces valid JSON", func(t *testing.T) {
+		resp := NewOKResponse("test", nil)
+		out := marshalContract(resp)
+		var parsed map[string]interface{}
+		if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+			t.Errorf("marshalContract output is not valid JSON: %v", err)
+		}
+		if parsed["status"] != "ok" {
+			t.Errorf("expected status=ok in marshaled output, got %v", parsed["status"])
+		}
+	})
+
+	t.Run("empty response serializes code as null", func(t *testing.T) {
+		resp := NewEmptyResponse("no results", nil)
+		out := marshalContract(resp)
+		if !strings.Contains(out, `"code": null`) {
+			t.Errorf("expected code:null in empty response JSON, got: %s", out)
+		}
+	})
+}
