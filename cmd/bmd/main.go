@@ -58,6 +58,13 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "context":
+			cmdErr = knowledge.CmdContext(args[1:])
+			if cmdErr != nil {
+				fmt.Fprintln(os.Stderr, "bmd context:", cmdErr)
+				os.Exit(1)
+			}
+			return
 		case "-h", "--help", "help":
 			usage()
 			return
@@ -198,6 +205,8 @@ Knowledge commands:
                               List all detected services
   bmd graph [SERVICE] [--dir DIR] [--format dot|json]
                               Export knowledge graph
+  bmd context QUERY [--dir DIR] [--top N] [--format markdown|json]
+                              Assemble RAG-ready context block for a query
 
 Examples:
   bmd                         Browse markdown files in current directory
