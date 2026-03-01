@@ -97,16 +97,17 @@ func sectionsFromBM25Results(results []SearchResult) []ContextSection {
 
 // ContextArgs holds parsed CLI arguments for CmdContext.
 type ContextArgs struct {
-	Query  string
-	Dir    string
-	Top    int    // max sections to return; default 5
-	Format string // "markdown" (default) | "json"
-	Model  string // LLM model; default "claude-sonnet-4-5"
+	Query    string
+	Dir      string
+	Top      int    // max sections to return; default 5
+	Format   string // "markdown" (default) | "json"
+	Strategy string // "" (env var/default) | "bm25" | "pageindex"
+	Model    string // LLM model; default "claude-sonnet-4-5"
 }
 
 // ParseContextArgs parses raw CLI arguments for the context command.
 //
-// Usage: bmd context QUERY [--dir DIR] [--top N] [--format markdown|json] [--model MODEL]
+// Usage: bmd context QUERY [--dir DIR] [--top N] [--format markdown|json] [--strategy bm25|pageindex] [--model MODEL]
 func ParseContextArgs(args []string) (*ContextArgs, error) {
 	positionals, flags := splitPositionalsAndFlags(args)
 
@@ -117,6 +118,7 @@ func ParseContextArgs(args []string) (*ContextArgs, error) {
 	fs.StringVar(&a.Dir, "dir", ".", "Directory to search")
 	fs.IntVar(&a.Top, "top", 5, "Maximum number of sections to return")
 	fs.StringVar(&a.Format, "format", "markdown", "Output format (markdown|json)")
+	fs.StringVar(&a.Strategy, "strategy", "", "Strategy: '' or 'bm25' (default) | 'pageindex'")
 	fs.StringVar(&a.Model, "model", "claude-sonnet-4-5", "LLM model for PageIndex retrieval")
 
 	if err := fs.Parse(flags); err != nil {
@@ -128,6 +130,9 @@ func ParseContextArgs(args []string) (*ContextArgs, error) {
 	}
 	a.Query = positionals[0]
 
+	// Resolve strategy: flag → env var → default
+	a.Strategy = resolveStrategy(a.Strategy)
+
 	return &a, nil
 }
 
@@ -136,9 +141,10 @@ func ParseContextArgs(args []string) (*ContextArgs, error) {
 // CmdContext implements `bmd context QUERY`.  It assembles a RAG-ready context
 // block by retrieving the most relevant sections for the given query.
 //
-// Strategy:
-//  1. Attempt to load .bmd-tree.json files; if present, invoke RunPageIndexQuery.
-//  2. Fall back to BM25 chunk search when no tree files exist or PageIndex fails.
+// Strategy (respects --strategy flag, env var BMD_STRATEGY, or auto-detect):
+//  1. If strategy == "pageindex": attempt to load .bmd-tree.json files and invoke RunPageIndexQuery.
+//  2. If strategy == "bm25" or if PageIndex unavailable: use BM25 chunk search.
+//  3. If strategy is auto (from env var or default): attempt PageIndex first, fall back to BM25.
 //
 // Output:
 //   - format=="markdown": prints AssembleContextBlock output to stdout.
@@ -156,20 +162,25 @@ func CmdContext(args []string) error {
 
 	var sections []ContextSection
 
-	// Attempt PageIndex tree path first.
-	trees, treeErr := LoadTreeFiles(absDir)
-	if treeErr == nil && len(trees) > 0 {
-		fmt.Fprintf(os.Stderr, "Using PageIndex trees (%d files)\n", len(trees))
-		cfg := PageIndexConfig{
-			ExecutablePath: "pageindex",
-			Model:          a.Model,
-		}
-		piSections, piErr := RunPageIndexQuery(cfg, a.Query, trees, a.Top)
-		if piErr == nil {
-			sections = piSections
-		} else {
-			// PageIndex query failed — fall through to BM25.
-			fmt.Fprintf(os.Stderr, "PageIndex query failed (%v); falling back to BM25 chunk search\n", piErr)
+	// Strategy routing: force BM25, or attempt PageIndex if available.
+	useBM25Only := strings.ToLower(a.Strategy) == "bm25"
+
+	if !useBM25Only {
+		// Attempt PageIndex tree path (either explicit pageindex strategy or auto-detect).
+		trees, treeErr := LoadTreeFiles(absDir)
+		if treeErr == nil && len(trees) > 0 {
+			fmt.Fprintf(os.Stderr, "Using PageIndex trees (%d files)\n", len(trees))
+			cfg := PageIndexConfig{
+				ExecutablePath: "pageindex",
+				Model:          a.Model,
+			}
+			piSections, piErr := RunPageIndexQuery(cfg, a.Query, trees, a.Top)
+			if piErr == nil {
+				sections = piSections
+			} else {
+				// PageIndex query failed — fall through to BM25.
+				fmt.Fprintf(os.Stderr, "PageIndex query failed (%v); falling back to BM25 chunk search\n", piErr)
+			}
 		}
 	}
 

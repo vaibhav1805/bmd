@@ -3,6 +3,7 @@ package knowledge
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -27,8 +28,8 @@ func TestParseIndexArgs_Defaults(t *testing.T) {
 	if a.PollInterval != 5 {
 		t.Errorf("PollInterval: got %d, want 5", a.PollInterval)
 	}
-	if a.Strategy != "" {
-		t.Errorf("Strategy: got %q, want empty string", a.Strategy)
+	if a.Strategy != "bm25" {
+		t.Errorf("Strategy: got %q, want %q (resolved from env var or default)", a.Strategy, "bm25")
 	}
 	if a.Model != "claude-sonnet-4-5" {
 		t.Errorf("Model: got %q, want %q", a.Model, "claude-sonnet-4-5")
@@ -156,8 +157,8 @@ func TestParseQueryArgs_StrategyDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if a.Strategy != "" {
-		t.Errorf("Strategy: got %q, want empty string (BM25 default)", a.Strategy)
+	if a.Strategy != "bm25" {
+		t.Errorf("Strategy: got %q, want %q (resolved from env var or default)", a.Strategy, "bm25")
 	}
 }
 
@@ -253,7 +254,7 @@ func TestCmdQuery_PageindexStrategy_NoTrees(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	err := CmdQuery([]string{"query", "--dir", emptyDir, "--strategy", "pageindex", "--format", "json"})
+	err := CmdQuery([]string{"searchterm", "--dir", emptyDir, "--strategy", "pageindex", "--format", "json"})
 
 	_ = w.Close()
 	os.Stdout = old
@@ -281,7 +282,13 @@ func TestCmdQuery_PageindexStrategy_NoTrees(t *testing.T) {
 
 // TestCmdQuery_PageindexStrategy_NoBinary verifies that --strategy pageindex
 // with tree files present but no pageindex binary returns PAGEINDEX_NOT_AVAILABLE.
+// Note: This test is skipped if pageindex is actually installed in the environment.
 func TestCmdQuery_PageindexStrategy_NoBinary(t *testing.T) {
+	// Skip test if pageindex is actually available
+	if isPageIndexAvailable() {
+		t.Skip("pageindex binary is installed; skipping binary-missing test")
+	}
+
 	tmpDir := t.TempDir()
 
 	// Write a minimal valid .bmd-tree.json so LoadTreeFiles returns a result.
@@ -297,7 +304,7 @@ func TestCmdQuery_PageindexStrategy_NoBinary(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	err := CmdQuery([]string{"query", "--dir", tmpDir, "--strategy", "pageindex", "--format", "json"})
+	err := CmdQuery([]string{"searchterm", "--dir", tmpDir, "--strategy", "pageindex", "--format", "json"})
 
 	_ = w.Close()
 	os.Stdout = old
@@ -321,6 +328,12 @@ func TestCmdQuery_PageindexStrategy_NoBinary(t *testing.T) {
 	if envelope["code"] != ErrCodePageIndexNotAvailable {
 		t.Errorf("expected code=%s, got %v", ErrCodePageIndexNotAvailable, envelope["code"])
 	}
+}
+
+// isPageIndexAvailable checks if the pageindex binary is available in PATH.
+func isPageIndexAvailable() bool {
+	_, err := exec.LookPath("pageindex")
+	return err == nil
 }
 
 func TestParseDependsArgs_Defaults(t *testing.T) {

@@ -58,6 +58,22 @@ type GraphArgs struct {
 
 // ─── argument parsers ─────────────────────────────────────────────────────────
 
+// resolveStrategy returns the strategy in precedence order: flag value → env var → default "bm25".
+// This allows users to set a global preference via BMD_STRATEGY env var while allowing
+// command-line flags to override it.
+func resolveStrategy(flagValue string) string {
+	// Flag value takes precedence
+	if flagValue != "" {
+		return flagValue
+	}
+	// Environment variable next
+	if env := os.Getenv("BMD_STRATEGY"); env != "" {
+		return env
+	}
+	// Default to BM25
+	return "bm25"
+}
+
 // ParseIndexArgs parses raw CLI arguments for the index command.
 //
 // Usage: bmd index [DIR] [--dir DIR] [--db PATH] [--watch] [--poll-interval N]
@@ -82,6 +98,9 @@ func ParseIndexArgs(args []string) (*IndexArgs, error) {
 	if pos := fs.Args(); len(pos) > 0 {
 		a.Dir = pos[0]
 	}
+
+	// Resolve strategy: flag → env var → default
+	a.Strategy = resolveStrategy(a.Strategy)
 
 	return &a, nil
 }
@@ -119,6 +138,9 @@ func ParseQueryArgs(args []string) (*QueryArgs, error) {
 	if a.Top < 1 {
 		return nil, fmt.Errorf("query: --top must be >= 1")
 	}
+
+	// Resolve strategy: flag → env var → default
+	a.Strategy = resolveStrategy(a.Strategy)
 
 	return &a, nil
 }
