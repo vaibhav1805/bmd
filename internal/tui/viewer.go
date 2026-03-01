@@ -131,6 +131,10 @@ type Viewer struct {
 	// DIR-04: When true, the current file was opened from search results.
 	// Used to enable 'h' to return to search results with cursor preserved.
 	openedFromSearch bool
+
+	// Split-pane mode (09-01): dual-pane layout with file list left, preview right.
+	splitMode          bool // true when split-pane view is active in directory mode
+	splitPreviewOffset int  // scroll offset for the right (preview) pane
 }
 
 // FileMetadata holds metadata for a single markdown file discovered during directory scan.
@@ -1340,6 +1344,269 @@ func (v Viewer) renderDirectoryListing(contentHeight int) string {
 	return sb.String()
 }
 
+// splitPaneWidths calculates the left (file list) and right (preview) pane
+// widths for split-pane mode. Returns (leftWidth, rightWidth, ok). If the
+// terminal is too narrow (< 80 columns), ok is false and split mode should
+// not be used.
+func splitPaneWidths(totalWidth int) (int, int, bool) {
+	if totalWidth < 80 {
+		return 0, 0, false
+	}
+	// Left pane: 35% of width, clamped to [25, 50].
+	left := totalWidth * 35 / 100
+	if left < 25 {
+		left = 25
+	}
+	if left > 50 {
+		left = 50
+	}
+	// Right pane: remaining width minus 1 for the border character.
+	right := totalWidth - left - 1
+	if right < 20 {
+		return 0, 0, false
+	}
+	return left, right, true
+}
+
+// renderDirectoryListingSplit renders the left pane of the split view: a
+// compact file list restricted to leftWidth characters. It returns one string
+// per row (up to contentHeight rows).
+func (v Viewer) renderDirectoryListingSplit(leftWidth, contentHeight int) []string {
+	ds := v.directoryState
+	files := ds.Files
+
+	selectedBg := "\x1b[48;5;22m\x1b[38;5;46m"
+	dimText := "\x1b[38;5;244m"
+	boldText := "\x1b[1;38;5;252m"
+	reset := "\x1b[0m"
+
+	rows := make([]string, contentHeight)
+
+	// Row 0: title
+	title := " Files"
+	titleRunes := []rune(title)
+	if len(titleRunes) > leftWidth {
+		title = string(titleRunes[:leftWidth])
+	} else {
+		title = title + strings.Repeat(" ", leftWidth-len(titleRunes))
+	}
+	rows[0] = "\x1b[48;5;17m\x1b[1;38;5;51m" + title + reset
+
+	// Row 1: separator
+	rows[1] = dimText + strings.Repeat("─", leftWidth) + reset
+
+	// Available rows for file entries.
+	listHeight := contentHeight - 2
+	if listHeight < 1 {
+		listHeight = 1
+	}
+
+	fileCount := len(files)
+
+	// Compute visible window: keep selected in view.
+	startIdx := 0
+	if fileCount > listHeight {
+		startIdx = ds.SelectedIndex - listHeight/2
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		if startIdx+listHeight > fileCount {
+			startIdx = fileCount - listHeight
+		}
+	}
+
+	if fileCount == 0 {
+		msg := " No files"
+		if len([]rune(msg)) > leftWidth {
+			msg = string([]rune(msg)[:leftWidth])
+		}
+		rows[2] = dimText + msg + reset
+		for i := 3; i < contentHeight; i++ {
+			rows[i] = strings.Repeat(" ", leftWidth)
+		}
+		return rows
+	}
+
+	for ri := 0; ri < listHeight; ri++ {
+		fi := startIdx + ri
+		rowIdx := ri + 2 // offset by title + separator
+		if fi >= fileCount {
+			rows[rowIdx] = strings.Repeat(" ", leftWidth)
+			continue
+		}
+		f := files[fi]
+		isSelected := fi == ds.SelectedIndex
+
+		prefix := "  "
+		if isSelected {
+			prefix = "> "
+		}
+
+		displayName := f.Name
+		maxName := leftWidth - len(prefix) - 1
+		if maxName < 4 {
+			maxName = 4
+		}
+		nameRunes := []rune(displayName)
+		if len(nameRunes) > maxName {
+			displayName = string(nameRunes[:maxName-1]) + "…"
+		}
+
+		line := prefix + displayName
+		lineRunes := []rune(line)
+		if len(lineRunes) < leftWidth {
+			line = line + strings.Repeat(" ", leftWidth-len(lineRunes))
+		}
+
+		if isSelected {
+			rows[rowIdx] = selectedBg + boldText + line + reset
+		} else {
+			rows[rowIdx] = dimText + line + reset
+		}
+	}
+
+	return rows
+}
+
+// renderFilePreviewSplit renders the right pane of the split view: a markdown
+// preview of the currently selected file. It returns one string per row (up to
+// contentHeight rows). Each row is padded/truncated to rightWidth.
+func (v Viewer) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
+	ds := v.directoryState
+	files := ds.Files
+	rows := make([]string, contentHeight)
+
+	dimText := "\x1b[38;5;244m"
+	reset := "\x1b[0m"
+
+	if len(files) == 0 {
+		for i := range rows {
+			rows[i] = strings.Repeat(" ", rightWidth)
+		}
+		return rows
+	}
+
+	sel := ds.SelectedIndex
+	if sel < 0 || sel >= len(files) {
+		sel = 0
+	}
+	f := files[sel]
+
+	// Row 0: filename header
+	header := " " + f.Name
+	headerRunes := []rune(header)
+	if len(headerRunes) > rightWidth {
+		header = string(headerRunes[:rightWidth-3]) + "..."
+	} else {
+		header = header + strings.Repeat(" ", rightWidth-len(headerRunes))
+	}
+	rows[0] = "\x1b[48;5;17m\x1b[1;38;5;51m" + header + reset
+
+	// Row 1: separator
+	rows[1] = dimText + strings.Repeat("─", rightWidth) + reset
+
+	// Read and render the preview content using the file's preview text first,
+	// or fall back to reading the file.
+	previewLines := []string{}
+	data, err := os.ReadFile(f.Path)
+	if err == nil {
+		content := string(data)
+		previewLines = strings.Split(content, "\n")
+	} else {
+		// Fallback to stored preview
+		previewLines = strings.Split(f.Preview, "\n")
+	}
+
+	// Apply scroll offset
+	start := v.splitPreviewOffset
+	if start >= len(previewLines) {
+		start = 0
+	}
+
+	availHeight := contentHeight - 3 // header + separator + footer
+	if availHeight < 1 {
+		availHeight = 1
+	}
+
+	end := start + availHeight
+	if end > len(previewLines) {
+		end = len(previewLines)
+	}
+
+	for i := 0; i < availHeight; i++ {
+		lineIdx := start + i
+		rowIdx := i + 2
+		if lineIdx < end {
+			line := previewLines[lineIdx]
+			lineRunes := []rune(line)
+			if len(lineRunes) > rightWidth {
+				line = string(lineRunes[:rightWidth])
+			} else {
+				line = line + strings.Repeat(" ", rightWidth-len(lineRunes))
+			}
+			rows[rowIdx] = line
+		} else {
+			rows[rowIdx] = strings.Repeat(" ", rightWidth)
+		}
+	}
+
+	// Footer row: page indicator
+	totalPages := (len(previewLines) + availHeight - 1) / availHeight
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	currentPage := start/availHeight + 1
+	pageStr := fmt.Sprintf(" [%d/%d pages]", currentPage, totalPages)
+	pageRunes := []rune(pageStr)
+	if len(pageRunes) > rightWidth {
+		pageStr = string(pageRunes[:rightWidth])
+	} else {
+		pageStr = pageStr + strings.Repeat(" ", rightWidth-len(pageRunes))
+	}
+	rows[contentHeight-1] = dimText + pageStr + reset
+
+	return rows
+}
+
+// renderSplitPane combines the left (directory list) and right (file preview)
+// panes side-by-side with a border character. Returns the full split view string.
+func (v Viewer) renderSplitPane(contentHeight int) string {
+	leftWidth, rightWidth, ok := splitPaneWidths(v.Width)
+	if !ok {
+		// Terminal too narrow — fall back to full-screen directory listing.
+		return v.renderDirectoryListing(contentHeight)
+	}
+
+	leftRows := v.renderDirectoryListingSplit(leftWidth, contentHeight)
+	rightRows := v.renderFilePreviewSplit(rightWidth, contentHeight)
+
+	border := "\x1b[38;5;240m│\x1b[0m"
+
+	var sb strings.Builder
+	for i := 0; i < contentHeight; i++ {
+		left := ""
+		if i < len(leftRows) {
+			left = leftRows[i]
+		}
+		right := ""
+		if i < len(rightRows) {
+			right = rightRows[i]
+		}
+		sb.WriteString(left)
+		sb.WriteString(border)
+		sb.WriteString(right)
+		sb.WriteString("\n")
+	}
+
+	// Footer with keyboard hints
+	dimText := "\x1b[38;5;244m"
+	reset := "\x1b[0m"
+	footer := dimText + " [↑/↓] Navigate  [Enter] Open  [s] Toggle split  [/] Search  [q] Quit" + reset
+	sb.WriteString(footer)
+
+	return sb.String()
+}
+
 // updateCrossSearch handles keyboard input when the cross-document search
 // input prompt is open. Printable characters build the query; Enter executes
 // the search; Esc cancels.
@@ -1951,6 +2218,9 @@ func (v Viewer) View() string {
 	}
 
 	if v.directoryMode {
+		if v.splitMode {
+			return v.renderSplitPane(contentHeight)
+		}
 		return v.renderDirectoryListing(contentHeight)
 	}
 

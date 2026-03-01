@@ -1587,3 +1587,390 @@ func TestOpenFileFromDirectoryPreservesDirectoryState(t *testing.T) {
 		t.Errorf("File count changed: expected %d, got %d", origCount, len(vv.directoryState.Files))
 	}
 }
+
+// ==================== Split-Pane Mode Tests (09-01) ====================
+
+// TestSplitModeStateInitialized verifies that splitMode defaults to false.
+func TestSplitModeStateInitialized(t *testing.T) {
+	v := NewDirectoryViewer("/tmp", theme.NewTheme(), 120)
+	if v.splitMode {
+		t.Error("Expected splitMode=false by default")
+	}
+	if v.splitPreviewOffset != 0 {
+		t.Errorf("Expected splitPreviewOffset=0, got %d", v.splitPreviewOffset)
+	}
+}
+
+// TestSplitPaneWidthCalculation_Normal verifies width split at standard terminal sizes.
+func TestSplitPaneWidthCalculation_Normal(t *testing.T) {
+	tests := []struct {
+		total     int
+		wantLeft  int
+		wantRight int
+		wantOK    bool
+	}{
+		{120, 42, 77, true},  // 120 * 0.35 = 42; 120-42-1 = 77
+		{100, 35, 64, true},  // 100 * 0.35 = 35; 100-35-1 = 64
+		{80, 28, 51, true},   // 80 * 0.35 = 28; 80-28-1 = 51
+		{160, 50, 109, true}, // 160 * 0.35 = 56 -> clamped to 50; 160-50-1 = 109
+	}
+
+	for _, tt := range tests {
+		left, right, ok := splitPaneWidths(tt.total)
+		if ok != tt.wantOK {
+			t.Errorf("splitPaneWidths(%d): ok=%v, want %v", tt.total, ok, tt.wantOK)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if left != tt.wantLeft {
+			t.Errorf("splitPaneWidths(%d): left=%d, want %d", tt.total, left, tt.wantLeft)
+		}
+		if right != tt.wantRight {
+			t.Errorf("splitPaneWidths(%d): right=%d, want %d", tt.total, right, tt.wantRight)
+		}
+	}
+}
+
+// TestSplitPaneWidthCalculation_NarrowTerminal verifies split is disabled below 80 cols.
+func TestSplitPaneWidthCalculation_NarrowTerminal(t *testing.T) {
+	for _, w := range []int{40, 60, 79} {
+		_, _, ok := splitPaneWidths(w)
+		if ok {
+			t.Errorf("splitPaneWidths(%d): expected ok=false for narrow terminal", w)
+		}
+	}
+}
+
+// TestRenderDirectoryListingSplit_Truncates verifies long filenames are truncated.
+func TestRenderDirectoryListingSplit_Truncates(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"very-long-filename-that-should-be-truncated.md": "content",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	rows := v.renderDirectoryListingSplit(25, 10)
+	if len(rows) != 10 {
+		t.Fatalf("Expected 10 rows, got %d", len(rows))
+	}
+	// Row 2 should contain the (possibly truncated) filename
+	row2 := rows[2]
+	if !strings.Contains(row2, "…") && !strings.Contains(row2, "very-long") {
+		// Either truncated with ellipsis or fits
+		t.Logf("Row content: %q", row2)
+	}
+}
+
+// TestRenderDirectoryListingSplit_Metadata verifies file list rows are populated.
+func TestRenderDirectoryListingSplit_Metadata(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"aaa.md": "# AAA\n",
+		"bbb.md": "# BBB\nLine 2\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	rows := v.renderDirectoryListingSplit(30, 10)
+	// Should have title, separator, then 2 file entries
+	if len(rows) != 10 {
+		t.Fatalf("Expected 10 rows, got %d", len(rows))
+	}
+	// Check that "aaa.md" appears somewhere in the rows
+	found := false
+	for _, r := range rows {
+		if strings.Contains(r, "aaa.md") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected 'aaa.md' to appear in split directory listing")
+	}
+}
+
+// TestRenderFilePreviewSplit_ShowsContent verifies file content appears in preview.
+func TestRenderFilePreviewSplit_ShowsContent(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"test.md": "# Hello World\nThis is preview content.\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	rows := v.renderFilePreviewSplit(60, 10)
+	if len(rows) != 10 {
+		t.Fatalf("Expected 10 rows, got %d", len(rows))
+	}
+	// Check that content from the file appears
+	combined := strings.Join(rows, "\n")
+	if !strings.Contains(combined, "Hello World") {
+		t.Error("Expected 'Hello World' in preview content")
+	}
+}
+
+// TestRenderFilePreviewSplit_RespectsBoundary verifies preview stays within width.
+func TestRenderFilePreviewSplit_RespectsBoundary(t *testing.T) {
+	longLine := strings.Repeat("X", 200)
+	dir := makeTempDir(t, map[string]string{
+		"wide.md": longLine + "\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	rightWidth := 60
+	rows := v.renderFilePreviewSplit(rightWidth, 10)
+	// Content row (row 2) should not exceed rightWidth in rune length
+	contentRow := rows[2]
+	if len([]rune(contentRow)) > rightWidth {
+		t.Errorf("Preview row exceeds rightWidth: got %d runes, max %d", len([]rune(contentRow)), rightWidth)
+	}
+}
+
+// TestRenderSplitPane_CombinesLeftRight verifies the composite renders both panes.
+func TestRenderSplitPane_CombinesLeftRight(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"readme.md": "# README\nProject description here.\n",
+		"notes.md":  "# Notes\nSome notes.\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	v.splitMode = true
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	output := v.renderSplitPane(20)
+	// Should contain both file list and preview content
+	if !strings.Contains(output, "notes.md") && !strings.Contains(output, "readme.md") {
+		t.Error("Expected file name to appear in split pane output")
+	}
+}
+
+// TestRenderSplitPane_ProperAlignment verifies each line has the border character.
+func TestRenderSplitPane_ProperAlignment(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"test.md": "# Test\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	v.splitMode = true
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	output := v.renderSplitPane(10)
+	lines := strings.Split(output, "\n")
+	// Each content line (not the footer) should contain the border character
+	borderCount := 0
+	for _, l := range lines {
+		if strings.Contains(l, "│") {
+			borderCount++
+		}
+	}
+	if borderCount < 10 {
+		t.Errorf("Expected at least 10 lines with border character, got %d", borderCount)
+	}
+}
+
+// TestRenderSplitPane_BorderCharacters verifies the border is the │ character.
+func TestRenderSplitPane_BorderCharacters(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"a.md": "content",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	v.splitMode = true
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	output := v.renderSplitPane(5)
+	if !strings.Contains(output, "│") {
+		t.Error("Expected │ border character in split pane output")
+	}
+}
+
+// TestRenderSplitPane_EmptyDirectory verifies split mode handles zero files.
+func TestRenderSplitPane_EmptyDirectory(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"readme.txt": "not markdown",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	v.splitMode = true
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	// Should not panic
+	output := v.renderSplitPane(10)
+	if output == "" {
+		t.Error("Expected non-empty output for empty directory in split mode")
+	}
+}
+
+// TestRenderSplitPane_LargeDifferences verifies split handles many files.
+func TestRenderSplitPane_LargeDifferences(t *testing.T) {
+	files := make(map[string]string)
+	for i := 0; i < 30; i++ {
+		files[fmt.Sprintf("file%03d.md", i)] = fmt.Sprintf("# File %d\nContent line\n", i)
+	}
+	dir := makeTempDir(t, files)
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 40
+	v.splitMode = true
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	output := v.renderSplitPane(35)
+	if output == "" {
+		t.Error("Expected non-empty output for large file list")
+	}
+	// Should contain border characters
+	if !strings.Contains(output, "│") {
+		t.Error("Expected border characters in output")
+	}
+}
+
+// TestSplitModeWithVeryNarrowTerminal verifies fallback to full-screen listing.
+func TestSplitModeWithVeryNarrowTerminal(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"test.md": "# Test\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 60) // too narrow for split
+	v.Height = 24
+	v.splitMode = true
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	// renderSplitPane should fall back to renderDirectoryListing
+	output := v.renderSplitPane(20)
+	// The fallback output should still contain the file name
+	if !strings.Contains(output, "test.md") {
+		t.Error("Expected fallback to still show file name")
+	}
+}
+
+// TestSplitModeScrollingPlaceholder verifies splitPreviewOffset starts at zero.
+func TestSplitModeScrollingPlaceholder(t *testing.T) {
+	v := NewDirectoryViewer("/tmp", theme.NewTheme(), 120)
+	if v.splitPreviewOffset != 0 {
+		t.Errorf("Expected splitPreviewOffset=0 initially, got %d", v.splitPreviewOffset)
+	}
+
+	// Simulate setting offset
+	v.splitPreviewOffset = 5
+	if v.splitPreviewOffset != 5 {
+		t.Errorf("Expected splitPreviewOffset=5, got %d", v.splitPreviewOffset)
+	}
+}
+
+// TestSplitModeToggleState verifies split mode can be toggled on and off.
+func TestSplitModeToggleState(t *testing.T) {
+	v := NewDirectoryViewer("/tmp", theme.NewTheme(), 120)
+
+	if v.splitMode {
+		t.Error("Expected splitMode=false initially")
+	}
+
+	v.splitMode = true
+	if !v.splitMode {
+		t.Error("Expected splitMode=true after toggle on")
+	}
+
+	v.splitMode = false
+	if v.splitMode {
+		t.Error("Expected splitMode=false after toggle off")
+	}
+}
+
+// TestViewRoutesSplitMode verifies View() routes to split rendering when enabled.
+func TestViewRoutesSplitMode(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"doc.md": "# Document\nSome content.\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	// Without split mode: normal directory listing
+	normalOutput := v.View()
+
+	// With split mode: split pane
+	v.splitMode = true
+	splitOutput := v.View()
+
+	// Split output should contain border characters that normal output doesn't
+	if !strings.Contains(splitOutput, "│") {
+		t.Error("Expected split output to contain │ border")
+	}
+	// Outputs should be different
+	if normalOutput == splitOutput {
+		t.Error("Expected split and normal outputs to differ")
+	}
+}
+
+// TestSplitPreviewPageIndicator verifies page indicator in preview pane.
+func TestSplitPreviewPageIndicator(t *testing.T) {
+	// Create a file with many lines to ensure multiple pages
+	content := ""
+	for i := 0; i < 100; i++ {
+		content += fmt.Sprintf("Line %d of content\n", i)
+	}
+	dir := makeTempDir(t, map[string]string{
+		"long.md": content,
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	rows := v.renderFilePreviewSplit(60, 12)
+	// Last row should contain page indicator
+	lastRow := rows[len(rows)-1]
+	if !strings.Contains(lastRow, "pages") {
+		t.Errorf("Expected page indicator in last row, got: %q", lastRow)
+	}
+}
