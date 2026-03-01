@@ -1531,7 +1531,7 @@ func (v Viewer) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
 		if parseErr == nil {
 			r := renderer.NewRenderer(v.Theme, rightWidth).WithDocDir(filepath.Dir(f.Path))
 			rendered := r.Render(doc)
-			previewLines = strings.Split(rendered, "\n")
+			previewLines = stripAllSentinels(strings.Split(rendered, "\n"))
 		} else {
 			// Fallback to raw content if parse fails
 			content := string(data)
@@ -2686,6 +2686,41 @@ func padOrTruncate(s string, width int) string {
 		return s[:width]
 	}
 	return s + strings.Repeat(" ", width-len(s))
+}
+
+// ansiPadOrTruncate truncates or pads s so that its visible width (excluding
+// ANSI escape sequences) equals exactly width. Unlike padOrTruncate it
+// preserves embedded ANSI codes and resets styling after truncation.
+func ansiPadOrTruncate(s string, width int) string {
+	var b strings.Builder
+	visible := 0
+	runes := []rune(s)
+	i := 0
+	for i < len(runes) && visible < width {
+		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
+			// Copy the entire escape sequence as-is.
+			j := i + 2
+			for j < len(runes) && !((runes[j] >= 'A' && runes[j] <= 'Z') || (runes[j] >= 'a' && runes[j] <= 'z')) {
+				j++
+			}
+			if j < len(runes) {
+				j++ // include the terminator letter
+			}
+			b.WriteString(string(runes[i:j]))
+			i = j
+		} else {
+			b.WriteRune(runes[i])
+			visible++
+			i++
+		}
+	}
+	if visible < width {
+		b.WriteString(strings.Repeat(" ", width-visible))
+	} else {
+		// Reset styling after truncation so colours don't bleed.
+		b.WriteString("\x1b[0m")
+	}
+	return b.String()
 }
 
 // stripAllSentinels returns a copy of lines with all link sentinels removed.

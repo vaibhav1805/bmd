@@ -184,8 +184,19 @@ None.
 
 ## Session Continuity
 
-Current session: 2026-03-01 — Phase 9 (Split-Pane) COMPLETE
-Status: All 9 phases complete, project PRODUCTION READY
+Current session: 2026-03-01 (continued) — Post-Phase 9 Refinements
+Status: All 9 phases complete + post-phase fixes applied, project PRODUCTION READY
+
+**Post-Phase 9 Fixes (YOLO mode):**
+- **Split-pane preview styling**: Now uses viewer renderer for full markdown formatting
+  * Files display with proper ANSI colors, bold/italic, syntax highlighting
+  * Respects split-pane width and scroll offset
+  * Commit: 8651724
+- **Graph rendering fallback**: Added intelligent fallback from ASCII art to list view
+  * Detects when ASCII art produces minimal output
+  * Automatically switches to list fallback for better UX
+  * Ensures graph view always displays node information
+  * Commit: 8651724
 
 **Wave 1-2 Completion Summary (from earlier session):**
 
