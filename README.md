@@ -14,7 +14,9 @@ A powerful, beautiful terminal-based markdown editor with integrated knowledge g
 
 **One-line installer:**
 ```bash
-curl -fsSL https://github.com/vaibhav1805/bmd/releases/latest/download/install.sh | bash
+curl -fsSL \
+  https://github.com/vaibhav1805/bmd/releases/latest/download/install.sh \
+  | bash
 ```
 
 This script:
@@ -34,8 +36,10 @@ go build -o bmd ./cmd/bmd
 
 # Install to PATH
 sudo mv bmd /usr/local/bin/
+
 # Or locally:
-mkdir -p ~/.local/bin && mv bmd ~/.local/bin/
+mkdir -p ~/.local/bin
+mv bmd ~/.local/bin/
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -45,7 +49,9 @@ If you're using bmd with AI agents or documentation automation:
 
 ```bash
 # 1. Install bmd (as above)
-curl -fsSL https://github.com/vaibhav1805/bmd/releases/latest/download/install.sh | bash
+curl -fsSL \
+  https://github.com/vaibhav1805/bmd/releases/latest/download/install.sh \
+  | bash
 
 # 2. Install PageIndex for semantic search (optional but recommended)
 pip install pageindex
