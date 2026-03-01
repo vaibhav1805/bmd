@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Enhanced UX & Images** - Color themes, text selection, and image rendering
 - [x] **Phase 6: Agent Intelligence & Knowledge Graphs** - Agent-queryable markdown indexing, dependency detection, local knowledge graphs (completed 2026-02-28)
 - [x] **Phase 7: Edit Mode** - Transform viewer into editor: inline markdown editing with syntax highlighting, file persistence, undo/redo (completed 2026-02-28)
-- [ ] **Phase 8: Directory Browser** - Markdown explorer: list directory files, create index & graph UIs, free-text search navigation
+- [x] **Phase 8: Directory Browser** - Markdown explorer: list directory files, create index & graph UIs, free-text search navigation (completed 2026-03-01)
 
 ## Phase Details
 
@@ -159,15 +159,15 @@ Plans:
   3. User can search across all markdown files in the directory using free-text queries
   4. Search results show matching documents with context snippets and clickable navigation
   5. A dependency graph is visualized showing relationships between markdown files
-**Plans**: TBD (design phase in progress)
+**Plans**: 6/6 plans complete
 
-**Planned approach:**
-- Add directory-mode detection (no filepath provided, or explicit `--browse` flag)
-- Directory listing UI showing all .md files with preview snippets
-- Reuse Phase 6 index & graph for search functionality
-- Graph visualization in TUI (ASCII art or interactive node browser)
-- Search results pane with document navigation
-- Status transitions between file/directory/search/graph views
+Plans:
+- [x] 08-01-PLAN.md — Directory listing with metadata, file discovery, navigation
+- [x] 08-02-PLAN.md — Directory-file navigation with state save/restore and breadcrumb
+- [x] 08-03-PLAN.md — Cross-document search with BM25 index integration
+- [x] 08-04-PLAN.md — Search result snippets with context highlighting and navigation
+- [x] 08-05-PLAN.md — Graph visualization with ASCII art, level-based layout, list fallback
+- [x] 08-06-PLAN.md — Verification & polish: 55 tests, help docs, zero regressions
 
 ## Progress
 
@@ -183,8 +183,8 @@ Phases execute in numeric order: 1 → 2 → 3
 | 5. Enhanced UX & Images | 4/4 | Complete    | 2026-02-28 |
 | 6. Agent Intelligence & Knowledge Graphs | 6/6 | Complete   | 2026-02-28 |
 | 7. Edit Mode | 7/7 | Complete    | 2026-02-28 |
-| 8. Directory Browser | 5/6 | In Progress|  |
+| 8. Directory Browser | 6/6 | Complete   | 2026-03-01 |
 
-**Current Status: Phase 8 (Directory Browser) - Design & Planning**
+**Current Status: All 8 phases COMPLETE**
 **Previous Completion: All 7 phases complete (2026-02-28)**
-**Total Project Duration: 3 days (Phases 1-7)**
+**Total Project Duration: 4 days (Phases 1-8)**
