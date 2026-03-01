@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 
 ## Current Position
 
-Phase: 10 of 12 (Agent Output Contracts & Chunk-Level Search) — PLANNING
-Plan: Preparing Phase 10 based on PageIndex improvement plan
-Status: READY FOR PLANNING — All context prepared, YOLO mode authorized
-Last activity: 2026-03-01 — Phases 10-12 context prepared from bmd-improvement-plan.docx
+Phase: 11 of 12 (PageIndex Integration & Reasoning-Based Retrieval) — IN PROGRESS
+Plan: 2 of 3 complete (11-02 bmd context command delivered)
+Status: IN PROGRESS — Plans 11-01 and 11-02 complete, 11-03 remaining
+Last activity: 2026-03-01 — Phase 11 Plan 02 complete (bmd context command)
 
 Previous completion:
   - Phase 9 (Split-Pane Directory Browser): All 3 plans complete ✓
@@ -68,6 +68,7 @@ Progress: [███████████████████████
 | Phase 10-agent-contracts P01 | 4 | 3 tasks | 3 files |
 | Phase 10-agent-contracts P03 | 3 | 3 tasks | 1 files |
 | Phase 11-pageindex-integration P01 | 3 | 3 tasks | 6 files |
+| Phase 11-pageindex-integration P02 | 10 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -189,6 +190,9 @@ Recent decisions affecting current work:
 - [Phase 11-pageindex-integration]: BM25 runs first unconditionally; PageIndex tree generation appended after, so BM25 always succeeds even if PageIndex is unavailable
 - [Phase 11-pageindex-integration]: ErrPageIndexNotFound uses errors.Is-compatible wrapping for testability without real subprocess
 - [Phase 11-pageindex-integration]: Opt-in strategy flag: empty Strategy = BM25-only (zero-cost default), 'pageindex' triggers tree generation
+- [Phase 11-pageindex-integration]: BM25 fallback executes when no .bmd-tree.json files are present OR when RunPageIndexQuery fails — graceful degradation always wins
+- [Phase 11-pageindex-integration]: AssembleContextBlock uses § (U+00A7) as heading separator in context block citations; preamble sections (HeadingPath='') omit the § separator
+- [Phase 11-pageindex-integration]: bmd context --format json returns CONTRACT-01 ContractResponse envelope consistent with all other agent commands
 
 ### Pending Todos
 
