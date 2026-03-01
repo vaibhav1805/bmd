@@ -1562,17 +1562,7 @@ func (v Viewer) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
 		lineIdx := start + i
 		rowIdx := i + 2
 		if lineIdx < end {
-			line := previewLines[lineIdx]
-			// Truncate to rightWidth (ANSI codes make exact truncation hard, but approximate)
-			lineRunes := []rune(line)
-			if len(lineRunes) > rightWidth {
-				line = string(lineRunes[:rightWidth])
-			} else {
-				// Pad with spaces (don't pad if line has ANSI codes to avoid visual issues)
-				if !strings.Contains(line, "\x1b") {
-					line = line + strings.Repeat(" ", rightWidth-len(lineRunes))
-				}
-			}
+			line := ansiPadOrTruncate(previewLines[lineIdx], rightWidth)
 			rows[rowIdx] = line
 		} else {
 			rows[rowIdx] = strings.Repeat(" ", rightWidth)

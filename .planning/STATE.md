@@ -191,12 +191,15 @@ Status: All 9 phases complete + post-phase fixes applied, project PRODUCTION REA
 - **Split-pane preview styling**: Now uses viewer renderer for full markdown formatting
   * Files display with proper ANSI colors, bold/italic, syntax highlighting
   * Respects split-pane width and scroll offset
-  * Commit: 8651724
+  * Parses file → renders with theme → displays styled content
+  * Commits: 8651724 (main fix), 68e518d (compilation fix)
 - **Graph rendering fallback**: Added intelligent fallback from ASCII art to list view
-  * Detects when ASCII art produces minimal output
+  * Detects when ASCII art produces minimal output (< 2-3 lines)
   * Automatically switches to list fallback for better UX
   * Ensures graph view always displays node information
-  * Commit: 8651724
+  * List shows all nodes with in/out degree counts
+  * Commits: 8651724 (main fix), 68e518d (compilation fix)
+- **Test status**: All 289 TUI tests passing, zero regressions
 
 **Wave 1-2 Completion Summary (from earlier session):**
 
