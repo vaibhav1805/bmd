@@ -67,6 +67,7 @@ Progress: [███████████████████████
 | Phase 10-agent-contracts P02 | 22 | 3 tasks | 7 files |
 | Phase 10-agent-contracts P01 | 4 | 3 tasks | 3 files |
 | Phase 10-agent-contracts P03 | 3 | 3 tasks | 1 files |
+| Phase 11-pageindex-integration P01 | 3 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -185,6 +186,9 @@ Recent decisions affecting current work:
 - [Phase 10-agent-contracts]: classifyIndexError() maps error message content to INDEX_NOT_FOUND or INTERNAL_ERROR
 - [Phase 10-agent-contracts]: bmd-final and bmd-test added to .gitignore as named binary patterns — /bmd root-only pattern does not cover them
 - [Phase 10-agent-contracts]: *.bmd-index.json and *.bmd-tree.json added to .gitignore in anticipation of Phase 11 PageIndex outputs
+- [Phase 11-pageindex-integration]: BM25 runs first unconditionally; PageIndex tree generation appended after, so BM25 always succeeds even if PageIndex is unavailable
+- [Phase 11-pageindex-integration]: ErrPageIndexNotFound uses errors.Is-compatible wrapping for testability without real subprocess
+- [Phase 11-pageindex-integration]: Opt-in strategy flag: empty Strategy = BM25-only (zero-cost default), 'pageindex' triggers tree generation
 
 ### Pending Todos
 
