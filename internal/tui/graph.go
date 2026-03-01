@@ -17,8 +17,6 @@ import (
 // updateGraph handles keyboard input when graph view mode is active.
 // Arrow keys move selection; 'l'/Enter opens selected node's file; 'h'/Esc goes back.
 func (v Viewer) updateGraph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	order := v.graphState.NodeOrder
-	n := len(order)
 
 	switch msg.String() {
 	case "q", "ctrl+c":
@@ -33,29 +31,27 @@ func (v Viewer) updateGraph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v, nil
 
 	case "up", "k":
-		if n > 0 {
-			idx := graphIndexOfNode(order, v.graphState.SelectedNodeID)
-			if idx < 0 {
-				idx = 0
+		// Navigate to parent node (incoming)
+		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
+			incoming := v.graphState.Graph.GetIncoming(v.graphState.SelectedNodeID)
+			if len(incoming) > 0 {
+				v.graphState.SelectedNodeID = incoming[0].Source
 			}
-			idx = (idx - 1 + n) % n
-			v.graphState.SelectedNodeID = order[idx]
 		}
 		return v, nil
 
 	case "down", "j":
-		if n > 0 {
-			idx := graphIndexOfNode(order, v.graphState.SelectedNodeID)
-			if idx < 0 {
-				idx = 0
+		// Navigate to child node (outgoing)
+		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
+			outgoing := v.graphState.Graph.GetOutgoing(v.graphState.SelectedNodeID)
+			if len(outgoing) > 0 {
+				v.graphState.SelectedNodeID = outgoing[0].Target
 			}
-			idx = (idx + 1) % n
-			v.graphState.SelectedNodeID = order[idx]
 		}
 		return v, nil
 
 	case "left":
-		// Navigate to a parent node (first incoming edge source).
+		// Cycle to previous parent
 		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
 			incoming := v.graphState.Graph.GetIncoming(v.graphState.SelectedNodeID)
 			if len(incoming) > 0 {
@@ -65,7 +61,7 @@ func (v Viewer) updateGraph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v, nil
 
 	case "right":
-		// Navigate to a child node (first outgoing edge target).
+		// Cycle to next child
 		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
 			outgoing := v.graphState.Graph.GetOutgoing(v.graphState.SelectedNodeID)
 			if len(outgoing) > 0 {
@@ -163,14 +159,15 @@ func (v Viewer) renderGraphView(contentHeight int) string {
 	if len(g.Nodes) == 0 {
 		// Empty graph - show placeholder
 		sb.WriteString(renderGraphEmptyFallback(v.Width))
-	} else if len(g.Nodes) > 50 {
-		// For very large graphs (50+), use list view for performance
-		sb.WriteString(renderGraphListFallback(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
+	} else if v.graphState.SelectedNodeID != "" {
+		// Focused sub-graph view: show only selected node and adjacent nodes
+		sb.WriteString(renderFocusedSubgraph(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
 	} else {
-		// For now, use ASCII art (Kitty graphics through TUI framework doesn't render well)
-		// TODO: Future enhancement - save graph to temp file and display with native viewer
-		layout := forceDirectedLayout(g, v.Width, graphHeight)
-		sb.WriteString(renderGraphWithForceLayout(g, layout, v.graphState.SelectedNodeID, v.Width, graphHeight))
+		// No node selected, show first node as focus
+		if len(v.graphState.NodeOrder) > 0 {
+			v.graphState.SelectedNodeID = v.graphState.NodeOrder[0]
+			sb.WriteString(renderFocusedSubgraph(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
+		}
 	}
 
 	// Footer: show selected node details and key hints.
@@ -903,6 +900,66 @@ func graphIndexOfNode(order []string, nodeID string) int {
 		}
 	}
 	return -1
+}
+
+// renderFocusedSubgraph renders a focused view showing only the selected node and adjacent nodes.
+// This creates a clean, clutter-free graph view perfect for exploration.
+func renderFocusedSubgraph(g *knowledge.Graph, selectedNodeID string, width, height int) string {
+	var sb strings.Builder
+
+	selected := g.Nodes[selectedNodeID]
+	if selected == nil {
+		return "[Node not found]"
+	}
+
+	// Get adjacent nodes
+	incoming := g.GetIncoming(selectedNodeID)
+	outgoing := g.GetOutgoing(selectedNodeID)
+
+	// Render layout
+	lineWidth := width - 4
+
+	// Title
+	sb.WriteString(fmt.Sprintf("\n  \x1b[1;38;5;51m%s\x1b[0m\n", truncateLabel(selected.Title, lineWidth-4)))
+	sb.WriteString(fmt.Sprintf("  \x1b[38;5;244m[%d incoming, %d outgoing]\x1b[0m\n", len(incoming), len(outgoing)))
+	sb.WriteString(strings.Repeat("─", lineWidth) + "\n")
+
+	// Show incoming (parents/dependencies)
+	if len(incoming) > 0 {
+		sb.WriteString("\n  \x1b[38;5;244m← Incoming Dependencies:\x1b[0m\n")
+		for i, edge := range incoming {
+			parent := g.Nodes[edge.Source]
+			if parent != nil {
+				label := fmt.Sprintf("  [%d] %s", i+1, truncateLabel(parent.Title, lineWidth-8))
+				sb.WriteString(label + "\n")
+			}
+		}
+	}
+
+	// Show outgoing (children/dependents)
+	if len(outgoing) > 0 {
+		sb.WriteString("\n  \x1b[38;5;244m→ Outgoing Dependencies:\x1b[0m\n")
+		for i, edge := range outgoing {
+			child := g.Nodes[edge.Target]
+			if child != nil {
+				label := fmt.Sprintf("  [%d] %s", i+1, truncateLabel(child.Title, lineWidth-8))
+				sb.WriteString(label + "\n")
+			}
+		}
+	}
+
+	sb.WriteString("\n  \x1b[38;5;244m[↑/↓] Navigate  [→/←] Explore  [e] Export  [?] Help\x1b[0m\n")
+
+	return sb.String()
+}
+
+// truncateLabel shortens a label to fit within max width.
+func truncateLabel(label string, maxWidth int) string {
+	runes := []rune(label)
+	if len(runes) <= maxWidth {
+		return label
+	}
+	return string(runes[:maxWidth-3]) + "..."
 }
 
 // saveGraphImage saves PNG data to a temporary file and returns the path.
