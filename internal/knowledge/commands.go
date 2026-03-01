@@ -332,11 +332,18 @@ func CmdIndex(args []string) error {
 }
 
 // CmdQuery implements `bmd query TERM`.  It loads the index from the database
-// and executes a BM25 search, printing results in the requested format.
+// and executes a BM25 search (default) or a PageIndex semantic search
+// (--strategy pageindex), printing results in the requested format.
 func CmdQuery(args []string) error {
 	a, err := ParseQueryArgs(args)
 	if err != nil {
 		return err
+	}
+
+	// Route to pageindex strategy when requested.
+	usePageIndex := strings.ToLower(a.Strategy) == "pageindex"
+	if usePageIndex {
+		return cmdQueryPageIndex(a)
 	}
 
 	isJSON := strings.ToLower(a.Format) == "json"
@@ -432,6 +439,119 @@ func CmdQuery(args []string) error {
 	}
 	payload := searchResponseJSON{
 		Query:       a.Query,
+		Results:     items,
+		Count:       len(items),
+		QueryTimeMs: queryTimeMs,
+	}
+	fmt.Println(marshalContract(NewOKResponse("Search completed", payload)))
+	return nil
+}
+
+// cmdQueryPageIndex executes `bmd query` with strategy=pageindex.
+// It loads .bmd-tree.json files from absDir, calls RunPageIndexQuery,
+// and returns results wrapped in a CONTRACT-01 envelope with reasoning_trace
+// fields per result.
+//
+// Graceful fallback paths:
+//   - No .bmd-tree.json files → INDEX_NOT_FOUND error
+//   - pageindex binary not found → PAGEINDEX_NOT_AVAILABLE error
+func cmdQueryPageIndex(a *QueryArgs) error {
+	isJSON := strings.ToLower(a.Format) == "json"
+
+	absDir, err := filepath.Abs(a.Dir)
+	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
+		return fmt.Errorf("query: resolve dir: %w", err)
+	}
+
+	start := time.Now()
+
+	// Load tree files.
+	trees, err := LoadTreeFiles(absDir)
+	if err != nil || len(trees) == 0 {
+		msg := "No .bmd-tree.json files found. Run: bmd index --strategy pageindex"
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeIndexNotFound, msg)))
+			return nil
+		}
+		fmt.Fprintln(os.Stderr, msg)
+		return nil
+	}
+
+	cfg := PageIndexConfig{
+		ExecutablePath: "pageindex",
+		Model:          a.Model,
+	}
+
+	sections, err := RunPageIndexQuery(cfg, a.Query, trees, a.Top)
+	if err != nil {
+		if errors.Is(err, ErrPageIndexNotFound) {
+			msg := "pageindex CLI not found. Install via: pip install pageindex"
+			if isJSON {
+				fmt.Println(marshalContract(NewErrorResponse(ErrCodePageIndexNotAvailable, msg)))
+				return nil
+			}
+			return fmt.Errorf("%s", msg)
+		}
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
+		return fmt.Errorf("query: pageindex: %w", err)
+	}
+
+	queryTimeMs := time.Since(start).Milliseconds()
+
+	if !isJSON {
+		// Text output for pageindex strategy.
+		if len(sections) == 0 {
+			fmt.Println("No results found.")
+			return nil
+		}
+		for i, s := range sections {
+			fmt.Printf("%d. %s", i+1, s.File)
+			if s.HeadingPath != "" {
+				fmt.Printf(" \u00a7 %s", s.HeadingPath)
+			}
+			fmt.Printf(" (score: %.4f)\n", s.Score)
+			if s.ReasoningTrace != "" {
+				fmt.Printf("   Reasoning: %s\n", s.ReasoningTrace)
+			}
+		}
+		return nil
+	}
+
+	// JSON path: build pageindexResponseJSON wrapped in ContractResponse.
+	if len(sections) == 0 {
+		fmt.Println(marshalContract(NewEmptyResponse("No results found", pageindexResponseJSON{
+			Query:       a.Query,
+			Strategy:    "pageindex",
+			Model:       a.Model,
+			Results:     []reasoningResultJSON{},
+			Count:       0,
+			QueryTimeMs: queryTimeMs,
+		})))
+		return nil
+	}
+
+	items := make([]reasoningResultJSON, len(sections))
+	for i, s := range sections {
+		items[i] = reasoningResultJSON{
+			Rank:           i + 1,
+			File:           s.File,
+			HeadingPath:    s.HeadingPath,
+			ContentPreview: s.Content,
+			Score:          roundFloat(s.Score, 4),
+			ReasoningTrace: s.ReasoningTrace,
+		}
+	}
+	payload := pageindexResponseJSON{
+		Query:       a.Query,
+		Strategy:    "pageindex",
+		Model:       a.Model,
 		Results:     items,
 		Count:       len(items),
 		QueryTimeMs: queryTimeMs,
