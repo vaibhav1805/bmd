@@ -1,7 +1,11 @@
 package knowledge
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -100,6 +104,79 @@ func collapseWhitespace(s string) string {
 		}
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// ErrPageIndexNotAvailable is returned by SearchAllDocumentsPageIndex when no
+// .bmd-tree.json files are found in the directory — indicating PageIndex has
+// not been run yet.  Callers should fall back to BM25.
+var ErrPageIndexNotAvailable = errors.New("pageindex trees not found; run 'bmd index --strategy pageindex' first")
+
+// SearchAllDocumentsPageIndex searches across all documents using PageIndex
+// semantic search.  It loads .bmd-tree.json files from dir/.bmd/trees/, then
+// calls RunPageIndexQuery to rank results by semantic relevance.
+//
+// Returns ErrPageIndexNotAvailable when no tree files exist (caller should
+// fall back to BM25).  Returns ErrPageIndexNotFound (wrapped) when the
+// pageindex binary is absent.
+//
+// Results are converted to SearchResult format with Score populated from the
+// PageIndex confidence score, sorted descending.
+func SearchAllDocumentsPageIndex(dir, query string, limit int) ([]SearchResult, error) {
+	if query == "" {
+		return []SearchResult{}, nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+
+	trees, err := LoadTreeFiles(dir)
+	if err != nil {
+		return nil, fmt.Errorf("SearchAllDocumentsPageIndex: load trees: %w", err)
+	}
+	if len(trees) == 0 {
+		return nil, ErrPageIndexNotAvailable
+	}
+
+	cfg := DefaultPageIndexConfig()
+	sections, err := RunPageIndexQuery(cfg, query, trees, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]SearchResult, 0, len(sections))
+	for _, s := range sections {
+		// Resolve absolute path from the file field in the tree section.
+		absPath := s.File
+		if !filepath.IsAbs(absPath) {
+			absPath = filepath.Join(dir, s.File)
+		}
+		relPath := s.File
+
+		// Build a snippet from the section content (first 200 chars).
+		snippet := collapseWhitespace(s.Content)
+		if len([]rune(snippet)) > 200 {
+			snippet = string([]rune(snippet)[:200]) + "..."
+		}
+
+		results = append(results, SearchResult{
+			DocID:          absPath + "#" + s.HeadingPath,
+			Path:           absPath,
+			RelPath:        relPath,
+			Title:          s.HeadingPath,
+			Score:          s.Score,
+			Snippet:        snippet,
+			MatchCount:     1,
+			HeadingPath:    s.HeadingPath,
+			ContentPreview: snippet,
+		})
+	}
+
+	// Sort descending by score (PageIndex may already sort, but be explicit).
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+
+	return results, nil
 }
 
 // SearchAllDocuments loads the BM25 index from rootPath (building it if missing)

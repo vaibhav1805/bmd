@@ -3161,20 +3161,31 @@ func min(a, b int) int {
 	return b
 }
 
-// SearchAllFiles executes a BM25 cross-document search across all markdown
-// files in the viewer's startDir. It delegates to knowledge.SearchAllDocuments
-// which loads (or builds) the Phase 6 index and executes the query.
+// SearchAllFiles executes a cross-document search across all markdown files in
+// the viewer's startDir.  The search strategy is determined by the BMD_STRATEGY
+// environment variable:
 //
-// Results are already sorted by BM25 score descending by the knowledge layer.
+//   - "pageindex": use PageIndex semantic search (falls back to BM25 if trees
+//     are missing or the pageindex binary is not found).
+//   - "bm25" or "" (default): use BM25 keyword search.
+//
+// Returns the results, the strategy actually used, and any error.
 func (v *Viewer) SearchAllFiles(query string) ([]knowledge.SearchResult, string, error) {
-	// Determine which strategy to use (check environment variable, default to bm25)
 	strategy := os.Getenv("BMD_STRATEGY")
 	if strategy == "" {
 		strategy = "bm25"
 	}
 
-	// Currently the UI viewer only supports BM25 search through SearchAllDocuments
-	// Strategy tracking is for display purposes; actual semantic search via CLI commands
+	if strategy == "pageindex" {
+		results, err := knowledge.SearchAllDocumentsPageIndex(v.startDir, query, 50)
+		if err != nil {
+			// Fall back to BM25 when trees are missing or binary not found.
+			fallbackResults, fallbackErr := knowledge.SearchAllDocuments(v.startDir, query, 50)
+			return fallbackResults, "bm25", fallbackErr
+		}
+		return results, "pageindex", nil
+	}
+
 	results, err := knowledge.SearchAllDocuments(v.startDir, query, 50)
 	return results, strategy, err
 }
