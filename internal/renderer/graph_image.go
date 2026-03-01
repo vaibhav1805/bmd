@@ -10,7 +10,7 @@ import (
 )
 
 // GraphToDOT generates a Graphviz DOT representation of a knowledge graph.
-// This can be piped to 'dot' or 'neato' to generate PNG/SVG.
+// Uses hierarchical layout (rankdir=LR) for clean, organized visualization.
 func GraphToDOT(g *knowledge.Graph) string {
 	if g == nil || len(g.Nodes) == 0 {
 		return ""
@@ -20,8 +20,10 @@ func GraphToDOT(g *knowledge.Graph) string {
 	dot.WriteString("digraph G {\n")
 	dot.WriteString("  rankdir=LR;\n")
 	dot.WriteString("  bgcolor=\"#1e1e2e\";\n")
-	dot.WriteString("  node [shape=box, style=\"rounded,filled\", fillcolor=\"#45475a\", fontcolor=\"#cdd6f4\", fontname=\"monospace\"];\n")
-	dot.WriteString("  edge [color=\"#45475a\"];\n\n")
+	dot.WriteString("  nodesep=0.5;\n")
+	dot.WriteString("  ranksep=0.75;\n")
+	dot.WriteString("  node [shape=box, style=\"rounded,filled\", fillcolor=\"#45475a\", fontcolor=\"#cdd6f4\", fontname=\"monospace\", width=2, height=0.6];\n")
+	dot.WriteString("  edge [color=\"#45475a\", penwidth=1.5, arrowsize=0.8];\n\n")
 
 	// Add nodes
 	for id, node := range g.Nodes {
