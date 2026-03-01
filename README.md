@@ -39,11 +39,6 @@ mkdir -p ~/.local/bin && mv bmd ~/.local/bin/
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-**Or use Homebrew (if published):**
-```bash
-brew install bmd
-```
-
 ### For Agents (Complete Setup)
 
 If you're using bmd with AI agents or documentation automation:
