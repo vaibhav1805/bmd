@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -114,14 +115,16 @@ func (v Viewer) renderGraphView(contentHeight int) string {
 		graphHeight = 1
 	}
 
-	// For any graph, prefer list view for reliable display of all nodes
-	// ASCII art can fail to render properly when space is limited or layout is complex
-	if len(g.Nodes) > 0 {
-		// Use list fallback which always shows all nodes clearly
-		sb.WriteString(renderGraphListFallback(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
-	} else {
+	if len(g.Nodes) == 0 {
 		// Empty graph - show placeholder
 		sb.WriteString(renderGraphEmptyFallback(v.Width))
+	} else if len(g.Nodes) > 50 {
+		// For very large graphs (50+), use list view for performance
+		sb.WriteString(renderGraphListFallback(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
+	} else {
+		// For smaller graphs, use force-directed layout with ASCII art
+		layout := forceDirectedLayout(g, v.Width, graphHeight)
+		sb.WriteString(renderGraphWithForceLayout(g, layout, v.graphState.SelectedNodeID, v.Width, graphHeight))
 	}
 
 	// Footer: show selected node details and key hints.
@@ -217,6 +220,378 @@ func computeNodeLayout(g *knowledge.Graph) map[string][2]int {
 		}
 	}
 	return layout
+}
+
+// Vector2 is a simple 2D vector type for force simulations
+type Vector2 struct {
+	X float64
+	Y float64
+}
+
+// forceDirectedLayout computes node positions using a spring-physics simulation.
+// Nodes repel each other, edges attract their endpoints.
+// Returns a map of nodeID -> [x, y] positions suitable for rendering.
+func forceDirectedLayout(g *knowledge.Graph, width, height int) map[string][2]float64 {
+	if g == nil || len(g.Nodes) == 0 {
+		return nil
+	}
+
+	// Parameters for the force simulation
+	const (
+		iterations        = 40
+		springLength      = 80.0 // Natural length of edges
+		springForce       = 0.1  // Spring attraction constant
+		repulsionStrength = 5000.0 // Node repulsion constant
+		damping           = 0.8    // Velocity damping per iteration
+		minForce          = 0.01   // Convergence threshold
+	)
+
+	// Initialize positions randomly (seeded by node ID for determinism)
+	pos := make(map[string]Vector2)
+	vel := make(map[string]Vector2)
+
+	for id := range g.Nodes {
+		// Deterministic seed based on node ID
+		hash := hashString(id)
+		x := float64(int(hash)%width) * 0.8
+		y := float64(int(hash/1000)%height) * 0.8
+		pos[id] = Vector2{x + float64(width) * 0.1, y + float64(height) * 0.1}
+		vel[id] = Vector2{0, 0}
+	}
+
+	// Iterative force simulation
+	for iter := 0; iter < iterations; iter++ {
+		// Reset forces
+		forces := make(map[string]Vector2)
+		for id := range g.Nodes {
+			forces[id] = Vector2{0, 0}
+		}
+
+		// Repulsive forces between all node pairs
+		nodeIDs := make([]string, 0, len(g.Nodes))
+		for id := range g.Nodes {
+			nodeIDs = append(nodeIDs, id)
+		}
+
+		for i, id1 := range nodeIDs {
+			for _, id2 := range nodeIDs[i+1:] {
+				p1 := pos[id1]
+				p2 := pos[id2]
+
+				dx := p2.X - p1.X
+				dy := p2.Y - p1.Y
+				dist := math.Sqrt(dx*dx + dy*dy)
+				if dist < 1 {
+					dist = 1
+				}
+
+				// Repulsive force magnitude
+				forceMag := repulsionStrength / (dist * dist)
+				fx := (forceMag * dx) / dist
+				fy := (forceMag * dy) / dist
+
+				f1 := forces[id1]
+				f1.X -= fx
+				f1.Y -= fy
+				forces[id1] = f1
+
+				f2 := forces[id2]
+				f2.X += fx
+				f2.Y += fy
+				forces[id2] = f2
+			}
+		}
+
+		// Attractive forces along edges
+		for _, edge := range g.Edges {
+			p1 := pos[edge.Source]
+			p2 := pos[edge.Target]
+
+			dx := p2.X - p1.X
+			dy := p2.Y - p1.Y
+			dist := math.Sqrt(dx*dx + dy*dy)
+			if dist < 1 {
+				dist = 1
+			}
+
+			// Spring force magnitude
+			forceMag := springForce * (dist - springLength)
+			fx := (forceMag * dx) / dist
+			fy := (forceMag * dy) / dist
+
+			f1 := forces[edge.Source]
+			f1.X += fx
+			f1.Y += fy
+			forces[edge.Source] = f1
+
+			f2 := forces[edge.Target]
+			f2.X -= fx
+			f2.Y -= fy
+			forces[edge.Target] = f2
+		}
+
+		// Update velocities and positions
+		maxForce := 0.0
+		for id := range g.Nodes {
+			f := forces[id]
+			forceMag := math.Sqrt(f.X*f.X + f.Y*f.Y)
+			if forceMag > maxForce {
+				maxForce = forceMag
+			}
+
+			// Update velocity with damping
+			v := vel[id]
+			v.X = (v.X + f.X) * damping
+			v.Y = (v.Y + f.Y) * damping
+			vel[id] = v
+
+			// Update position
+			p := pos[id]
+			p.X += v.X
+			p.Y += v.Y
+
+			// Keep within bounds
+			if p.X < 0 {
+				p.X = 0
+				v.X = 0
+			}
+			if p.X > float64(width) {
+				p.X = float64(width)
+				v.X = 0
+			}
+			if p.Y < 0 {
+				p.Y = 0
+				v.Y = 0
+			}
+			if p.Y > float64(height) {
+				p.Y = float64(height)
+				v.Y = 0
+			}
+			pos[id] = p
+			vel[id] = v
+		}
+
+		// Check for convergence
+		if maxForce < minForce {
+			break
+		}
+	}
+
+	// Convert to output format
+	result := make(map[string][2]float64)
+	for id, p := range pos {
+		result[id] = [2]float64{p.X, p.Y}
+	}
+	return result
+}
+
+// hashString returns a deterministic integer hash of a string
+func hashString(s string) uint32 {
+	h := uint32(0)
+	for _, c := range s {
+		h = h*31 + uint32(c)
+	}
+	return h
+}
+
+// renderGraphWithForceLayout renders a force-directed graph on a character grid.
+// Positions are in floating-point coordinates from the layout algorithm.
+func renderGraphWithForceLayout(g *knowledge.Graph, layout map[string][2]float64, selectedNodeID string, width, height int) string {
+	if g == nil || len(g.Nodes) == 0 {
+		return ""
+	}
+
+	// Determine the grid dimensions.
+	minX, maxX, minY, maxY := 0.0, float64(width), 0.0, float64(height)
+	for _, pos := range layout {
+		if pos[0] < minX {
+			minX = pos[0]
+		}
+		if pos[0] > maxX {
+			maxX = pos[0]
+		}
+		if pos[1] < minY {
+			minY = pos[1]
+		}
+		if pos[1] > maxY {
+			maxY = pos[1]
+		}
+	}
+
+	// Add padding
+	rangeX := maxX - minX
+	rangeY := maxY - minY
+	if rangeX < 1 {
+		rangeX = 1
+	}
+	if rangeY < 1 {
+		rangeY = 1
+	}
+	minX -= rangeX * 0.1
+	maxX += rangeX * 0.1
+	minY -= rangeY * 0.1
+	maxY += rangeY * 0.1
+
+	gridW := width
+	gridH := height
+
+	// Allocate the character grid.
+	grid := make([][]rune, gridH)
+	for i := range grid {
+		grid[i] = make([]rune, gridW)
+		for j := range grid[i] {
+			grid[i][j] = ' '
+		}
+	}
+
+	// Helper to set a rune at (x, y) safely.
+	set := func(x, y int, r rune) {
+		if y >= 0 && y < gridH && x >= 0 && x < gridW {
+			grid[y][x] = r
+		}
+	}
+	setStr := func(x, y int, s string) {
+		for i, r := range []rune(s) {
+			set(x+i, y, r)
+		}
+	}
+
+	// Convert normalized positions to screen coordinates
+	nodePos := make(map[string][2]int)
+	for id, pos := range layout {
+		// Normalize to 0-1 range, then scale to grid
+		normX := (pos[0] - minX) / (maxX - minX)
+		normY := (pos[1] - minY) / (maxY - minY)
+		if normX < 0 {
+			normX = 0
+		}
+		if normX > 1 {
+			normX = 1
+		}
+		if normY < 0 {
+			normY = 0
+		}
+		if normY > 1 {
+			normY = 1
+		}
+
+		sx := int(normX * float64(gridW-18))
+		sy := int(normY * float64(gridH-3))
+		nodePos[id] = [2]int{sx, sy}
+	}
+
+	const nodeBoxWidth = 14
+	const nodeBoxHeight = 3
+
+	// Draw edges first (so nodes render on top).
+	for _, edge := range g.Edges {
+		srcPos, srcOK := nodePos[edge.Source]
+		dstPos, dstOK := nodePos[edge.Target]
+		if !srcOK || !dstOK {
+			continue
+		}
+
+		// Bresenham line drawing
+		x0, y0 := srcPos[0]+nodeBoxWidth, srcPos[1]+1
+		x1, y1 := dstPos[0], dstPos[1]+1
+
+		// Clamp endpoints
+		if x0 < 0 {
+			x0 = 0
+		}
+		if x0 >= gridW {
+			x0 = gridW - 1
+		}
+		if x1 < 0 {
+			x1 = 0
+		}
+		if x1 >= gridW {
+			x1 = gridW - 1
+		}
+
+		dx := x1 - x0
+		dy := y1 - y0
+		steps := dx
+		if dy < 0 {
+			dy = -dy
+		}
+		if dy > steps {
+			steps = dy
+		}
+		if steps == 0 {
+			steps = 1
+		}
+
+		for i := 0; i <= steps; i++ {
+			x := x0 + (dx * i / steps)
+			y := y0 + (dy * i / steps)
+			if i == steps && x1 < x0+nodeBoxWidth {
+				set(x, y, '→')
+			} else if i > 0 && i < steps {
+				if dx != 0 && (i%3 == 0) {
+					set(x, y, '─')
+				} else if dy != 0 && (i%2 == 0) {
+					set(x, y, '│')
+				}
+			}
+		}
+	}
+
+	// Draw nodes on top of edges.
+	for id, pos := range nodePos {
+		sx := pos[0]
+		sy := pos[1]
+
+		node := g.Nodes[id]
+		label := nodeLabel(node)
+
+		// Truncate label to fit in box.
+		maxLabel := nodeBoxWidth - 4
+		if len([]rune(label)) > maxLabel {
+			label = string([]rune(label)[:maxLabel-1]) + "…"
+		}
+
+		// Draw box borders.
+		setStr(sx, sy, "┌"+strings.Repeat("─", nodeBoxWidth-2)+"┐")
+		padding := nodeBoxWidth - 2 - len([]rune(label))
+		leftPad := padding / 2
+		rightPad := padding - leftPad
+		setStr(sx, sy+1, "│"+strings.Repeat(" ", leftPad)+label+strings.Repeat(" ", rightPad)+"│")
+		setStr(sx, sy+2, "└"+strings.Repeat("─", nodeBoxWidth-2)+"┘")
+	}
+
+	// Convert grid to string, applying ANSI highlight to selected node.
+	var sb strings.Builder
+	if selectedNodeID != "" {
+		if pos, ok := nodePos[selectedNodeID]; ok {
+			selSY := pos[1]
+			selEY := pos[1] + 2
+
+			for y := 0; y < gridH; y++ {
+				line := strings.TrimRight(string(grid[y]), " ")
+				if y >= selSY && y <= selEY {
+					sb.WriteString("\x1b[7m" + line + "\x1b[m")
+				} else {
+					sb.WriteString(line)
+				}
+				sb.WriteString("\n")
+			}
+		} else {
+			for y := 0; y < gridH; y++ {
+				line := strings.TrimRight(string(grid[y]), " ")
+				sb.WriteString(line)
+				sb.WriteString("\n")
+			}
+		}
+	} else {
+		for y := 0; y < gridH; y++ {
+			line := strings.TrimRight(string(grid[y]), " ")
+			sb.WriteString(line)
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String()
 }
 
 // RenderGraphASCII renders the graph as ASCII art.
