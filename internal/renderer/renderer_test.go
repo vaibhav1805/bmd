@@ -196,7 +196,56 @@ func TestRenderImage(t *testing.T) {
 func TestImageProtocolDetection(t *testing.T) {
 	protocol := DetectImageProtocol()
 	// Just verify it returns a valid value
-	if protocol < 0 || protocol > 3 {
+	if protocol < 0 || protocol > 4 {
 		t.Errorf("DetectImageProtocol returned invalid value: %d", protocol)
 	}
+}
+
+// TestSixelAvailable checks if Sixel availability detection works.
+func TestSixelAvailable(t *testing.T) {
+	available := SixelAvailable()
+	// Should return bool without panicking
+	_ = available
+}
+
+// TestImageToSixel verifies Sixel conversion handling.
+func TestImageToSixel(t *testing.T) {
+	// Test with empty data
+	result := ImageToSixel([]byte{}, 40, 10)
+	if result != "" {
+		t.Errorf("ImageToSixel with empty data should return empty string, got: %q", result)
+	}
+
+	// Test with dummy image data (will fail if convert not available, but shouldn't panic)
+	dummyData := []byte{0x89, 0x50, 0x4E, 0x47} // PNG header
+	result = ImageToSixel(dummyData, 40, 10)
+	// Result should be either Sixel data or fallback message, never empty with non-empty input
+	if result == "" {
+		t.Errorf("ImageToSixel should return non-empty result for non-empty input")
+	}
+}
+
+// TestProtocolCapabilities verifies human-readable capability strings.
+func TestProtocolCapabilities(t *testing.T) {
+	caps := ProtocolCapabilities()
+	if caps == "" {
+		t.Errorf("ProtocolCapabilities should return non-empty string")
+	}
+	if !strings.Contains(caps, "protocol") && !strings.Contains(caps, "support") && !strings.Contains(caps, "fallback") {
+		t.Errorf("ProtocolCapabilities should describe a protocol or fallback, got: %q", caps)
+	}
+}
+
+// TestConvertImageToSixel verifies the conversion helper.
+func TestConvertImageToSixel(t *testing.T) {
+	// Test with empty data
+	result := ConvertImageToSixel([]byte{})
+	if result != "" {
+		t.Errorf("ConvertImageToSixel with empty data should return empty string, got: %q", result)
+	}
+
+	// Test with invalid image data (should fail gracefully)
+	result = ConvertImageToSixel([]byte{0xFF, 0xFE, 0xFD})
+	// Should return empty string if convert fails or not available
+	_ = result
 }

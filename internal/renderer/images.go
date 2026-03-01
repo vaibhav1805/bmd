@@ -1,9 +1,11 @@
 package renderer
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -65,10 +67,15 @@ func DetectImageProtocol() ImageProtocol {
 		return ProtocolKitty
 	}
 
-	// Sixel support
+	// Sixel support (only if convert is available)
 	if strings.Contains(term, "sixel") {
-		// fmt.Fprintf(os.Stderr, "[DEBUG] → Sixel\n")
-		return ProtocolSixel
+		if SixelAvailable() {
+			// fmt.Fprintf(os.Stderr, "[DEBUG] → Sixel\n")
+			return ProtocolSixel
+		}
+		// Terminal claims Sixel but convert not available, fall back to Kitty
+		// fmt.Fprintf(os.Stderr, "[DEBUG] → Sixel claimed but convert unavailable, using Kitty fallback\n")
+		return ProtocolKitty
 	}
 
 	// xterm-256color on macOS likely means Terminal.app (which doesn't support images)
@@ -181,12 +188,49 @@ func ImageToKitty(imageData []byte, width, height int) string {
 	return payload + "\n"
 }
 
-// ImageToSixel converts image data to Sixel format (placeholder).
-// Sixel encoding is complex; for Phase 5, this returns a placeholder or uses an external tool.
+// ImageToSixel converts image data to Sixel format using ImageMagick's convert command.
+// If convert is not available, returns a placeholder with fallback instructions.
 func ImageToSixel(imageData []byte, width, height int) string {
-	// For Phase 5, Sixel support is optional; can use an external tool like "convert" from ImageMagick
-	// or return a placeholder: "[Sixel image would render here]"
-	return "[Image (Sixel format) would render here]"
+	if len(imageData) == 0 {
+		return ""
+	}
+
+	// Try to use ImageMagick convert to generate Sixel format
+	cmd := exec.Command("convert", "-", "sixel:-")
+	cmd.Stdin = bytes.NewReader(imageData)
+
+	output, err := cmd.Output()
+	if err != nil {
+		// convert command not available or failed
+		// Return a helpful message that guides user to install ImageMagick
+		return "[Image (Sixel format) - install ImageMagick for full rendering]"
+	}
+
+	return string(output)
+}
+
+// ConvertImageToSixel is a helper that tries to convert image data to Sixel.
+// Returns the Sixel sequence, or empty string if conversion fails or convert is unavailable.
+func ConvertImageToSixel(imageData []byte) string {
+	if len(imageData) == 0 {
+		return ""
+	}
+
+	cmd := exec.Command("convert", "-", "-depth", "8", "-colors", "256", "sixel:-")
+	cmd.Stdin = bytes.NewReader(imageData)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	return string(output)
+}
+
+// SixelAvailable checks if ImageMagick's convert command is available for Sixel rendering.
+func SixelAvailable() bool {
+	cmd := exec.Command("which", "convert")
+	return cmd.Run() == nil
 }
 
 // ImageToUnicode generates a Unicode block character representation of the image.
@@ -251,4 +295,41 @@ func SaveImageTemp(data []byte, hint string) string {
 	}
 	// fmt.Fprintf(os.Stderr, "[DEBUG] Saved image to: %s\n", tmpFile)
 	return tmpFile
+}
+
+// ProtocolCapabilities returns a human-readable string describing image protocol support.
+// Useful for help text and diagnostics.
+func ProtocolCapabilities() string {
+	protocol := DetectImageProtocol()
+
+	switch protocol {
+	case ProtocolKitty:
+		return "Kitty graphics protocol (best for Kitty, Alacritty, WezTerm)"
+	case ProtocolITerm2:
+		return "iTerm2 inline images (native macOS Terminal and iTerm2)"
+	case ProtocolSixel:
+		if SixelAvailable() {
+			return "Sixel graphics (with ImageMagick convert)"
+		}
+		return "Sixel terminal detected (but ImageMagick 'convert' not found - install imagemagick)"
+	case ProtocolUnicode:
+		return "Unicode/emoji fallback (works everywhere, limited quality)"
+	case ProtocolNone:
+		return "No image support (text fallback only)"
+	default:
+		return "Unknown image protocol"
+	}
+}
+
+// RequiredForSixel returns installation instructions if Sixel is desired but unavailable.
+func RequiredForSixel() string {
+	if SixelAvailable() {
+		return ""
+	}
+
+	return "To enable Sixel graphics, install ImageMagick:\n" +
+		"  macOS: brew install imagemagick\n" +
+		"  Ubuntu: sudo apt-get install imagemagick\n" +
+		"  Alpine: apk add imagemagick\n" +
+		"  Or: https://imagemagick.org/script/download.php"
 }

@@ -143,7 +143,7 @@ bmd services
 - 📤 **Multiple formats** — JSON, text, CSV, Graphviz output
 
 **Terminal & Display:**
-- 🌐 **Image rendering** — Terminal image support (iTerm2, Kitty, Alacritty)
+- 🌐 **Image rendering** — Terminal image support (iTerm2, Kitty, Alacritty, Sixel with ImageMagick)
 - ⌨️ **Vim keybindings** — Familiar shortcuts for efficient navigation
 - 📂 **Directory browser** — *(Beta)* Browse and search markdown files in split-pane view
 - 🚀 **Zero dependencies** — Pure Go stdlib, single binary
@@ -902,12 +902,19 @@ echo $TERM
 TERM=xterm-256color bmd file.md
 
 # Try different image protocols
-export BMD_IMAGE_PROTOCOL="kitty"    # For Kitty terminal
-export BMD_IMAGE_PROTOCOL="sixel"    # For xterm/mlterm
+export BMD_IMAGE_PROTOCOL="kitty"    # For Kitty terminal (best)
+export BMD_IMAGE_PROTOCOL="sixel"    # For xterm/mlterm (requires ImageMagick)
 export BMD_IMAGE_PROTOCOL="unicode"  # Fallback (ASCII art)
+
+# For Sixel support, install ImageMagick
+sudo apt install imagemagick              # Debian/Ubuntu
+sudo dnf install imagemagick              # Fedora
+brew install imagemagick                  # macOS
+apk add imagemagick                       # Alpine
 
 # Verify terminal supports images
 # For Kitty: kitty --version
+# For Sixel: which convert (checks for ImageMagick)
 # For xterm: printf '\033P0@0+256;400;300#1\033\\'  (should display or error)
 ```
 
