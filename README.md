@@ -144,6 +144,7 @@ bmd services
 
 **Terminal & Display:**
 - 🌐 **Image rendering** — Terminal image support (iTerm2, Kitty, Alacritty, Sixel with ImageMagick)
+- 📊 **Native graph visualization** — Dependency graphs as native graphics (Graphviz) or ASCII art fallback
 - ⌨️ **Vim keybindings** — Familiar shortcuts for efficient navigation
 - 📂 **Directory browser** — *(Beta)* Browse and search markdown files in split-pane view
 - 🚀 **Zero dependencies** — Pure Go stdlib, single binary
@@ -916,6 +917,22 @@ apk add imagemagick                       # Alpine
 # For Kitty: kitty --version
 # For Sixel: which convert (checks for ImageMagick)
 # For xterm: printf '\033P0@0+256;400;300#1\033\\'  (should display or error)
+```
+
+#### Graph visualization showing ASCII instead of graphics
+
+```bash
+# To enable native graph graphics (Sixel/Kitty), install Graphviz
+brew install graphviz            # macOS
+sudo apt install graphviz        # Debian/Ubuntu
+sudo dnf install graphviz        # Fedora
+apk add graphviz                 # Alpine
+
+# Verify installation
+which dot  # Should print the dot executable path
+
+# For best results on Alacritty
+export TERM=xterm-256color  # Ensure proper terminal detection
 ```
 
 #### PageIndex subprocess errors on Linux

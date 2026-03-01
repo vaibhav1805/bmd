@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/bmd/bmd/internal/knowledge"
+	"github.com/bmd/bmd/internal/renderer"
 )
 
 // updateGraph handles keyboard input when graph view mode is active.
@@ -143,9 +144,16 @@ func (v Viewer) renderGraphView(contentHeight int) string {
 		// For very large graphs (50+), use list view for performance
 		sb.WriteString(renderGraphListFallback(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
 	} else {
-		// For smaller graphs, use force-directed layout with ASCII art
-		layout := forceDirectedLayout(g, v.Width, graphHeight)
-		sb.WriteString(renderGraphWithForceLayout(g, layout, v.graphState.SelectedNodeID, v.Width, graphHeight))
+		// Try rendering as native graphics (Sixel/Kitty) if available
+		imageResult := renderer.RenderGraphAsImage(g, v.Width, graphHeight)
+		if imageResult != "" {
+			// Successfully rendered as image
+			sb.WriteString(imageResult)
+		} else {
+			// Fallback to force-directed layout with ASCII art
+			layout := forceDirectedLayout(g, v.Width, graphHeight)
+			sb.WriteString(renderGraphWithForceLayout(g, layout, v.graphState.SelectedNodeID, v.Width, graphHeight))
+		}
 	}
 
 	// Footer: show selected node details and key hints.
