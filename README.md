@@ -89,6 +89,22 @@ export PATH="$HOME/.local/bin:$PATH"
 # View/edit markdown files with beautiful rendering
 bmd README.md        # View mode
 # Press 'e' to enter edit mode
+
+# Configure search strategy (default: BM25)
+export BMD_STRATEGY="bm25"      # Fast keyword search
+export BMD_STRATEGY="pageindex" # Semantic search with LLM reasoning
+
+# Index your documentation (one-time setup for better search)
+bmd index ./docs                    # Build BM25 index
+bmd index ./docs --strategy pageindex  # Build with semantic trees
+
+# Search within document (while viewing)
+bmd README.md
+# Press '/' to search within the file, or Ctrl+F in edit mode
+
+# Search across all markdown files in directory
+bmd query "topic" --dir ./docs              # BM25 keyword search
+bmd query "how do we..." --dir ./docs --strategy pageindex  # Semantic search
 ```
 
 ### As an Agent Tool
