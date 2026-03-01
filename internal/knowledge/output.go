@@ -7,6 +7,51 @@ import (
 	"strings"
 )
 
+// ─── agent contract types ─────────────────────────────────────────────────────
+
+// Error code constants for ContractResponse.Code.
+const (
+	ErrCodeIndexNotFound = "INDEX_NOT_FOUND"
+	ErrCodeFileNotFound  = "FILE_NOT_FOUND"
+	ErrCodeInvalidQuery  = "INVALID_QUERY"
+	ErrCodeInternalError = "INTERNAL_ERROR"
+)
+
+// ContractResponse is the top-level JSON envelope for all agent-facing commands.
+// status: "ok" | "error" | "empty"
+// code: nil when status="ok"/"empty"; a string constant from ErrCode* when status="error"
+// message: human-readable summary
+// data: command-specific payload; nil when status="error"
+type ContractResponse struct {
+	Status  string      `json:"status"`
+	Code    *string     `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
+}
+
+// NewOKResponse constructs a ContractResponse with status="ok" and nil code.
+func NewOKResponse(message string, data interface{}) ContractResponse {
+	return ContractResponse{Status: "ok", Code: nil, Message: message, Data: data}
+}
+
+// NewEmptyResponse constructs a ContractResponse with status="empty" and nil code.
+func NewEmptyResponse(message string, data interface{}) ContractResponse {
+	return ContractResponse{Status: "empty", Code: nil, Message: message, Data: data}
+}
+
+// NewErrorResponse constructs a ContractResponse with status="error" and the given code.
+func NewErrorResponse(code, message string) ContractResponse {
+	c := code
+	return ContractResponse{Status: "error", Code: &c, Message: message, Data: nil}
+}
+
+// marshalContract serializes a ContractResponse to indented JSON.
+// Error is silenced because ContractResponse contains only JSON-safe types.
+func marshalContract(resp ContractResponse) string {
+	data, _ := json.MarshalIndent(resp, "", "  ")
+	return string(data)
+}
+
 // FormatSearchResults formats a slice of SearchResult values in the requested
 // output format.  Supported formats: "json" (default), "text", "csv".
 // Unknown formats fall back to JSON.
