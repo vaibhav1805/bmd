@@ -127,6 +127,10 @@ type Viewer struct {
 	// DIR-02: When true, the current file was opened from directory mode.
 	// Used to enable 'h'/Backspace to return to directory view.
 	openedFromDirectory bool
+
+	// DIR-04: When true, the current file was opened from search results.
+	// Used to enable 'h' to return to search results with cursor preserved.
+	openedFromSearch bool
 }
 
 // FileMetadata holds metadata for a single markdown file discovered during directory scan.
@@ -357,6 +361,25 @@ func (v Viewer) BackToDirectory() (Viewer, tea.Cmd) {
 	v.openedFromDirectory = false
 	v.currentView = "directory"
 	v.directoryState.RestoreDirectorySelection()
+	// Reset file view state.
+	v.Offset = 0
+	v.searchState = NewSearchState()
+	v.searchMode = false
+	v.searchInput = ""
+	return v, nil
+}
+
+// BackToSearchResults restores the cross-document search results view,
+// returning from a file that was opened by pressing 'l'/Enter on a search result.
+// The cursor position in results is preserved.
+func (v Viewer) BackToSearchResults() (Viewer, tea.Cmd) {
+	if !v.openedFromSearch {
+		return v, nil
+	}
+	v.openedFromSearch = false
+	v.crossSearchActive = true
+	v.crossSearchMode = false
+	v.currentView = "search"
 	// Reset file view state.
 	v.Offset = 0
 	v.searchState = NewSearchState()
@@ -639,8 +662,11 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "h":
+			// 'h' returns to search results when file was opened from search (DIR-04).
+			if v.openedFromSearch {
+				return v.BackToSearchResults()
+			}
 			// 'h' returns to directory when file was opened from directory mode (DIR-02).
-			// Otherwise it toggles the help overlay.
 			if v.openedFromDirectory {
 				return v.BackToDirectory()
 			}
@@ -652,6 +678,10 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v, nil
 
 		case "backspace":
+			// Backspace returns to search results when opened from search (DIR-04).
+			if v.openedFromSearch {
+				return v.BackToSearchResults()
+			}
 			// Backspace returns to directory when file was opened from directory mode (DIR-02).
 			if v.openedFromDirectory {
 				return v.BackToDirectory()
@@ -1375,12 +1405,15 @@ func (v Viewer) updateCrossSearchNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			v.crossSearchSelected++
 		}
 	case "l", "enter":
-		// Open the selected file.
+		// Open the selected file, preserving search state for back navigation.
 		if n > 0 && v.crossSearchSelected >= 0 && v.crossSearchSelected < n {
 			path := v.crossSearchResults[v.crossSearchSelected].Path
 			if path != "" {
+				// Keep search results intact so 'h' can return.
 				v.crossSearchActive = false
 				v.crossSearchMode = false
+				v.openedFromSearch = true
+				v.currentView = "file"
 				return v.loadFile(path)
 			}
 		}
@@ -1390,6 +1423,11 @@ func (v Viewer) updateCrossSearchNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.crossSearchMode = false
 		v.crossSearchResults = nil
 		v.crossSearchSelected = -1
+		// Return to directory mode if available.
+		if v.directoryState.RootPath != "" && msg.String() != "q" {
+			v.directoryMode = true
+			v.currentView = "directory"
+		}
 		if msg.String() == "q" {
 			return v, tea.Quit
 		}
@@ -1433,18 +1471,24 @@ func (v Viewer) renderCrossSearchResults(contentHeight int) string {
 	borderFg := "\x1b[38;5;244m" // dim gray
 	sb.WriteString(fmt.Sprintf("%s%s%s\n", borderFg, "┌"+strings.Repeat("─", innerWidth+2)+"┐", reset))
 
+	// Each result takes 3 lines: filename+score, snippet, blank separator.
+	linesPerResult := 3
 	// Available lines: contentHeight minus title line and box top/bottom/status = contentHeight - 3
 	available := contentHeight - 3
 	if available < 1 {
 		available = 1
 	}
+	maxResults := available / linesPerResult
+	if maxResults < 1 {
+		maxResults = 1
+	}
 
 	// Determine scroll window for results.
 	start := 0
-	if v.crossSearchSelected >= available {
-		start = v.crossSearchSelected - available + 1
+	if v.crossSearchSelected >= maxResults {
+		start = v.crossSearchSelected - maxResults + 1
 	}
-	end := start + available
+	end := start + maxResults
 	if end > len(results) {
 		end = len(results)
 	}
@@ -1458,26 +1502,26 @@ func (v Viewer) renderCrossSearchResults(contentHeight int) string {
 		sb.WriteString(fmt.Sprintf("%s│%s│%s\n", borderFg, noMatch, reset))
 	}
 
+	snippetFg := "\x1b[38;5;250m"  // light gray for snippet text
+	matchHi := "\x1b[1;38;5;226m"  // bold yellow for matching text
+
 	for i := start; i < end; i++ {
 		r := results[i]
 		selected := (i == v.crossSearchSelected)
 
-		// Format: "> N. filename [score]" or "  N. filename [score]"
-		// Filename: use RelPath if available, else base name.
+		// Line 1: "> N. filename [score]" or "  N. filename [score]"
 		name := r.RelPath
 		if name == "" {
 			name = filepath.Base(r.Path)
 		}
 		score := fmt.Sprintf("%.1f", r.Score)
 
-		// Build the row content.
 		prefix := "  "
 		if selected {
 			prefix = "> "
 		}
 		numStr := fmt.Sprintf("%d.", i+1)
 		scoreStr := "[" + score + "]"
-		// Available space for name: innerWidth - prefix(2) - numStr - space - space - scoreStr
 		nameWidth := innerWidth - len(prefix) - len(numStr) - 1 - 1 - len(scoreStr)
 		if nameWidth < 8 {
 			nameWidth = 8
@@ -1490,7 +1534,6 @@ func (v Viewer) renderCrossSearchResults(contentHeight int) string {
 		}
 
 		rowContent := fmt.Sprintf("%s%s %s %s", prefix, numStr, name, scoreStr)
-		// Pad to innerWidth+2.
 		rowRunes := []rune(rowContent)
 		if len(rowRunes) < innerWidth+2 {
 			rowContent += strings.Repeat(" ", innerWidth+2-len(rowRunes))
@@ -1504,6 +1547,27 @@ func (v Viewer) renderCrossSearchResults(contentHeight int) string {
 		} else {
 			sb.WriteString(fmt.Sprintf("%s│%s%s│%s\n", borderFg, rowContent, borderFg, reset))
 		}
+
+		// Line 2: Snippet with highlighted query terms.
+		snippet := knowledge.GetContextSnippet(r.Path, query, innerWidth-4)
+		if snippet == "" && r.Snippet != "" {
+			// Fall back to pre-computed snippet from search index.
+			snippet = r.Snippet
+			if len([]rune(snippet)) > innerWidth-4 {
+				snippet = string([]rune(snippet)[:innerWidth-7]) + "..."
+			}
+		}
+		snippetLine := highlightQueryInSnippet(snippet, query, snippetFg, matchHi, reset)
+		snippetContent := fmt.Sprintf("    %s%s%s", snippetFg, snippetLine, reset)
+		snippetRunes := []rune(stripANSIForLen(snippetContent))
+		if len(snippetRunes) < innerWidth+2 {
+			snippetContent += strings.Repeat(" ", innerWidth+2-len(snippetRunes))
+		}
+		sb.WriteString(fmt.Sprintf("%s│%s%s│%s\n", borderFg, snippetContent, borderFg, reset))
+
+		// Line 3: Blank separator between results.
+		blankLine := strings.Repeat(" ", innerWidth+2)
+		sb.WriteString(fmt.Sprintf("%s│%s│%s\n", borderFg, blankLine, reset))
 	}
 
 	// Box border bottom.
@@ -1515,6 +1579,65 @@ func (v Viewer) renderCrossSearchResults(contentHeight int) string {
 	sb.WriteString(hint)
 
 	return sb.String()
+}
+
+// highlightQueryInSnippet returns the snippet with all case-insensitive occurrences
+// of query wrapped in matchHi color (bold yellow). Non-matching text uses snippetFg.
+func highlightQueryInSnippet(snippet, query, snippetFg, matchHi, reset string) string {
+	if snippet == "" || query == "" {
+		return snippet
+	}
+	lowerSnippet := strings.ToLower(snippet)
+	lowerQuery := strings.ToLower(strings.TrimSpace(query))
+	if lowerQuery == "" {
+		return snippet
+	}
+
+	var b strings.Builder
+	snippetRunes := []rune(snippet)
+	lowerRunes := []rune(lowerSnippet)
+	queryRunes := []rune(lowerQuery)
+	qLen := len(queryRunes)
+	i := 0
+	for i < len(snippetRunes) {
+		// Check for match at position i.
+		if i+qLen <= len(lowerRunes) && string(lowerRunes[i:i+qLen]) == string(queryRunes) {
+			b.WriteString(matchHi)
+			b.WriteString(string(snippetRunes[i : i+qLen]))
+			b.WriteString(reset)
+			b.WriteString(snippetFg)
+			i += qLen
+		} else {
+			b.WriteRune(snippetRunes[i])
+			i++
+		}
+	}
+	return b.String()
+}
+
+// stripANSIForLen returns the string with ANSI escape codes removed, for length calculation.
+func stripANSIForLen(s string) string {
+	// Use the existing ansiEscape regexp from the search package.
+	result := make([]rune, 0, len(s))
+	runes := []rune(s)
+	i := 0
+	for i < len(runes) {
+		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
+			// Skip until we find a letter (the terminator).
+			j := i + 2
+			for j < len(runes) && !((runes[j] >= 'A' && runes[j] <= 'Z') || (runes[j] >= 'a' && runes[j] <= 'z')) {
+				j++
+			}
+			if j < len(runes) {
+				j++ // skip the terminator letter
+			}
+			i = j
+		} else {
+			result = append(result, runes[i])
+			i++
+		}
+	}
+	return string(result)
 }
 
 // renderHelp returns a centered box overlay with grouped keyboard shortcuts.
@@ -1720,7 +1843,11 @@ func (v Viewer) renderMarkdownSyntax() string {
 func (v Viewer) renderHeader() string {
 	// Left side: breadcrumb when opened from directory, or "filename  (parent/)" normally.
 	var left string
-	if v.openedFromDirectory {
+	if v.openedFromSearch {
+		// DIR-04: Breadcrumb shows search context: "[search: query] filename.md"
+		filename := filepath.Base(v.FilePath)
+		left = "[search: " + v.crossSearchQuery + "] " + filename
+	} else if v.openedFromDirectory {
 		// DIR-02: Breadcrumb shows directory context: "[~/docs] filename.md"
 		filename := filepath.Base(v.FilePath)
 		dirDisplay := v.directoryState.RootPath
@@ -1749,6 +1876,9 @@ func (v Viewer) renderHeader() string {
 	} else if v.searchState.Active && v.searchState.Query != "" {
 		// No matches in muted color
 		right = "\x1b[33m🔍 " + v.searchState.Query + " (no matches)\x1b[0m"
+	} else if v.openedFromSearch {
+		// DIR-04: back-to-search hint when file was opened from search results
+		right = "\x1b[38;5;117m← h/Backspace: back to search\x1b[0m"
 	} else if v.openedFromDirectory {
 		// DIR-02: back-to-directory hint when file was opened from directory mode
 		right = "\x1b[38;5;117m← h/Backspace: back to directory\x1b[0m"
@@ -1766,6 +1896,8 @@ func (v Viewer) renderHeader() string {
 		rightLen = len([]rune("✗ " + v.errorMsg))
 	} else if v.searchState.Active {
 		rightLen = len([]rune("🔍 " + v.searchState.Query + " (X/Y)"))
+	} else if v.openedFromSearch {
+		rightLen = len([]rune("← h/Backspace: back to search"))
 	} else if v.openedFromDirectory {
 		rightLen = len([]rune("← h/Backspace: back to directory"))
 	} else if v.history.CanGoBack() {
