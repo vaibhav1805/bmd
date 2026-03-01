@@ -1486,7 +1486,7 @@ func (v Viewer) renderDirectoryListingSplit(leftWidth, contentHeight int) []stri
 }
 
 // renderFilePreviewSplit renders the right pane of the split view: a markdown
-// preview of the currently selected file. It returns one string per row (up to
+// preview of the currently selected file with full styling. It returns one string per row (up to
 // contentHeight rows). Each row is padded/truncated to rightWidth.
 func (v Viewer) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
 	ds := v.directoryState
@@ -1522,13 +1522,21 @@ func (v Viewer) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
 	// Row 1: separator
 	rows[1] = dimText + strings.Repeat("─", rightWidth) + reset
 
-	// Read and render the preview content using the file's preview text first,
-	// or fall back to reading the file.
-	previewLines := []string{}
+	// Read and render the file with markdown styling
+	var previewLines []string
 	data, err := os.ReadFile(f.Path)
 	if err == nil {
-		content := string(data)
-		previewLines = strings.Split(content, "\n")
+		// Parse and render the markdown with full styling
+		doc, parseErr := parser.ParseMarkdown(string(data))
+		if parseErr == nil {
+			r := renderer.NewRenderer(v.Theme, rightWidth).WithDocDir(filepath.Dir(f.Path))
+			rendered := r.Render(doc)
+			previewLines = strings.Split(rendered, "\n")
+		} else {
+			// Fallback to raw content if parse fails
+			content := string(data)
+			previewLines = strings.Split(content, "\n")
+		}
 	} else {
 		// Fallback to stored preview
 		previewLines = strings.Split(f.Preview, "\n")
@@ -1555,11 +1563,15 @@ func (v Viewer) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
 		rowIdx := i + 2
 		if lineIdx < end {
 			line := previewLines[lineIdx]
+			// Truncate to rightWidth (ANSI codes make exact truncation hard, but approximate)
 			lineRunes := []rune(line)
 			if len(lineRunes) > rightWidth {
 				line = string(lineRunes[:rightWidth])
 			} else {
-				line = line + strings.Repeat(" ", rightWidth-len(lineRunes))
+				// Pad with spaces (don't pad if line has ANSI codes to avoid visual issues)
+				if !strings.Contains(line, "\x1b") {
+					line = line + strings.Repeat(" ", rightWidth-len(lineRunes))
+				}
 			}
 			rows[rowIdx] = line
 		} else {

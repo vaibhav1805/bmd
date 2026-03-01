@@ -114,7 +114,17 @@ func (v Viewer) renderGraphView(contentHeight int) string {
 	if graphHeight < 1 {
 		graphHeight = 1
 	}
-	sb.WriteString(RenderGraphASCII(g, layout, v.graphState.SelectedNodeID, v.Width, graphHeight))
+
+	// Force list view if graph is too large or ASCII rendering would be empty
+	asciiOutput := RenderGraphASCII(g, layout, v.graphState.SelectedNodeID, v.Width, graphHeight)
+	// If ASCII rendering is minimal or empty, fall back to list view
+	asciiLines := strings.Split(strings.TrimSpace(asciiOutput), "\n")
+	if len(asciiLines) < 2 || (len(g.Nodes) > 0 && len(asciiLines) < 3) {
+		// ASCII art not producing good output, use list fallback
+		sb.WriteString(renderGraphListFallback(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
+	} else {
+		sb.WriteString(asciiOutput)
+	}
 
 	// Footer: show selected node details and key hints.
 	var footerContent string
