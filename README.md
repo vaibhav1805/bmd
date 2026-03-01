@@ -235,6 +235,52 @@ pip install pageindex
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+## MCP Server Mode
+
+Run bmd as a persistent documentation service for agent fleets:
+
+```bash
+bmd serve --mcp
+```
+
+This starts bmd as an MCP (Model Context Protocol) server on stdin/stdout, exposing all knowledge tools as native endpoints. Agents can query documentation without subprocess overhead.
+
+### Available MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `bmd/query` | Full-text (BM25) or semantic (PageIndex) search |
+| `bmd/index` | Index a documentation directory |
+| `bmd/depends` | Query service dependencies |
+| `bmd/services` | List detected microservices |
+| `bmd/graph` | Export the knowledge graph as JSON |
+| `bmd/context` | Assemble RAG-ready context blocks |
+
+### Integration Example
+
+Configure in your MCP client (e.g., Claude Desktop, agent framework):
+
+```json
+{
+  "mcpServers": {
+    "bmd": {
+      "command": "bmd",
+      "args": ["serve", "--mcp"]
+    }
+  }
+}
+```
+
+Once connected, agents can call tools directly:
+
+```
+bmd/query: { "query": "authentication flow", "strategy": "bm25" }
+bmd/context: { "query": "OAuth implementation", "top": 5 }
+bmd/depends: { "service": "api-gateway", "transitive": true }
+```
+
+All responses comply with CONTRACT-01 JSON envelope format (`status`, `code`, `message`, `data`).
+
 ## Rendering Features
 
 ![Beautiful File View with Syntax Highlighting](docs/screenshots/02-file-view-rendering.png)

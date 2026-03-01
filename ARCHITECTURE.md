@@ -80,6 +80,28 @@ Technical deep-dive into BMD's design, components, and features.
 
 **Files:** `internal/tui/viewer.go` (directory state and rendering)
 
+### MCP Server
+**Goal:** Expose all knowledge tools as native MCP endpoints for persistent agent integration
+
+- **Protocol:** Model Context Protocol (MCP) via stdin/stdout
+- **SDK:** mark3labs/mcp-go (community MCP SDK for Go)
+- **Tools:** bmd/query, bmd/index, bmd/depends, bmd/services, bmd/graph, bmd/context
+- **Zero subprocess overhead:** Single process handles all agent requests
+- **CONTRACT-01 compliance:** All responses wrapped in JSON envelope (status/code/message/data)
+- **Startup:** `bmd serve --mcp` — blocks until process is killed
+
+```
+Agent (MCP client)
+    ↓ stdin (JSON-RPC)
+bmd serve --mcp (MCP server)
+    ↓ delegates to knowledge.*Cmd functions
+SQLite index + Knowledge graph
+    ↑ stdout (JSON-RPC response)
+Agent (receives result)
+```
+
+**Files:** `internal/mcp/server.go`, `internal/mcp/handlers.go`
+
 ### Image Rendering
 **Goal:** Display images in compatible terminal emulators
 
@@ -182,6 +204,7 @@ All core features complete and production-ready:
 - ✅ Knowledge graph and microservice detection
 - ✅ Directory browser with split-pane view (Beta)
 - ✅ Image rendering support
-- ✅ 290+ unit tests
+- ✅ MCP server (`bmd serve --mcp`) for native agent integration
+- ✅ 321+ unit tests
 
 **Current Status:** Feature-complete. Ready for production use.
