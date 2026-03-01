@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  bmd:
+    build: .
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./docs:/docs:ro
+      - ./data:/data
+    environment:
+      - BMD_STRATEGY=pageindex
+      - BMD_DB=/data/bmd.db
+    command: ["bmd", "serve", "--mcp"]
