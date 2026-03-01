@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -18,7 +19,10 @@ type IndexArgs struct {
 	Dir          string
 	DB           string
 	Watch        bool
-	PollInterval int // seconds
+	PollInterval int    // seconds
+	Strategy     string // "" | "pageindex" — default "" means BM25-only
+	Model        string // LLM model for pageindex strategy; default "claude-sonnet-4-5"
+	PageIndexBin string // path to pageindex executable; default "pageindex"
 }
 
 // QueryArgs holds parsed arguments for CmdQuery.
@@ -64,6 +68,9 @@ func ParseIndexArgs(args []string) (*IndexArgs, error) {
 	fs.StringVar(&a.DB, "db", "knowledge.db", "Path to SQLite database")
 	fs.BoolVar(&a.Watch, "watch", false, "Rebuild index on file changes")
 	fs.IntVar(&a.PollInterval, "poll-interval", 5, "Polling interval in seconds (watch mode)")
+	fs.StringVar(&a.Strategy, "strategy", "", "Indexing strategy: '' (BM25 default) | 'pageindex'")
+	fs.StringVar(&a.Model, "model", "claude-sonnet-4-5", "LLM model for pageindex strategy")
+	fs.StringVar(&a.PageIndexBin, "pageindex-bin", "pageindex", "Path to pageindex CLI binary")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("index: %w", err)
@@ -285,6 +292,32 @@ func CmdIndex(args []string) error {
 		fmt.Fprintf(os.Stderr, "  Index saved to %s\n", absDB)
 	}
 	fmt.Fprintf(os.Stderr, "  Completed in %dms\n", elapsed.Milliseconds())
+
+	// PageIndex tree generation (opt-in, after BM25 so BM25 always succeeds first).
+	if strings.ToLower(a.Strategy) == "pageindex" {
+		fmt.Fprintf(os.Stderr, "  Generating PageIndex trees (strategy=pageindex)...\n")
+		cfg := PageIndexConfig{
+			ExecutablePath: a.PageIndexBin,
+			Model:          a.Model,
+		}
+		treeCount := 0
+		for _, doc := range docs {
+			ft, err := RunPageIndex(cfg, doc.Path)
+			if errors.Is(err, ErrPageIndexNotFound) {
+				return fmt.Errorf("index: pageindex strategy requires pageindex CLI: %w", err)
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  warning: pageindex failed for %s: %v\n", doc.RelPath, err)
+				continue
+			}
+			if err := SaveTreeFile(absDir, ft); err != nil {
+				fmt.Fprintf(os.Stderr, "  warning: save tree failed for %s: %v\n", doc.RelPath, err)
+				continue
+			}
+			treeCount++
+		}
+		fmt.Fprintf(os.Stderr, "  %d tree files written\n", treeCount)
+	}
 
 	if a.Watch {
 		fmt.Fprintf(os.Stderr, "Watching %s for changes (poll every %ds)...\n", absDir, a.PollInterval)

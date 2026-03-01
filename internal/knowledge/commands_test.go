@@ -27,6 +27,32 @@ func TestParseIndexArgs_Defaults(t *testing.T) {
 	if a.PollInterval != 5 {
 		t.Errorf("PollInterval: got %d, want 5", a.PollInterval)
 	}
+	if a.Strategy != "" {
+		t.Errorf("Strategy: got %q, want empty string", a.Strategy)
+	}
+	if a.Model != "claude-sonnet-4-5" {
+		t.Errorf("Model: got %q, want %q", a.Model, "claude-sonnet-4-5")
+	}
+}
+
+func TestParseIndexArgs_StrategyFlag(t *testing.T) {
+	a, err := ParseIndexArgs([]string{"--strategy", "pageindex"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Strategy != "pageindex" {
+		t.Errorf("Strategy: got %q, want %q", a.Strategy, "pageindex")
+	}
+}
+
+func TestParseIndexArgs_ModelFlag(t *testing.T) {
+	a, err := ParseIndexArgs([]string{"--strategy", "pageindex", "--model", "claude-opus-4"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Model != "claude-opus-4" {
+		t.Errorf("Model: got %q, want %q", a.Model, "claude-opus-4")
+	}
 }
 
 func TestParseIndexArgs_Positional(t *testing.T) {
