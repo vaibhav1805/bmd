@@ -188,34 +188,57 @@ func usage() {
 	fmt.Fprint(os.Stderr, `Usage: bmd COMMAND [OPTIONS]
 
 Browse markdown files in current directory:
-  bmd                         (auto-detects if .md files exist)
+  bmd                         Auto-detects and browses .md files
   bmd --browse [DIR]          Explicit directory browse mode
 
 View a single markdown file:
   bmd file.md
 
 Knowledge commands:
-  bmd index [DIR] [--dir DIR] [--db DB]
-                              Build/update knowledge index
-  bmd query TERM [DIR] [--dir DIR] [--format json|text|csv] [--top N]
-                              Search markdown files
-  bmd depends SERVICE [DIR] [--dir DIR] [--transitive] [--format json|text|dot]
-                              Show service dependencies
-  bmd services [DIR] [--dir DIR] [--format json|text]
-                              List all detected services
-  bmd graph [SERVICE] [--dir DIR] [--format dot|json]
-                              Export knowledge graph
-  bmd context QUERY [--dir DIR] [--top N] [--format markdown|json]
-                              Assemble RAG-ready context block for a query
+  bmd index [DIR] [OPTIONS]
+    --dir DIR                 Directory to index (default: .)
+    --db DB                   Database path (default: knowledge.db)
+    --strategy pageindex      Use PageIndex for semantic indexing (optional)
+    --model MODEL             LLM model for PageIndex (default: claude-sonnet-4-5)
+    --pageindex-bin PATH      Path to pageindex CLI (default: pageindex)
+
+  bmd query TERM [DIR] [OPTIONS]
+    --dir DIR                 Directory to search (default: .)
+    --strategy bm25|pageindex Search strategy (default: bm25)
+    --model MODEL             LLM model for PageIndex (default: claude-sonnet-4-5)
+    --format json|text|csv    Output format (default: json)
+    --top N                   Max results (default: 10)
+
+  bmd context QUERY [OPTIONS]
+    --dir DIR                 Directory to search (default: .)
+    --format markdown|json    Output format (default: markdown)
+    --top N                   Max sections (default: 5)
+
+  bmd depends SERVICE [DIR] [OPTIONS]
+    --transitive              Include transitive dependencies
+    --format json|text|dot    Output format (default: json)
+
+  bmd services [DIR] [OPTIONS]
+    --format json|text        Output format (default: json)
+
+  bmd graph [SERVICE] [OPTIONS]
+    --format dot|json         Output format (default: json)
 
 Examples:
-  bmd                         Browse markdown files in current directory
-  bmd --browse ./docs         Browse specific directory
-  bmd README.md               View single file
-  bmd index ./docs            Index directory
-  bmd query "authentication"  Search
-  bmd depends api-gateway     Show dependencies
-  bmd services                List services
-  bmd graph --format dot | dot -Tpng > graph.png
+  bmd                              Browse current directory
+  bmd --browse ./docs              Browse specific directory
+  bmd README.md                    View file
+  bmd index ./docs                 Index with BM25 (default)
+  bmd index ./docs --strategy pageindex  Index with semantic trees
+  bmd query "authentication"       BM25 search (fast)
+  bmd query "auth" --strategy pageindex  Semantic search (needs trees)
+  bmd context "how auth works"     Assemble RAG context block
+  bmd depends api-gateway          Show service dependencies
+
+Notes:
+  - Directory browser search uses BM25 (Phase 11+: PageIndex support planned)
+  - PageIndex strategy requires: pip install pageindex
+  - Tree files: {filename}.bmd-tree.json (created with --strategy pageindex)
+  - Help: bmd -h, bmd --help, or bmd help
 `)
 }
