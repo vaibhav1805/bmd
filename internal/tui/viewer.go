@@ -2247,10 +2247,17 @@ func (v Viewer) View() string {
 	}
 
 	if v.directoryMode {
+		var sb strings.Builder
+		sb.WriteString(v.renderHeader())
+		sb.WriteString("\n")
 		if v.splitMode {
-			return v.renderSplitPane(contentHeight)
+			sb.WriteString(v.renderSplitPane(contentHeight))
+		} else {
+			sb.WriteString(v.renderDirectoryListing(contentHeight))
 		}
-		return v.renderDirectoryListing(contentHeight)
+		sb.WriteString("\n")
+		sb.WriteString(v.renderStatusBar())
+		return sb.String()
 	}
 
 	if v.editMode {
