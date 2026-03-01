@@ -1043,3 +1043,119 @@ func TestHeaderShowsSearchBreadcrumb(t *testing.T) {
 		t.Errorf("Expected search breadcrumb in header, got: %s", header)
 	}
 }
+
+// ====== Phase 12-01: PageIndex UI Search Tests ======
+
+// TestSearchAllFiles_DefaultStrategyIsBM25 verifies that the default strategy is BM25.
+func TestSearchAllFiles_DefaultStrategyIsBM25(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "# Document\nThis is about authentication and microservices.",
+	})
+	v := newTestViewerWithDir(t, dir)
+
+	// Ensure BMD_STRATEGY is not set.
+	t.Setenv("BMD_STRATEGY", "")
+
+	_, strategy, err := v.SearchAllFiles("authentication")
+	if err != nil {
+		t.Fatalf("SearchAllFiles error: %v", err)
+	}
+	if strategy != "bm25" {
+		t.Errorf("Expected default strategy 'bm25', got %q", strategy)
+	}
+}
+
+// TestSearchAllFiles_StrategyEnvVar_BM25 verifies BMD_STRATEGY=bm25 uses BM25.
+func TestSearchAllFiles_StrategyEnvVar_BM25(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "# Document\nContent about services.",
+	})
+	v := newTestViewerWithDir(t, dir)
+	t.Setenv("BMD_STRATEGY", "bm25")
+
+	_, strategy, err := v.SearchAllFiles("services")
+	if err != nil {
+		t.Fatalf("SearchAllFiles error: %v", err)
+	}
+	if strategy != "bm25" {
+		t.Errorf("Expected strategy 'bm25', got %q", strategy)
+	}
+}
+
+// TestSearchAllFiles_PageIndexFallback verifies that when BMD_STRATEGY=pageindex
+// but no tree files exist, the method falls back to BM25.
+func TestSearchAllFiles_PageIndexFallback(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "# Document\nContent about authentication microservices.",
+	})
+	v := newTestViewerWithDir(t, dir)
+	t.Setenv("BMD_STRATEGY", "pageindex")
+
+	// No .bmd-tree.json files exist, so PageIndex will fail → BM25 fallback.
+	_, strategy, _ := v.SearchAllFiles("authentication")
+	// After fallback, strategy should be "bm25".
+	if strategy != "bm25" {
+		t.Errorf("Expected fallback strategy 'bm25', got %q", strategy)
+	}
+}
+
+// TestCrossSearch_DisplaysStrategyBM25 verifies that the cross-search header
+// shows [bm25] when BM25 strategy was used.
+func TestCrossSearch_DisplaysStrategyBM25(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestViewerWithDir(t, dir)
+	v.crossSearchActive = true
+	v.crossSearchQuery = "test"
+	v.crossSearchStrategy = "bm25"
+	v.crossSearchResults = []knowledge.SearchResult{
+		{RelPath: "doc.md", Score: 5.0},
+	}
+	v.crossSearchSelected = 0
+
+	out := v.renderCrossSearchResults(20)
+	if !strings.Contains(out, "[bm25]") {
+		t.Errorf("Expected '[bm25]' in header, got:\n%s", out)
+	}
+}
+
+// TestCrossSearch_DisplaysStrategyPageIndex verifies that the cross-search header
+// shows [pageindex] when PageIndex strategy was used.
+func TestCrossSearch_DisplaysStrategyPageIndex(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestViewerWithDir(t, dir)
+	v.crossSearchActive = true
+	v.crossSearchQuery = "authentication flow"
+	v.crossSearchStrategy = "pageindex"
+	v.crossSearchResults = []knowledge.SearchResult{
+		{RelPath: "auth.md", Score: 0.95},
+	}
+	v.crossSearchSelected = 0
+
+	out := v.renderCrossSearchResults(20)
+	if !strings.Contains(out, "[pageindex]") {
+		t.Errorf("Expected '[pageindex]' in header, got:\n%s", out)
+	}
+}
+
+// TestCrossSearch_DisplaysStrategyFallback verifies that after PageIndex fallback,
+// the header shows [bm25].
+func TestCrossSearch_DisplaysStrategyFallback(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestViewerWithDir(t, dir)
+	v.crossSearchActive = true
+	v.crossSearchQuery = "microservices"
+	v.crossSearchStrategy = "bm25" // BM25 because PageIndex was unavailable
+	v.crossSearchResults = []knowledge.SearchResult{
+		{RelPath: "svc.md", Score: 3.2},
+	}
+	v.crossSearchSelected = 0
+
+	out := v.renderCrossSearchResults(20)
+	if !strings.Contains(out, "[bm25]") {
+		t.Errorf("Expected '[bm25]' in header on fallback, got:\n%s", out)
+	}
+	// Must NOT show [pageindex].
+	if strings.Contains(out, "[pageindex]") {
+		t.Error("Expected no '[pageindex]' when bm25 fallback was used")
+	}
+}
