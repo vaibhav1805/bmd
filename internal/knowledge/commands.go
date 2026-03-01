@@ -109,7 +109,7 @@ func ParseQueryArgs(args []string) (*QueryArgs, error) {
 	}
 
 	if len(positionals) < 1 {
-		return nil, fmt.Errorf("query: TERM argument required")
+		return nil, fmt.Errorf("query: TERM argument required\nUsage: bmd query TERM [DIR] [--dir DIR] [--format json|text|csv] [--top N] [--strategy bm25|pageindex] [--model MODEL]")
 	}
 	a.Query = positionals[0]
 	if len(positionals) > 1 {
