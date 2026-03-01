@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -10,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/bmd/bmd/internal/config"
 	"github.com/bmd/bmd/internal/knowledge"
+	bmcmp "github.com/bmd/bmd/internal/mcp"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/terminal"
 	"github.com/bmd/bmd/internal/theme"
@@ -62,6 +64,23 @@ func main() {
 			cmdErr = knowledge.CmdContext(args[1:])
 			if cmdErr != nil {
 				fmt.Fprintln(os.Stderr, "bmd context:", cmdErr)
+				os.Exit(1)
+			}
+			return
+		case "serve":
+			if len(args) < 2 || args[1] != "--mcp" {
+				fmt.Fprintf(os.Stderr, "Usage: bmd serve --mcp\n")
+				os.Exit(1)
+			}
+			cwd, err := os.Getwd()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "bmd: cannot get current directory:", err)
+				os.Exit(1)
+			}
+			dbPath := filepath.Join(cwd, ".bmd", "knowledge.db")
+			srv := bmcmp.NewServer(cwd, dbPath)
+			if err := srv.Start(context.Background()); err != nil {
+				fmt.Fprintln(os.Stderr, "bmd: MCP server error:", err)
 				os.Exit(1)
 			}
 			return
@@ -223,6 +242,11 @@ Knowledge commands:
 
   bmd graph [SERVICE] [OPTIONS]
     --format dot|json         Output format (default: json)
+
+  bmd serve --mcp
+    Run as a persistent MCP (Model Context Protocol) server on stdin/stdout.
+    Exposes all knowledge tools as native MCP endpoints for agent integration.
+    Tools: bmd/query, bmd/index, bmd/depends, bmd/services, bmd/graph, bmd/context
 
 Examples:
   bmd                              Browse current directory
