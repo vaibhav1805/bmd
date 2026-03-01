@@ -1044,3 +1044,546 @@ func TestDirectoryMetadataNameIsSet(t *testing.T) {
 		t.Errorf("Expected Name='my-doc.md', got %q", f.Name)
 	}
 }
+
+// ─── DIR-02: Directory ↔ File Navigation Tests ────────────────────────────────
+
+// TestSaveDirectorySelection verifies that SaveDirectorySelection persists the
+// current selected index and root path.
+func TestSaveDirectorySelection(t *testing.T) {
+	ds := DirectoryState{
+		RootPath:      "/some/dir",
+		SelectedIndex: 3,
+	}
+	ds.SaveDirectorySelection()
+
+	if ds.SavedSelectedIndex != 3 {
+		t.Errorf("Expected SavedSelectedIndex=3, got %d", ds.SavedSelectedIndex)
+	}
+	if ds.SavedFilePath != "/some/dir" {
+		t.Errorf("Expected SavedFilePath=/some/dir, got %q", ds.SavedFilePath)
+	}
+}
+
+// TestRestoreDirectorySelection verifies that RestoreDirectorySelection restores
+// the saved cursor index.
+func TestRestoreDirectorySelection(t *testing.T) {
+	ds := DirectoryState{
+		RootPath:           "/some/dir",
+		SelectedIndex:      0,
+		SavedSelectedIndex: 5,
+		SavedFilePath:      "/some/dir",
+	}
+	ds.RestoreDirectorySelection()
+
+	if ds.SelectedIndex != 5 {
+		t.Errorf("Expected SelectedIndex=5 after restore, got %d", ds.SelectedIndex)
+	}
+}
+
+// TestSaveRestoreCycle verifies save then restore produces the same index.
+func TestSaveRestoreCycle(t *testing.T) {
+	ds := DirectoryState{
+		RootPath:      "/docs",
+		SelectedIndex: 7,
+	}
+	ds.SaveDirectorySelection()
+	ds.SelectedIndex = 0 // simulate moving away
+	ds.RestoreDirectorySelection()
+
+	if ds.SelectedIndex != 7 {
+		t.Errorf("Expected SelectedIndex=7 after save/restore cycle, got %d", ds.SelectedIndex)
+	}
+}
+
+// TestOpenFileFromDirectorySetsFlags verifies OpenFileFromDirectory sets the
+// openedFromDirectory flag and clears directoryMode.
+func TestOpenFileFromDirectorySetsFlags(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"api.md": "# API\nContent\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	vv, _ := v.OpenFileFromDirectory()
+
+	if vv.directoryMode {
+		t.Error("Expected directoryMode=false after OpenFileFromDirectory")
+	}
+	if !vv.openedFromDirectory {
+		t.Error("Expected openedFromDirectory=true after OpenFileFromDirectory")
+	}
+}
+
+// TestOpenFileFromDirectorySavesSelection verifies that the cursor position is
+// saved when opening a file from directory.
+func TestOpenFileFromDirectorySavesSelection(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"aaa.md": "a",
+		"bbb.md": "b",
+		"ccc.md": "c",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+	v.directoryState.SelectedIndex = 2 // ccc.md
+
+	vv, _ := v.OpenFileFromDirectory()
+
+	if vv.directoryState.SavedSelectedIndex != 2 {
+		t.Errorf("Expected SavedSelectedIndex=2, got %d", vv.directoryState.SavedSelectedIndex)
+	}
+}
+
+// TestOpenFileFromDirectorySetsCurrentView verifies currentView is set to "file".
+func TestOpenFileFromDirectorySetsCurrentView(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"file.md": "# File\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	vv, _ := v.OpenFileFromDirectory()
+
+	if vv.currentView != "file" {
+		t.Errorf("Expected currentView='file', got %q", vv.currentView)
+	}
+}
+
+// TestOpenFileFromDirectoryEmptyDoesNothing verifies that opening from an
+// empty directory returns the viewer unchanged.
+func TestOpenFileFromDirectoryEmptyDoesNothing(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	// Empty directory: OpenFileFromDirectory should return unchanged
+	vv, _ := v.OpenFileFromDirectory()
+
+	// Should remain in directory mode since there's nothing to open
+	if !vv.directoryMode {
+		t.Error("Expected directoryMode=true when opening from empty directory")
+	}
+}
+
+// TestBackToDirectoryRestoresMode verifies BackToDirectory restores directoryMode
+// and clears openedFromDirectory.
+func TestBackToDirectoryRestoresMode(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"doc.md": "# Doc\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	// Go to file view
+	v.directoryMode = false
+	v.openedFromDirectory = true
+	v.currentView = "file"
+
+	vv, _ := v.BackToDirectory()
+
+	if !vv.directoryMode {
+		t.Error("Expected directoryMode=true after BackToDirectory")
+	}
+	if vv.openedFromDirectory {
+		t.Error("Expected openedFromDirectory=false after BackToDirectory")
+	}
+}
+
+// TestBackToDirectorySetsCurrentView verifies currentView returns to "directory".
+func TestBackToDirectorySetsCurrentView(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"doc.md": "# Doc\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+	v.directoryMode = false
+	v.openedFromDirectory = true
+	v.currentView = "file"
+
+	vv, _ := v.BackToDirectory()
+
+	if vv.currentView != "directory" {
+		t.Errorf("Expected currentView='directory', got %q", vv.currentView)
+	}
+}
+
+// TestBackToDirectoryRestoresCursorPosition verifies cursor position is restored
+// after BackToDirectory.
+func TestBackToDirectoryRestoresCursorPosition(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"aaa.md": "a",
+		"bbb.md": "b",
+		"ccc.md": "c",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	// Set cursor at index 2, save it.
+	v.directoryState.SelectedIndex = 2
+	v.directoryState.SaveDirectorySelection()
+
+	// Simulate switch to file mode.
+	v.directoryMode = false
+	v.openedFromDirectory = true
+	v.currentView = "file"
+	v.directoryState.SelectedIndex = 0 // simulate drift
+
+	vv, _ := v.BackToDirectory()
+
+	if vv.directoryState.SelectedIndex != 2 {
+		t.Errorf("Expected SelectedIndex=2 after BackToDirectory, got %d", vv.directoryState.SelectedIndex)
+	}
+}
+
+// TestBackToDirectoryNoopWhenNotFromDirectory verifies BackToDirectory does
+// nothing if openedFromDirectory is false.
+func TestBackToDirectoryNoopWhenNotFromDirectory(t *testing.T) {
+	v := New(&ast.Document{}, "test.md", theme.NewTheme(), 80)
+
+	// Not opened from directory
+	vv, _ := v.BackToDirectory()
+
+	// directoryMode should remain false
+	if vv.directoryMode {
+		t.Error("Expected directoryMode=false when BackToDirectory called without openedFromDirectory")
+	}
+}
+
+// TestNavigationCycleDirToFileToDir verifies a full dir→file→dir cycle preserves
+// the correct cursor index.
+func TestNavigationCycleDirToFileToDir(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"aaa.md": "a",
+		"bbb.md": "b",
+		"ccc.md": "c",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+	v.directoryState.SelectedIndex = 1 // bbb.md
+
+	// Open file from directory
+	vv, _ := v.OpenFileFromDirectory()
+	if vv.directoryMode {
+		t.Error("Expected directoryMode=false after open")
+	}
+
+	// Return to directory
+	vvv, _ := vv.BackToDirectory()
+	if !vvv.directoryMode {
+		t.Error("Expected directoryMode=true after back")
+	}
+	if vvv.directoryState.SelectedIndex != 1 {
+		t.Errorf("Expected SelectedIndex=1 after cycle, got %d", vvv.directoryState.SelectedIndex)
+	}
+}
+
+// TestMultipleNavigationCycles verifies multiple dir→file→dir cycles all
+// preserve the correct cursor index each time.
+func TestMultipleNavigationCycles(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"aaa.md": "a",
+		"bbb.md": "b",
+		"ccc.md": "c",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	indices := []int{0, 2, 1, 2, 0}
+	for i, wantIdx := range indices {
+		v.directoryState.SelectedIndex = wantIdx
+
+		// Open
+		vv, _ := v.OpenFileFromDirectory()
+
+		// Return
+		vvv, _ := vv.BackToDirectory()
+		v = vvv
+
+		if v.directoryState.SelectedIndex != wantIdx {
+			t.Errorf("Cycle %d: Expected SelectedIndex=%d after back, got %d", i, wantIdx, v.directoryState.SelectedIndex)
+		}
+	}
+}
+
+// TestLoadDirectorySetsCurrentView verifies LoadDirectory sets currentView="directory".
+func TestLoadDirectorySetsCurrentView(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"a.md": "content",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	if v.currentView != "directory" {
+		t.Errorf("Expected currentView='directory' after LoadDirectory, got %q", v.currentView)
+	}
+}
+
+// TestNewDirectoryViewerCurrentView verifies NewDirectoryViewer sets currentView="directory".
+func TestNewDirectoryViewerCurrentView(t *testing.T) {
+	v := NewDirectoryViewer("/tmp", theme.NewTheme(), 80)
+	if v.currentView != "directory" {
+		t.Errorf("Expected currentView='directory' from constructor, got %q", v.currentView)
+	}
+}
+
+// TestBreadcrumbInHeader verifies that renderHeader shows breadcrumb when
+// openedFromDirectory is true.
+func TestBreadcrumbInHeader(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"api.md": "# API\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	// Simulate being in file view from directory
+	v.directoryMode = false
+	v.openedFromDirectory = true
+	v.currentView = "file"
+	v.FilePath = filepath.Join(dir, "api.md")
+
+	header := v.renderHeader()
+	plain := stripANSI(header)
+
+	// Breadcrumb should show directory context
+	if !strings.Contains(plain, "api.md") {
+		t.Errorf("Expected 'api.md' in breadcrumb header, got: %q", plain)
+	}
+	if !strings.Contains(plain, "[") || !strings.Contains(plain, "]") {
+		t.Error("Expected '[dir] filename' breadcrumb format in header")
+	}
+}
+
+// TestNoBreadcrumbInNormalFileHeader verifies that renderHeader shows normal
+// header (no breadcrumb) when file was NOT opened from directory.
+func TestNoBreadcrumbInNormalFileHeader(t *testing.T) {
+	v := New(&ast.Document{}, "/tmp/file.md", theme.NewTheme(), 80)
+	v.Height = 24
+
+	header := v.renderHeader()
+	plain := stripANSI(header)
+
+	// Normal header should show "filename  (parent/)" format
+	if !strings.Contains(plain, "file.md") {
+		t.Errorf("Expected 'file.md' in header, got: %q", plain)
+	}
+	// Should not contain the breadcrumb format "[dir] filename"
+	// The breadcrumb '[' comes from the directory, not file path
+	if strings.Contains(plain, "[/tmp]") {
+		t.Error("Unexpected breadcrumb format '[dir]' in non-directory header")
+	}
+}
+
+// TestBreadcrumbShowsBackHint verifies the header hints 'h/Backspace: back to directory'
+// when openedFromDirectory is true.
+func TestBreadcrumbShowsBackHint(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"doc.md": "# Doc\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 200) // wide for hint visibility
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+	v.directoryMode = false
+	v.openedFromDirectory = true
+	v.currentView = "file"
+	v.FilePath = filepath.Join(dir, "doc.md")
+
+	header := v.renderHeader()
+	plain := stripANSI(header)
+
+	if !strings.Contains(plain, "back to directory") {
+		t.Errorf("Expected 'back to directory' hint in header, got: %q", plain)
+	}
+}
+
+// TestUpdateDirectoryLKeyCallsOpenFileFromDirectory verifies that pressing 'l'
+// in directory mode triggers the file open behavior.
+func TestUpdateDirectoryLKeyCallsOpenFileFromDirectory(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"api.md": "# API\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")}
+	result, _ := v.updateDirectory(msg)
+	vv := result.(Viewer)
+
+	// Should leave directory mode
+	if vv.directoryMode {
+		t.Error("Expected directoryMode=false after 'l' in directory mode")
+	}
+	// Should set openedFromDirectory
+	if !vv.openedFromDirectory {
+		t.Error("Expected openedFromDirectory=true after 'l' in directory mode")
+	}
+}
+
+// TestUpdateDirectoryEnterKeyCallsOpenFileFromDirectory verifies Enter also
+// triggers file open.
+func TestUpdateDirectoryEnterKeyCallsOpenFileFromDirectory(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"doc.md": "# Doc\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := v.updateDirectory(msg)
+	vv := result.(Viewer)
+
+	if vv.directoryMode {
+		t.Error("Expected directoryMode=false after Enter in directory mode")
+	}
+	if !vv.openedFromDirectory {
+		t.Error("Expected openedFromDirectory=true after Enter in directory mode")
+	}
+}
+
+// TestBackToDirectoryResetsOffset verifies that returning to directory resets
+// the scroll offset.
+func TestBackToDirectoryResetsOffset(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"doc.md": "# Doc\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+	v.directoryMode = false
+	v.openedFromDirectory = true
+	v.currentView = "file"
+	v.Offset = 42 // simulate having scrolled in the file
+
+	vv, _ := v.BackToDirectory()
+
+	if vv.Offset != 0 {
+		t.Errorf("Expected Offset=0 after BackToDirectory, got %d", vv.Offset)
+	}
+}
+
+// TestBackToDirectoryClearsSearch verifies search state is cleared when
+// returning to directory.
+func TestBackToDirectoryClearsSearch(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"doc.md": "# Doc\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+	v.directoryMode = false
+	v.openedFromDirectory = true
+	v.currentView = "file"
+	v.searchMode = true
+	v.searchInput = "test"
+
+	vv, _ := v.BackToDirectory()
+
+	if vv.searchMode {
+		t.Error("Expected searchMode=false after BackToDirectory")
+	}
+	if vv.searchInput != "" {
+		t.Errorf("Expected searchInput='' after BackToDirectory, got %q", vv.searchInput)
+	}
+}
+
+// TestOpenFileFromDirectoryPreservesDirectoryState verifies that the directory
+// root path and file list are preserved when switching to file view.
+func TestOpenFileFromDirectoryPreservesDirectoryState(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"aaa.md": "a",
+		"bbb.md": "b",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+	origRoot := v.directoryState.RootPath
+	origCount := len(v.directoryState.Files)
+
+	vv, _ := v.OpenFileFromDirectory()
+
+	// Directory state should remain intact for return navigation
+	if vv.directoryState.RootPath != origRoot {
+		t.Errorf("RootPath changed: expected %q, got %q", origRoot, vv.directoryState.RootPath)
+	}
+	if len(vv.directoryState.Files) != origCount {
+		t.Errorf("File count changed: expected %d, got %d", origCount, len(vv.directoryState.Files))
+	}
+}

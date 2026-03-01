@@ -361,6 +361,7 @@ func (v Viewer) BackToDirectory() (Viewer, tea.Cmd) {
 	v.Offset = 0
 	v.searchState = NewSearchState()
 	v.searchMode = false
+	v.searchInput = ""
 	return v, nil
 }
 
