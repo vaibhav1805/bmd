@@ -1152,20 +1152,35 @@ func (v Viewer) updateDirectory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.helpOpen = true
 		return v, nil
 
+	case "s":
+		// Toggle split-pane mode in directory view.
+		if v.Width < 80 {
+			v.errorMsg = "Terminal too narrow for split pane (need 80+ cols)"
+			return v, clearErrorAfter(statusTimeout)
+		}
+		v.splitMode = !v.splitMode
+		v.splitPreviewOffset = 0
+		return v, nil
+
 	case "up", "k":
 		if n > 0 {
 			v.directoryState.SelectedIndex = (v.directoryState.SelectedIndex - 1 + n) % n
+			v.splitPreviewOffset = 0 // reset preview scroll on cursor move
 		}
 		return v, nil
 
 	case "down", "j":
 		if n > 0 {
 			v.directoryState.SelectedIndex = (v.directoryState.SelectedIndex + 1) % n
+			v.splitPreviewOffset = 0 // reset preview scroll on cursor move
 		}
 		return v, nil
 
 	case "enter", "l", "right":
 		if n > 0 {
+			if v.splitMode {
+				v.splitMode = false // exit split mode when opening file full-screen
+			}
 			// Use OpenFileFromDirectory() to save cursor state for return navigation.
 			return v.OpenFileFromDirectory()
 		}
@@ -1959,6 +1974,7 @@ func (v Viewer) renderHelp() string {
 		line(padRight("  ↑/↓ or j/k    Navigate file list", boxWidth)),
 		line(padRight("  l / Enter     Open selected file", boxWidth)),
 		line(padRight("  h / Backspace Back to directory", boxWidth)),
+		line(padRight("  s             Toggle split pane", boxWidth)),
 		line(padRight("  /             Search all files", boxWidth)),
 		line(padRight("  g             View dependency graph", boxWidth)),
 		sectionSep(),

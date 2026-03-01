@@ -1974,3 +1974,259 @@ func TestSplitPreviewPageIndicator(t *testing.T) {
 		t.Errorf("Expected page indicator in last row, got: %q", lastRow)
 	}
 }
+
+// ==================== Split-Pane Navigation Tests (09-02) ====================
+
+// TestToggleSplitMode_KeyS verifies 's' key toggles splitMode on/off via Update.
+func TestToggleSplitMode_KeyS(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{"a.md": "# A\n"})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+
+	if v.splitMode {
+		t.Fatal("Expected splitMode=false initially")
+	}
+
+	// Press 's' to toggle on
+	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	v = m.(Viewer)
+	if !v.splitMode {
+		t.Error("Expected splitMode=true after pressing 's'")
+	}
+
+	// Press 's' again to toggle off
+	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	v = m.(Viewer)
+	if v.splitMode {
+		t.Error("Expected splitMode=false after pressing 's' again")
+	}
+}
+
+// TestToggleSplitMode_MultipleTimes verifies rapid toggling is stable.
+func TestToggleSplitMode_MultipleTimes(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{"a.md": "# A\n"})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+
+	for i := 0; i < 10; i++ {
+		m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+		v = m.(Viewer)
+		expected := (i%2 == 0) // 0->true, 1->false, 2->true, ...
+		if v.splitMode != expected {
+			t.Errorf("Toggle %d: splitMode=%v, want %v", i, v.splitMode, expected)
+		}
+	}
+}
+
+// TestNavigationInSplitMode_UpArrow verifies up arrow moves cursor and resets preview offset.
+func TestNavigationInSplitMode_UpArrow(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"aaa.md": "# AAA\n",
+		"bbb.md": "# BBB\n",
+		"ccc.md": "# CCC\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+
+	// Move to second file first
+	v.directoryState.SelectedIndex = 1
+	v.splitMode = true
+	v.splitPreviewOffset = 5 // simulate scrolled preview
+
+	// Press up
+	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyUp})
+	v = m.(Viewer)
+	if v.directoryState.SelectedIndex != 0 {
+		t.Errorf("Expected SelectedIndex=0 after up, got %d", v.directoryState.SelectedIndex)
+	}
+	if v.splitPreviewOffset != 0 {
+		t.Errorf("Expected splitPreviewOffset=0 after navigation, got %d", v.splitPreviewOffset)
+	}
+}
+
+// TestNavigationInSplitMode_DownArrow verifies down arrow moves cursor and resets preview offset.
+func TestNavigationInSplitMode_DownArrow(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"aaa.md": "# AAA\n",
+		"bbb.md": "# BBB\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+
+	v.splitMode = true
+	v.splitPreviewOffset = 3
+
+	// Press down
+	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
+	v = m.(Viewer)
+	if v.directoryState.SelectedIndex != 1 {
+		t.Errorf("Expected SelectedIndex=1 after down, got %d", v.directoryState.SelectedIndex)
+	}
+	if v.splitPreviewOffset != 0 {
+		t.Errorf("Expected splitPreviewOffset=0 after navigation, got %d", v.splitPreviewOffset)
+	}
+}
+
+// TestOpenFileInSplitMode_EnterKey verifies Enter opens file and exits split mode.
+func TestOpenFileInSplitMode_EnterKey(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"test.md": "# Test\nContent here.\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+
+	v.splitMode = true
+
+	// Press Enter to open
+	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	v = m.(Viewer)
+	if v.splitMode {
+		t.Error("Expected splitMode=false after opening file with Enter")
+	}
+	if v.directoryMode {
+		t.Error("Expected directoryMode=false after opening file")
+	}
+}
+
+// TestOpenFileInSplitMode_LKey verifies 'l' opens file and exits split mode.
+func TestOpenFileInSplitMode_LKey(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"test.md": "# Test\nContent here.\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+
+	v.splitMode = true
+
+	// Press 'l' to open
+	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	v = m.(Viewer)
+	if v.splitMode {
+		t.Error("Expected splitMode=false after opening file with 'l'")
+	}
+}
+
+// TestSplitModeExitToFullScreen verifies opening file from split goes full-screen.
+func TestSplitModeExitToFullScreen(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"doc.md": "# Document\nFull content.\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+
+	v.splitMode = true
+
+	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	v = m.(Viewer)
+	// Should be in file view now, not directory or split
+	if v.splitMode || v.directoryMode {
+		t.Error("Expected full-screen file view after Enter in split mode")
+	}
+	if !v.openedFromDirectory {
+		t.Error("Expected openedFromDirectory=true for back navigation")
+	}
+}
+
+// TestHelp_ShowsSplitModeSection verifies help overlay mentions split pane shortcut.
+func TestHelp_ShowsSplitModeSection(t *testing.T) {
+	v := NewDirectoryViewer("/tmp", theme.NewTheme(), 120)
+	v.Height = 40
+	v.helpOpen = true
+
+	output := v.renderHelp()
+	if !strings.Contains(output, "split pane") {
+		t.Error("Expected help to mention 'split pane'")
+	}
+	if !strings.Contains(output, "s") {
+		t.Error("Expected help to mention 's' key for split toggle")
+	}
+}
+
+// TestSplitModeWarningNarrowTerminal verifies warning when terminal is too narrow.
+func TestSplitModeWarningNarrowTerminal(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{"a.md": "# A\n"})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 60) // narrow
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+
+	// Press 's' on narrow terminal
+	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	v = m.(Viewer)
+	if v.splitMode {
+		t.Error("Expected splitMode to remain false on narrow terminal")
+	}
+	if !strings.Contains(v.errorMsg, "narrow") {
+		t.Errorf("Expected narrow terminal warning, got: %q", v.errorMsg)
+	}
+}
+
+// TestSplitModeNavigationBoundary verifies cursor wraps at list boundaries.
+func TestSplitModeNavigationBoundary(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"a.md": "# A\n",
+		"b.md": "# B\n",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 120)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+
+	v.splitMode = true
+	v.directoryState.SelectedIndex = 0
+
+	// Press up at top — should wrap to bottom
+	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyUp})
+	v = m.(Viewer)
+	if v.directoryState.SelectedIndex != 1 {
+		t.Errorf("Expected wrap to index 1, got %d", v.directoryState.SelectedIndex)
+	}
+
+	// Press down at bottom — should wrap to top
+	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyDown})
+	v = m.(Viewer)
+	if v.directoryState.SelectedIndex != 0 {
+		t.Errorf("Expected wrap to index 0, got %d", v.directoryState.SelectedIndex)
+	}
+}
