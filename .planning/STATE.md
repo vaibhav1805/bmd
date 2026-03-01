@@ -64,6 +64,7 @@ Progress: [███████████████████████
 | Phase 08-directory-browser P08-05 | 20 | 4 tasks | 2 files |
 | Phase 08-directory-browser P08-01 | 20 | 4 tasks | 4 files |
 | Phase 08-directory-browser P08-04 | 46 | 4 tasks | 3 files |
+| Phase 10-agent-contracts P02 | 22 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -175,6 +176,9 @@ Recent decisions affecting current work:
 - [Phase 08-directory-browser]: Bold yellow (ANSI 226) for query term highlighting in snippets, light gray for surrounding text
 - [Phase 08-directory-browser]: openedFromSearch flag enables file-to-search-results back navigation with cursor preservation
 - [Phase 08-directory-browser]: collapseWhitespace() replaces newlines/tabs with spaces for clean single-line snippet display
+- [Phase 10-agent-contracts]: Chunk-level BM25: documents table stays file-level in SQLite; chunk metadata stored in index_entries columns (SchemaVersion 2)
+- [Phase 10-agent-contracts]: AddDocument indexes per-chunk using extractChunks() line-scan; falls back to PlainText when Content is empty
+- [Phase 10-agent-contracts]: RemoveDocumentsByRelPath replaces RemoveDocument for file-level removal of all chunks
 
 ### Pending Todos
 

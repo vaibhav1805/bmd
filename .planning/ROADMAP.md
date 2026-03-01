@@ -233,7 +233,7 @@ Phases execute in numeric order: 1 → 2 → 3
 | 7. Edit Mode | 7/7 | Complete    | 2026-02-28 |
 | 8. Directory Browser | 6/6 | Complete   | 2026-03-01 |
 | 9. Split-Pane Directory Browser | 3/3 | Complete   | 2026-03-01 |
-| 10. Agent Output Contracts & Chunk Search | 0/3 | In Progress | — |
+| 10. Agent Output Contracts & Chunk Search | 1/3 | In Progress|  |
 | 11. PageIndex Integration | TBD | Planned    | — |
 | 12. MCP Server & Live Indexing | TBD | Planned    | — |
 
