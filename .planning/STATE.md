@@ -65,6 +65,7 @@ Progress: [███████████████████████
 | Phase 08-directory-browser P08-01 | 20 | 4 tasks | 4 files |
 | Phase 08-directory-browser P08-04 | 46 | 4 tasks | 3 files |
 | Phase 10-agent-contracts P02 | 22 | 3 tasks | 7 files |
+| Phase 10-agent-contracts P01 | 4 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -179,6 +180,8 @@ Recent decisions affecting current work:
 - [Phase 10-agent-contracts]: Chunk-level BM25: documents table stays file-level in SQLite; chunk metadata stored in index_entries columns (SchemaVersion 2)
 - [Phase 10-agent-contracts]: AddDocument indexes per-chunk using extractChunks() line-scan; falls back to PlainText when Content is empty
 - [Phase 10-agent-contracts]: RemoveDocumentsByRelPath replaces RemoveDocument for file-level removal of all chunks
+- [Phase 10-agent-contracts]: ContractResponse wraps all JSON output from agent commands; text/CSV/DOT paths unchanged
+- [Phase 10-agent-contracts]: classifyIndexError() maps error message content to INDEX_NOT_FOUND or INTERNAL_ERROR
 
 ### Pending Todos
 
