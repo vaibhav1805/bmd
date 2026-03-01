@@ -179,24 +179,132 @@ bmd                    # Enter directory browser in split-pane mode
 # Navigate with ↑/↓, press 'l' to open, 'h' to go back
 ```
 
-### Agent Queries
-```bash
-# Build knowledge index (with semantic trees for PageIndex)
-bmd index ./docs --strategy pageindex
+### Querying & Analysis
 
-# Search documentation with keyword matching
+#### `bmd query` — Full-Text Search
+Searches your documentation using keyword matching or semantic reasoning.
+
+**How it works:**
+- **BM25 Strategy** (default): Tokenizes markdown, ranks results by relevance using BM25 algorithm
+- **PageIndex Strategy** (LLM-powered): Parses sections into a tree, uses LLM to match intent to content
+
+**Usage:**
+```bash
+# Keyword search (BM25) - fast, no AI needed
 bmd query "database patterns" --dir ./docs
 
-# Search with semantic reasoning (requires PageIndex trees)
+# Semantic search (LLM-powered) - understands intent
 bmd query "how are databases configured?" --dir ./docs --strategy pageindex
 
-# Assemble RAG-ready context blocks
-bmd context "authentication flow" --dir ./docs
+# JSON output for agents
+bmd query "microservices" --dir ./docs --format json
 
-# Analyze architecture
-bmd depends user-service --format json
-bmd services --format json
-bmd graph --format dot > architecture.dot
+# Show top 10 results
+bmd query "authentication" --dir ./docs --top 10
+```
+
+**Output fields:**
+- `content`: Full text of matching section
+- `content_preview`: First 200 characters with ellipsis
+- `score`: Relevance score (higher = better match)
+- `heading_path`: Full heading hierarchy (e.g., "API Gateway > Authentication")
+- `start_line`, `end_line`: Location in source file
+
+#### `bmd services` — Detect Microservices
+Automatically identifies all microservices in your documentation and their dependencies.
+
+**How it detects services:**
+1. **Filename pattern**: Looks for `*-service.md` files (e.g., `auth-service.md`)
+2. **Heading pattern**: Looks for headings containing "Service" (e.g., `# User Service`)
+3. **High in-degree**: Documents heavily referenced by others (hub services)
+4. **Configuration**: Custom patterns defined in `.bmd-config.yaml` (highest confidence)
+
+**Usage:**
+```bash
+# List all detected services with dependencies
+bmd services --dir ./docs
+
+# JSON output (for agents)
+bmd services --dir ./docs --format json
+
+# Example output:
+# [
+#   {
+#     "id": "auth-service",
+#     "name": "Auth Service",
+#     "file": "services/auth-service.md",
+#     "confidence": 0.9,
+#     "dependency_count": 5
+#   }
+# ]
+```
+
+**Finding dependencies:**
+```bash
+# Show services that auth-service depends on
+bmd depends auth-service --dir ./docs
+
+# Show what depends on auth-service
+bmd depends auth-service --dir ./docs --reverse
+
+# JSON with full dependency paths
+bmd depends auth-service --dir ./docs --format json --transitive
+```
+
+#### `bmd graph` — Visualize Architecture
+Renders the complete dependency graph of your services and documents.
+
+**How it works:**
+- Builds a knowledge graph from cross-document links and service references
+- Uses hierarchical layout algorithm to minimize edge crossings
+- Renders as ASCII art for terminals or Graphviz DOT format for processing
+
+**Usage:**
+```bash
+# View graph in terminal (interactive)
+bmd graph --dir ./docs
+
+# Export as Graphviz format
+bmd graph --dir ./docs --format dot > architecture.dot
+dot -Tpng architecture.dot -o architecture.png
+
+# JSON format (for programmatic analysis)
+bmd graph --dir ./docs --format json
+
+# Statistics
+bmd graph --dir ./docs --format text
+```
+
+**Graph components:**
+- **Nodes**: Services, documents, modules
+- **Edges**: Dependencies, references, relationships
+- **Confidence**: Strength of detected relationship (0.0-1.0)
+- **Edge types**: `calls`, `references`, `depends_on`, `imports`
+
+**Example workflow:**
+```bash
+# 1. Build index
+bmd index ./docs --strategy pageindex
+
+# 2. Analyze services
+bmd services --dir ./docs
+
+# 3. Check specific service
+bmd depends payment-service --transitive
+
+# 4. Visualize full architecture
+bmd graph --dir ./docs --format dot | dot -Tsvg > architecture.svg
+```
+
+#### `bmd context` — RAG-Ready Context Assembly
+Combines search results and service information into coherent context blocks for agent systems.
+
+**Usage:**
+```bash
+# Assemble context for authentication question
+bmd context "how does authentication work?" --dir ./docs
+
+# Returns: Relevant sections + related services + dependency context
 ```
 
 ## Configuration & Settings
