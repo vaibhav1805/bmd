@@ -609,3 +609,149 @@ func TestRenderGraphASCII_Stress50Nodes50Edges(t *testing.T) {
 		t.Error("expected non-empty output")
 	}
 }
+
+// --- Force-Directed Layout Tests -----------------------------------------------
+
+// TestForceDirectedLayout_NilGraph returns nil for nil input.
+func TestForceDirectedLayout_NilGraph(t *testing.T) {
+	layout := forceDirectedLayout(nil, 100, 100)
+	if layout != nil {
+		t.Error("expected nil layout for nil graph")
+	}
+}
+
+// TestForceDirectedLayout_EmptyGraph returns nil for empty graph.
+func TestForceDirectedLayout_EmptyGraph(t *testing.T) {
+	g := knowledge.NewGraph()
+	layout := forceDirectedLayout(g, 100, 100)
+	if layout != nil {
+		t.Error("expected nil layout for empty graph")
+	}
+}
+
+// TestForceDirectedLayout_SingleNode positions single node correctly.
+func TestForceDirectedLayout_SingleNode(t *testing.T) {
+	g := knowledge.NewGraph()
+	_ = g.AddNode(&knowledge.Node{ID: "a.md", Title: "A"})
+
+	layout := forceDirectedLayout(g, 100, 100)
+	if len(layout) != 1 {
+		t.Errorf("expected 1 node, got %d", len(layout))
+	}
+
+	pos := layout["a.md"]
+	if pos[0] < 0 || pos[0] > 100 || pos[1] < 0 || pos[1] > 100 {
+		t.Errorf("node position out of bounds: %v", pos)
+	}
+}
+
+// TestForceDirectedLayout_TwoConnectedNodes repels nodes apart.
+func TestForceDirectedLayout_TwoConnectedNodes(t *testing.T) {
+	g := knowledge.NewGraph()
+	_ = g.AddNode(&knowledge.Node{ID: "a.md", Title: "A"})
+	_ = g.AddNode(&knowledge.Node{ID: "b.md", Title: "B"})
+	_ = g.AddEdge(makeEdge("a.md", "b.md"))
+
+	layout := forceDirectedLayout(g, 200, 200)
+
+	posA := layout["a.md"]
+	posB := layout["b.md"]
+
+	// Nodes should be separated (not at same position)
+	dx := posA[0] - posB[0]
+	dy := posA[1] - posB[1]
+	dist := dx*dx + dy*dy
+	if dist < 100 {
+		t.Errorf("nodes too close: distance²=%v", dist)
+	}
+}
+
+// TestForceDirectedLayout_AllPositionsInBounds verifies all positions are within bounds.
+func TestForceDirectedLayout_AllPositionsInBounds(t *testing.T) {
+	g := knowledge.NewGraph()
+	for i := 0; i < 20; i++ {
+		id := string(rune('a' + i%26)) + ".md"
+		_ = g.AddNode(&knowledge.Node{ID: id, Title: id})
+	}
+
+	nodeIDs := make([]string, 0)
+	for id := range g.Nodes {
+		nodeIDs = append(nodeIDs, id)
+	}
+
+	for i := 0; i < 15; i++ {
+		_ = g.AddEdge(makeEdge(nodeIDs[i%20], nodeIDs[(i+3)%20]))
+	}
+
+	layout := forceDirectedLayout(g, 150, 150)
+
+	for id, pos := range layout {
+		if pos[0] < 0 || pos[0] > 150 {
+			t.Errorf("node %s X position out of bounds: %v", id, pos[0])
+		}
+		if pos[1] < 0 || pos[1] > 150 {
+			t.Errorf("node %s Y position out of bounds: %v", id, pos[1])
+		}
+	}
+}
+
+// TestForceDirectedLayout_Deterministic produces same layout for same input.
+func TestForceDirectedLayout_Deterministic(t *testing.T) {
+	g1 := knowledge.NewGraph()
+	g2 := knowledge.NewGraph()
+
+	for i := 0; i < 10; i++ {
+		id := string(rune('a' + i)) + ".md"
+		_ = g1.AddNode(&knowledge.Node{ID: id, Title: id})
+		_ = g2.AddNode(&knowledge.Node{ID: id, Title: id})
+	}
+
+	nodeIDs := make([]string, 0)
+	for id := range g1.Nodes {
+		nodeIDs = append(nodeIDs, id)
+	}
+
+	for i := 0; i < 5; i++ {
+		e := makeEdge(nodeIDs[i], nodeIDs[i+2])
+		_ = g1.AddEdge(e)
+		_ = g2.AddEdge(e)
+	}
+
+	layout1 := forceDirectedLayout(g1, 100, 100)
+	layout2 := forceDirectedLayout(g2, 100, 100)
+
+	for id := range layout1 {
+		pos1 := layout1[id]
+		pos2 := layout2[id]
+		// Positions should be very close (within 1 unit, allowing for float precision)
+		if pos1[0]-pos2[0] > 1 || pos1[0]-pos2[0] < -1 {
+			t.Errorf("X position differs for %s: %v vs %v", id, pos1[0], pos2[0])
+		}
+	}
+}
+
+// TestRenderGraphWithForceLayout_NilGraph returns empty string for nil input.
+func TestRenderGraphWithForceLayout_NilGraph(t *testing.T) {
+	out := renderGraphWithForceLayout(nil, nil, "", 100, 100)
+	if out != "" {
+		t.Error("expected empty string for nil graph")
+	}
+}
+
+// TestRenderGraphWithForceLayout_SmallGraph renders without error.
+func TestRenderGraphWithForceLayout_SmallGraph(t *testing.T) {
+	g := knowledge.NewGraph()
+	_ = g.AddNode(&knowledge.Node{ID: "a.md", Title: "A"})
+	_ = g.AddNode(&knowledge.Node{ID: "b.md", Title: "B"})
+	_ = g.AddEdge(makeEdge("a.md", "b.md"))
+
+	layout := forceDirectedLayout(g, 100, 100)
+	out := renderGraphWithForceLayout(g, layout, "", 80, 30)
+
+	if out == "" {
+		t.Error("expected non-empty output")
+	}
+	if !strings.Contains(out, "A") && !strings.Contains(out, "B") {
+		t.Error("output missing node labels")
+	}
+}
