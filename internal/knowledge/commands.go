@@ -565,7 +565,8 @@ func cmdQueryPageIndex(a *QueryArgs) error {
 			Rank:           i + 1,
 			File:           s.File,
 			HeadingPath:    s.HeadingPath,
-			ContentPreview: s.Content,
+			Content:        s.Content,
+			ContentPreview: contentPreview(s.Content, 200),
 			Score:          roundFloat(s.Score, 4),
 			ReasoningTrace: s.ReasoningTrace,
 		}

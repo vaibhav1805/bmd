@@ -13,6 +13,7 @@ import (
 type TreeNode struct {
 	Heading   string      `json:"heading"`
 	Summary   string      `json:"summary"`
+	Content   string      `json:"content,omitempty"`
 	LineStart int         `json:"line_start"`
 	LineEnd   int         `json:"line_end"`
 	Children  []*TreeNode `json:"children,omitempty"`

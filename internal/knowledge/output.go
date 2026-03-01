@@ -27,6 +27,7 @@ type reasoningResultJSON struct {
 	HeadingPath    string  `json:"heading_path,omitempty"`
 	StartLine      int     `json:"start_line,omitempty"`
 	EndLine        int     `json:"end_line,omitempty"`
+	Content        string  `json:"content,omitempty"`
 	ContentPreview string  `json:"content_preview,omitempty"`
 	Score          float64 `json:"score"`
 	ReasoningTrace string  `json:"reasoning_trace,omitempty"`

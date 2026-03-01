@@ -1092,7 +1092,7 @@ func TestHumanBytes(t *testing.T) {
 
 func TestDefaultDBPath(t *testing.T) {
 	got := defaultDBPath("/some/dir")
-	want := filepath.Join("/some/dir", "knowledge.db")
+	want := filepath.Join("/some/dir", ".bmd", "knowledge.db")
 	if got != want {
 		t.Errorf("defaultDBPath: got %q, want %q", got, want)
 	}

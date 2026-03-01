@@ -49,7 +49,7 @@ func TestSaveAndLoadTreeFile(t *testing.T) {
 	}
 
 	// Verify the file was created.
-	expected := filepath.Join(dir, "api.bmd-tree.json")
+	expected := filepath.Join(dir, ".bmd", "trees", "api.json")
 	if _, err := os.Stat(expected); os.IsNotExist(err) {
 		t.Fatalf("expected tree file %q not created", expected)
 	}
