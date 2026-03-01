@@ -149,6 +149,180 @@ func TestParseQueryArgs_PositionalDir(t *testing.T) {
 	}
 }
 
+// ─── strategy / model flag tests (Plan 11-03) ─────────────────────────────────
+
+func TestParseQueryArgs_StrategyDefault(t *testing.T) {
+	a, err := ParseQueryArgs([]string{"term"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Strategy != "" {
+		t.Errorf("Strategy: got %q, want empty string (BM25 default)", a.Strategy)
+	}
+}
+
+func TestParseQueryArgs_StrategyBM25(t *testing.T) {
+	a, err := ParseQueryArgs([]string{"term", "--strategy", "bm25"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Strategy != "bm25" {
+		t.Errorf("Strategy: got %q, want bm25", a.Strategy)
+	}
+}
+
+func TestParseQueryArgs_StrategyPageindex(t *testing.T) {
+	a, err := ParseQueryArgs([]string{"term", "--strategy", "pageindex"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Strategy != "pageindex" {
+		t.Errorf("Strategy: got %q, want pageindex", a.Strategy)
+	}
+}
+
+func TestParseQueryArgs_ModelFlag(t *testing.T) {
+	a, err := ParseQueryArgs([]string{"term", "--strategy", "pageindex", "--model", "claude-opus-4"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Model != "claude-opus-4" {
+		t.Errorf("Model: got %q, want claude-opus-4", a.Model)
+	}
+}
+
+func TestParseQueryArgs_ModelDefault(t *testing.T) {
+	a, err := ParseQueryArgs([]string{"term"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Model != "claude-sonnet-4-5" {
+		t.Errorf("Model: got %q, want claude-sonnet-4-5", a.Model)
+	}
+}
+
+// TestCmdQuery_DefaultStrategyIsBM25 verifies that CmdQuery with no --strategy
+// flag uses BM25 (the response data does not contain a top-level "strategy" field,
+// which differentiates it from the pageindex path).
+func TestCmdQuery_DefaultStrategyIsBM25(t *testing.T) {
+	dir := setupTestDocs(t)
+	dbPath := filepath.Join(dir, "test.db")
+	if err := CmdIndex([]string{"--dir", dir, "--db", dbPath}); err != nil {
+		t.Fatalf("CmdIndex: %v", err)
+	}
+
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := CmdQuery([]string{"authentication", "--dir", dir, "--format", "json"})
+
+	_ = w.Close()
+	os.Stdout = old
+
+	if err != nil {
+		t.Fatalf("CmdQuery error: %v", err)
+	}
+
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	output := strings.TrimSpace(string(buf[:n]))
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
+		t.Fatalf("output not valid JSON: %v\nOutput: %s", err, output)
+	}
+
+	// BM25 default path response data must not have a "strategy" key.
+	data, ok := envelope["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("data field is not an object: %v", envelope["data"])
+	}
+	if _, hasStrategy := data["strategy"]; hasStrategy {
+		t.Error("BM25 default path should not include 'strategy' field in data payload")
+	}
+}
+
+// TestCmdQuery_PageindexStrategy_NoTrees verifies that --strategy pageindex
+// with no .bmd-tree.json files returns an INDEX_NOT_FOUND error envelope.
+func TestCmdQuery_PageindexStrategy_NoTrees(t *testing.T) {
+	// Empty temp dir: no markdown files, no tree files.
+	emptyDir := t.TempDir()
+
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := CmdQuery([]string{"query", "--dir", emptyDir, "--strategy", "pageindex", "--format", "json"})
+
+	_ = w.Close()
+	os.Stdout = old
+
+	if err != nil {
+		t.Fatalf("CmdQuery should not return an error (handled internally): %v", err)
+	}
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	output := strings.TrimSpace(string(buf[:n]))
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
+		t.Fatalf("output not valid JSON: %v\nOutput: %s", err, output)
+	}
+
+	if envelope["status"] != "error" {
+		t.Errorf("expected status=error, got %v", envelope["status"])
+	}
+	if envelope["code"] != ErrCodeIndexNotFound {
+		t.Errorf("expected code=%s, got %v", ErrCodeIndexNotFound, envelope["code"])
+	}
+}
+
+// TestCmdQuery_PageindexStrategy_NoBinary verifies that --strategy pageindex
+// with tree files present but no pageindex binary returns PAGEINDEX_NOT_AVAILABLE.
+func TestCmdQuery_PageindexStrategy_NoBinary(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Write a minimal valid .bmd-tree.json so LoadTreeFiles returns a result.
+	ft := FileTree{
+		File: "test.md",
+		Root: &TreeNode{Heading: "", Summary: "test", LineStart: 1, LineEnd: 10},
+	}
+	if err := SaveTreeFile(tmpDir, ft); err != nil {
+		t.Fatalf("SaveTreeFile: %v", err)
+	}
+
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := CmdQuery([]string{"query", "--dir", tmpDir, "--strategy", "pageindex", "--format", "json"})
+
+	_ = w.Close()
+	os.Stdout = old
+
+	if err != nil {
+		t.Fatalf("CmdQuery should not return an error (handled internally): %v", err)
+	}
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	output := strings.TrimSpace(string(buf[:n]))
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
+		t.Fatalf("output not valid JSON: %v\nOutput: %s", err, output)
+	}
+
+	if envelope["status"] != "error" {
+		t.Errorf("expected status=error, got %v", envelope["status"])
+	}
+	if envelope["code"] != ErrCodePageIndexNotAvailable {
+		t.Errorf("expected code=%s, got %v", ErrCodePageIndexNotAvailable, envelope["code"])
+	}
+}
+
 func TestParseDependsArgs_Defaults(t *testing.T) {
 	a, err := ParseDependsArgs([]string{"api-gateway"})
 	if err != nil {
