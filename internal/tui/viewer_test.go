@@ -1932,20 +1932,29 @@ func TestViewRoutesSplitMode(t *testing.T) {
 		t.Fatalf("LoadDirectory error: %v", err)
 	}
 
-	// Without split mode: normal directory listing
-	normalOutput := v.View()
-
-	// With split mode: split pane
-	v.splitMode = true
+	// With split mode (default on wide terminal): split pane
 	splitOutput := v.View()
+	if !v.splitMode {
+		t.Fatal("Expected splitMode=true by default on wide terminal")
+	}
 
-	// Split output should contain border characters that normal output doesn't
+	// Split output should contain border characters
 	if !strings.Contains(splitOutput, "│") {
 		t.Error("Expected split output to contain │ border")
 	}
+
+	// Disable split mode
+	v.splitMode = false
+	normalOutput := v.View()
+
 	// Outputs should be different
 	if normalOutput == splitOutput {
 		t.Error("Expected split and normal outputs to differ")
+	}
+
+	// Normal output should not have split border
+	if strings.Contains(normalOutput, "│") {
+		t.Error("Expected normal output to not contain │ border")
 	}
 }
 
@@ -1988,22 +1997,22 @@ func TestToggleSplitMode_KeyS(t *testing.T) {
 		t.Fatalf("LoadDirectory: %v", err)
 	}
 
-	if v.splitMode {
-		t.Fatal("Expected splitMode=false initially")
+	if !v.splitMode {
+		t.Fatal("Expected splitMode=true by default in directory mode")
 	}
 
-	// Press 's' to toggle on
+	// Press 's' to toggle off
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 	v = m.(Viewer)
-	if !v.splitMode {
-		t.Error("Expected splitMode=true after pressing 's'")
+	if v.splitMode {
+		t.Error("Expected splitMode=false after pressing 's'")
 	}
 
-	// Press 's' again to toggle off
+	// Press 's' again to toggle back on
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 	v = m.(Viewer)
-	if v.splitMode {
-		t.Error("Expected splitMode=false after pressing 's' again")
+	if !v.splitMode {
+		t.Error("Expected splitMode=true after pressing 's' again")
 	}
 }
 
@@ -2021,7 +2030,7 @@ func TestToggleSplitMode_MultipleTimes(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 		v = m.(Viewer)
-		expected := (i%2 == 0) // 0->true, 1->false, 2->true, ...
+		expected := (i%2 == 1) // starts true: 0->false, 1->true, 2->false, ...
 		if v.splitMode != expected {
 			t.Errorf("Toggle %d: splitMode=%v, want %v", i, v.splitMode, expected)
 		}
@@ -2188,11 +2197,16 @@ func TestSplitModeWarningNarrowTerminal(t *testing.T) {
 		t.Fatalf("LoadDirectory: %v", err)
 	}
 
-	// Press 's' on narrow terminal
+	// Split mode should be disabled on narrow terminal by default
+	if v.splitMode {
+		t.Error("Expected splitMode=false on narrow terminal by default")
+	}
+
+	// Try to press 's' to enable split on narrow terminal (should show warning)
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 	v = m.(Viewer)
 	if v.splitMode {
-		t.Error("Expected splitMode to remain false on narrow terminal")
+		t.Error("Expected splitMode to remain false when trying to enable on narrow terminal")
 	}
 	if !strings.Contains(v.errorMsg, "narrow") {
 		t.Errorf("Expected narrow terminal warning, got: %q", v.errorMsg)
@@ -2387,15 +2401,16 @@ func TestSplitMode_StressTest_RapidToggle(t *testing.T) {
 	}
 
 	// Rapid toggle 20 times
+	// Starts as true, after even number of toggles should return to true
 	for i := 0; i < 20; i++ {
 		m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 		v = m.(Viewer)
 	}
 
-	// Should end in original state (odd number of toggles) or split mode (even)
-	// 20 is even, so should be in original state
-	if v.splitMode {
-		t.Error("Expected splitMode to be false after 20 toggles")
+	// Should end in original state (even number of toggles)
+	// 20 toggles starting from true should end at true
+	if !v.splitMode {
+		t.Error("Expected splitMode to be true after 20 toggles (even number)")
 	}
 
 	// Render should work fine
@@ -2419,14 +2434,13 @@ func TestSplitMode_FileNavigationPreservesSplitState(t *testing.T) {
 		t.Fatalf("LoadDirectory: %v", err)
 	}
 
-	// Enable split mode
-	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	v = m.(Viewer)
+	// Split mode should be enabled by default on wide terminal
 	if !v.splitMode {
-		t.Fatal("Expected splitMode to be true after 's' key")
+		t.Fatal("Expected splitMode to be true by default on wide terminal")
 	}
 
 	// Navigate down
+	var m tea.Model
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyDown})
 	v = m.(Viewer)
 
@@ -2594,11 +2608,23 @@ func TestSplitMode_AllKeyboardShortcuts(t *testing.T) {
 		t.Fatalf("LoadDirectory: %v", err)
 	}
 
-	// Toggle split mode with 's'
+	// Split mode should be enabled by default in directory mode
+	if !v.splitMode {
+		t.Fatal("Expected splitMode enabled by default in directory mode")
+	}
+
+	// Toggle split mode with 's' (should turn it off)
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 	v = m.(Viewer)
+	if v.splitMode {
+		t.Fatal("Expected splitMode to be disabled after 's' key toggle")
+	}
+
+	// Toggle again (should turn it back on)
+	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	v = m.(Viewer)
 	if !v.splitMode {
-		t.Fatal("Expected splitMode after 's' key")
+		t.Fatal("Expected splitMode to be re-enabled after second 's' key toggle")
 	}
 
 	// Up arrow navigation

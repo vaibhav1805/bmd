@@ -329,6 +329,8 @@ func (v *Viewer) LoadDirectory(path string) error {
 
 	v.directoryMode = true
 	v.currentView = "directory"
+	// Enable split-pane view by default in directory mode (if terminal is wide enough)
+	v.splitMode = v.Width >= 80
 	v.directoryState = DirectoryState{
 		RootPath:      absPath,
 		Files:         files,
