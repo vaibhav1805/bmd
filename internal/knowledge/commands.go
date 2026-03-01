@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -301,16 +302,32 @@ func CmdQuery(args []string) error {
 		return err
 	}
 
+	isJSON := strings.ToLower(a.Format) == "json"
+
+	// Validate query term for JSON callers.
+	if isJSON && a.Query == "" {
+		fmt.Println(marshalContract(NewErrorResponse(ErrCodeInvalidQuery, "Query term is required")))
+		return nil
+	}
+
 	start := time.Now()
 
 	absDir, err := filepath.Abs(a.Dir)
 	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
 		return fmt.Errorf("query: resolve dir: %w", err)
 	}
 
 	dbPath := defaultDBPath(absDir)
 	db, err := openOrBuildIndex(absDir, dbPath)
 	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(classifyIndexError(err), err.Error())))
+			return nil
+		}
 		return err
 	}
 	defer db.Close() //nolint:errcheck
@@ -318,6 +335,10 @@ func CmdQuery(args []string) error {
 	// Load index.
 	idx := NewIndex()
 	if err := db.LoadIndex(idx); err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
 		return fmt.Errorf("query: load index: %w", err)
 	}
 
@@ -331,12 +352,54 @@ func CmdQuery(args []string) error {
 	// Execute search.
 	results, err := idx.Search(a.Query, a.Top)
 	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
 		return fmt.Errorf("query: search: %w", err)
 	}
 
 	queryTimeMs := time.Since(start).Milliseconds()
-	output := FormatSearchResults(results, a.Query, a.Format, queryTimeMs)
-	fmt.Println(output)
+
+	if !isJSON {
+		// Text and CSV paths are unchanged.
+		output := FormatSearchResults(results, a.Query, a.Format, queryTimeMs)
+		fmt.Println(output)
+		return nil
+	}
+
+	// JSON path: wrap in ContractResponse envelope.
+	if len(results) == 0 {
+		fmt.Println(marshalContract(NewEmptyResponse("No results found", map[string]interface{}{
+			"query":   a.Query,
+			"count":   0,
+			"results": []interface{}{},
+		})))
+		return nil
+	}
+
+	// Build the search payload (same structure as formatSearchResultsJSON).
+	items := make([]searchResultJSON, len(results))
+	for i, r := range results {
+		items[i] = searchResultJSON{
+			Rank:           i + 1,
+			File:           r.RelPath,
+			Title:          r.Title,
+			Score:          roundFloat(r.Score, 4),
+			Snippet:        r.Snippet,
+			HeadingPath:    r.HeadingPath,
+			StartLine:      r.StartLine,
+			EndLine:        r.EndLine,
+			ContentPreview: r.ContentPreview,
+		}
+	}
+	payload := searchResponseJSON{
+		Query:       a.Query,
+		Results:     items,
+		Count:       len(items),
+		QueryTimeMs: queryTimeMs,
+	}
+	fmt.Println(marshalContract(NewOKResponse("Search completed", payload)))
 	return nil
 }
 
@@ -348,13 +411,23 @@ func CmdDepends(args []string) error {
 		return err
 	}
 
+	isJSON := strings.ToLower(a.Format) == "json"
+
 	absDir, err := filepath.Abs(a.Dir)
 	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
 		return fmt.Errorf("depends: resolve dir: %w", err)
 	}
 
 	db, graph, services, err := loadGraphAndServices(absDir)
 	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(classifyIndexError(err), err.Error())))
+			return nil
+		}
 		return fmt.Errorf("depends: %w", err)
 	}
 	defer db.Close() //nolint:errcheck
@@ -374,6 +447,10 @@ func CmdDepends(args []string) error {
 			}
 		}
 		if matched == "" {
+			if isJSON {
+				fmt.Println(marshalContract(NewErrorResponse(ErrCodeFileNotFound, "Service not found: "+a.Service)))
+				return nil
+			}
 			return fmt.Errorf("depends: service %q not found. Run `bmd services` to list available services", a.Service)
 		}
 		a.Service = matched
@@ -395,8 +472,49 @@ func CmdDepends(args []string) error {
 		}
 	}
 
-	output := FormatDependencies(a.Service, refs, a.Transitive, transitivePaths, cycles, a.Format)
-	fmt.Println(output)
+	if !isJSON {
+		// Text and DOT paths are unchanged.
+		output := FormatDependencies(a.Service, refs, a.Transitive, transitivePaths, cycles, a.Format)
+		fmt.Println(output)
+		return nil
+	}
+
+	// JSON path: build payload and wrap in envelope.
+	// Re-use the same inner structs as formatDependenciesJSON.
+	var payload interface{}
+	var cleanCycles [][]string
+	if len(cycles) > 0 {
+		cleanCycles = cycles
+	}
+	if a.Transitive {
+		items := make([]depTransitiveJSON, 0, len(transitivePaths))
+		for _, path := range transitivePaths {
+			items = append(items, depTransitiveJSON{
+				Path:     path,
+				Distance: len(path) - 1,
+			})
+		}
+		payload = depsTransitiveResponseJSON{
+			Service:                a.Service,
+			TransitiveDependencies: items,
+			Cycles:                 cleanCycles,
+		}
+	} else {
+		items := make([]depRefJSON, len(refs))
+		for i, r := range refs {
+			items[i] = depRefJSON{
+				Service:    r.ServiceID,
+				Type:       r.Type,
+				Confidence: roundFloat(r.Confidence, 2),
+			}
+		}
+		payload = depsDirectResponseJSON{
+			Service:      a.Service,
+			Dependencies: items,
+			Cycles:       cleanCycles,
+		}
+	}
+	fmt.Println(marshalContract(NewOKResponse("Dependencies found", payload)))
 	return nil
 }
 
@@ -408,13 +526,23 @@ func CmdServices(args []string) error {
 		return err
 	}
 
+	isJSON := strings.ToLower(a.Format) == "json"
+
 	absDir, err := filepath.Abs(a.Dir)
 	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
 		return fmt.Errorf("services: resolve dir: %w", err)
 	}
 
 	db, graph, services, err := loadGraphAndServices(absDir)
 	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(classifyIndexError(err), err.Error())))
+			return nil
+		}
 		return fmt.Errorf("services: %w", err)
 	}
 	defer db.Close() //nolint:errcheck
@@ -428,8 +556,27 @@ func CmdServices(args []string) error {
 		depCounts[id] = len(refs)
 	}
 
-	output := FormatServices(services, depCounts, a.Format)
-	fmt.Println(output)
+	if !isJSON {
+		// Text path is unchanged.
+		output := FormatServices(services, depCounts, a.Format)
+		fmt.Println(output)
+		return nil
+	}
+
+	// JSON path: build payload and wrap in envelope.
+	items := make([]serviceEntryJSON, len(services))
+	for i, s := range services {
+		cnt := depCounts[s.ID]
+		items[i] = serviceEntryJSON{
+			ID:              s.ID,
+			Name:            s.Name,
+			File:            s.File,
+			Confidence:      roundFloat(s.Confidence, 2),
+			DependencyCount: cnt,
+		}
+	}
+	payload := servicesResponseJSON{Services: items}
+	fmt.Println(marshalContract(NewOKResponse("Services detected", payload)))
 	return nil
 }
 
@@ -441,20 +588,34 @@ func CmdGraph(args []string) error {
 		return err
 	}
 
+	isJSON := strings.ToLower(a.Format) == "json"
+
 	absDir, err := filepath.Abs(a.Dir)
 	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
 		return fmt.Errorf("graph: resolve dir: %w", err)
 	}
 
 	dbPath := defaultDBPath(absDir)
 	db, err := openOrBuildIndex(absDir, dbPath)
 	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(classifyIndexError(err), err.Error())))
+			return nil
+		}
 		return err
 	}
 	defer db.Close() //nolint:errcheck
 
 	graph := NewGraph()
 	if err := db.LoadGraph(graph); err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
 		return fmt.Errorf("graph: load graph: %w", err)
 	}
 
@@ -464,13 +625,59 @@ func CmdGraph(args []string) error {
 		// Find the node ID for this service (match by ID or filename stem).
 		nodeID := findNodeForService(graph, a.Service)
 		if nodeID == "" {
+			if isJSON {
+				fmt.Println(marshalContract(NewErrorResponse(ErrCodeFileNotFound, fmt.Sprintf("service/node %q not found in graph", a.Service))))
+				return nil
+			}
 			return fmt.Errorf("graph: service/node %q not found in graph", a.Service)
 		}
 		exportGraph = graph.GetSubgraph(nodeID, 10)
 	}
 
-	output := FormatGraph(exportGraph, a.Format)
-	fmt.Println(output)
+	if !isJSON {
+		// DOT path is unchanged.
+		output := FormatGraph(exportGraph, a.Format)
+		fmt.Println(output)
+		return nil
+	}
+
+	// JSON path: build payload and wrap in envelope.
+	// Sort nodes and edges for deterministic output.
+	nodeIDs := make([]string, 0, len(exportGraph.Nodes))
+	for id := range exportGraph.Nodes {
+		nodeIDs = append(nodeIDs, id)
+	}
+	sort.Strings(nodeIDs)
+
+	edgeIDs := make([]string, 0, len(exportGraph.Edges))
+	for id := range exportGraph.Edges {
+		edgeIDs = append(edgeIDs, id)
+	}
+	sort.Strings(edgeIDs)
+
+	nodes := make([]graphNodeJSON, 0, len(nodeIDs))
+	for _, id := range nodeIDs {
+		n := exportGraph.Nodes[id]
+		label := n.Title
+		if label == "" {
+			label = n.ID
+		}
+		nodes = append(nodes, graphNodeJSON{ID: n.ID, Type: n.Type, Label: label})
+	}
+
+	edges := make([]graphEdgeJSON, 0, len(edgeIDs))
+	for _, id := range edgeIDs {
+		e := exportGraph.Edges[id]
+		edges = append(edges, graphEdgeJSON{
+			Source:     e.Source,
+			Target:     e.Target,
+			Type:       string(e.Type),
+			Confidence: roundFloat(e.Confidence, 4),
+		})
+	}
+
+	payload := graphResponseJSON{Nodes: nodes, Edges: edges}
+	fmt.Println(marshalContract(NewOKResponse("Graph loaded", payload)))
 	return nil
 }
 
@@ -669,6 +876,17 @@ func watchAndRebuild(a *IndexArgs, absDir string, initialDocs []Document) error 
 			_ = buildArgs
 		}
 	}
+}
+
+// classifyIndexError maps an openOrBuildIndex error to the appropriate ErrCode*
+// constant.  Errors mentioning "no index" or "index not found" become
+// ErrCodeIndexNotFound; everything else becomes ErrCodeInternalError.
+func classifyIndexError(err error) string {
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "no index") || strings.Contains(msg, "index not found") {
+		return ErrCodeIndexNotFound
+	}
+	return ErrCodeInternalError
 }
 
 // humanBytes formats a byte count as a human-readable string (KB, MB, etc.).

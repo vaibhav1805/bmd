@@ -349,21 +349,33 @@ func TestCmdQuery_JSON(t *testing.T) {
 	n, _ := r.Read(buf)
 	output := strings.TrimSpace(string(buf[:n]))
 
-	// Verify JSON is valid.
-	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &result); err != nil {
+	// Verify JSON is valid and is a ContractResponse envelope.
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
 		t.Fatalf("output not valid JSON: %v\nOutput: %s", err, output)
 	}
 
-	// Verify required fields.
-	if _, ok := result["query"]; !ok {
-		t.Error("JSON missing 'query' field")
+	// Verify top-level envelope fields.
+	if _, ok := envelope["status"]; !ok {
+		t.Error("JSON missing top-level 'status' field")
 	}
-	if _, ok := result["results"]; !ok {
-		t.Error("JSON missing 'results' field")
+	if _, ok := envelope["data"]; !ok {
+		t.Error("JSON missing top-level 'data' field")
 	}
-	if _, ok := result["count"]; !ok {
-		t.Error("JSON missing 'count' field")
+
+	// Verify data payload contains expected search fields.
+	data, ok := envelope["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("data field is not an object: %v", envelope["data"])
+	}
+	if _, ok := data["query"]; !ok {
+		t.Error("JSON data missing 'query' field")
+	}
+	if _, ok := data["results"]; !ok {
+		t.Error("JSON data missing 'results' field")
+	}
+	if _, ok := data["count"]; !ok {
+		t.Error("JSON data missing 'count' field")
 	}
 }
 
@@ -414,13 +426,27 @@ func TestCmdServices_JSON(t *testing.T) {
 	n, _ := r.Read(buf)
 	output := strings.TrimSpace(string(buf[:n]))
 
-	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &result); err != nil {
+	// Verify JSON is valid and is a ContractResponse envelope.
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
 		t.Fatalf("output not valid JSON: %v\nOutput: %s", err, output)
 	}
 
-	if _, ok := result["services"]; !ok {
-		t.Error("JSON missing 'services' field")
+	// Verify top-level envelope fields.
+	if _, ok := envelope["status"]; !ok {
+		t.Error("JSON missing top-level 'status' field")
+	}
+	if _, ok := envelope["data"]; !ok {
+		t.Error("JSON missing top-level 'data' field")
+	}
+
+	// Verify data payload contains services.
+	data, ok := envelope["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("data field is not an object: %v", envelope["data"])
+	}
+	if _, ok := data["services"]; !ok {
+		t.Error("JSON data missing 'services' field")
 	}
 }
 
@@ -498,25 +524,69 @@ func TestCmdGraph_JSON(t *testing.T) {
 	n, _ := r.Read(buf)
 	output := strings.TrimSpace(string(buf[:n]))
 
-	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &result); err != nil {
+	// Verify JSON is valid and is a ContractResponse envelope.
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
 		t.Fatalf("output not valid JSON: %v\nOutput: %s", err, output)
 	}
 
-	if _, ok := result["nodes"]; !ok {
-		t.Error("JSON missing 'nodes' field")
+	// Verify top-level envelope fields.
+	if _, ok := envelope["status"]; !ok {
+		t.Error("JSON missing top-level 'status' field")
 	}
-	if _, ok := result["edges"]; !ok {
-		t.Error("JSON missing 'edges' field")
+	if _, ok := envelope["data"]; !ok {
+		t.Error("JSON missing top-level 'data' field")
+	}
+
+	// Verify data payload contains graph fields.
+	data, ok := envelope["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("data field is not an object: %v", envelope["data"])
+	}
+	if _, ok := data["nodes"]; !ok {
+		t.Error("JSON data missing 'nodes' field")
+	}
+	if _, ok := data["edges"]; !ok {
+		t.Error("JSON data missing 'edges' field")
 	}
 }
 
 func TestCmdDepends_MissingService(t *testing.T) {
 	dir := setupTestDocs(t)
 
-	err := CmdDepends([]string{"nonexistent-service", "--dir", dir})
+	// JSON format (default): missing service emits FILE_NOT_FOUND envelope on stdout, returns nil.
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := CmdDepends([]string{"nonexistent-service", "--dir", dir, "--format", "json"})
+
+	_ = w.Close()
+	os.Stdout = old
+
+	if err != nil {
+		t.Fatalf("CmdDepends with JSON format should return nil, got: %v", err)
+	}
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	output := strings.TrimSpace(string(buf[:n]))
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
+		t.Fatalf("output not valid JSON: %v\nOutput: %s", err, output)
+	}
+	if envelope["status"] != "error" {
+		t.Errorf("expected status=error, got %v", envelope["status"])
+	}
+	if envelope["code"] != ErrCodeFileNotFound {
+		t.Errorf("expected code=%s, got %v", ErrCodeFileNotFound, envelope["code"])
+	}
+
+	// Text format: missing service returns an error.
+	err = CmdDepends([]string{"nonexistent-service", "--dir", dir, "--format", "text"})
 	if err == nil {
-		t.Fatal("expected error for unknown service")
+		t.Fatal("expected error for unknown service with text format")
 	}
 }
 
