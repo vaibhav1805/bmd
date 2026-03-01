@@ -26,6 +26,9 @@ bmd-test
 *.bmd-tree.json
 *.bmd-index.json
 
+# BMD artifacts directory (PageIndex trees, temp files)
+.bmd/
+
 # Dependencies
 node_modules/
 
