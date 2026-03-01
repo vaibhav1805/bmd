@@ -169,6 +169,49 @@ Plans:
 - [x] 08-05-PLAN.md — Graph visualization with ASCII art, level-based layout, list fallback
 - [x] 08-06-PLAN.md — Verification & polish: 55 tests, help docs, zero regressions
 
+### Phase 9: Split-Pane Directory Browser
+**Goal**: Enable users to view files and directory listing simultaneously for faster navigation in large documentation trees
+**Depends on**: Phase 8
+**Requirements**: SPLIT-01, SPLIT-02, SPLIT-03
+**Success Criteria** (what must be TRUE):
+  1. User presses 's' to toggle split-pane mode showing 35% file list + 65% file preview
+  2. User navigates file list with arrow keys, preview updates instantly
+  3. User can switch between split and full-screen modes seamlessly
+**Plans**: 3/3 complete
+- [x] 09-01 — Split-pane rendering: dual-pane layout with scroll tracking
+- [x] 09-02 — Keyboard navigation: 's' toggle, arrow keys, file operations
+- [x] 09-03 — Polish & testing: edge cases, performance validation, all features complete
+
+### Phase 10: Agent Output Contracts & Chunk-Level Search
+**Goal**: Establish structured JSON contracts for all agent-facing commands and enable section-level search results
+**Depends on**: Phase 8 (agent CLI infrastructure)
+**Requirements**: CONTRACT-01, CHUNK-01, HYGIENE-01
+**Success Criteria** (what must be TRUE):
+  1. All agent-facing commands return consistent JSON envelope with status/code/message/data fields
+  2. Search results include section-level context with heading paths and line offsets
+  3. Repo artifacts removed from Git, proper .gitignore established
+**Plans**: TBD
+
+### Phase 11: PageIndex Integration & Reasoning-Based Retrieval
+**Goal**: Add reasoning-based semantic search via PageIndex, enabling agents to query by intent rather than keywords
+**Depends on**: Phase 10
+**Requirements**: PAGEINDEX-01, CONTEXT-01, REASONING-01
+**Success Criteria** (what must be TRUE):
+  1. bmd query --strategy pageindex uses LLM reasoning to find relevant sections for natural language queries
+  2. New bmd context command assembles ready-to-inject RAG context blocks from multiple sections
+  3. PageIndex trees generated during indexing, BM25 remains default fast-path
+**Plans**: TBD
+
+### Phase 12: MCP Server & Live Indexing Infrastructure
+**Goal**: Transform bmd into a persistent documentation intelligence service with native MCP integration for agent fleets
+**Depends on**: Phase 11
+**Requirements**: MCP-01, WATCH-01, OPENCLAW-01
+**Success Criteria** (what must be TRUE):
+  1. bmd serve --mcp exposes all agent tools as native MCP endpoints
+  2. Incremental file-level indexing and filesystem watch mode keeps index fresh during long operations
+  3. OpenClaw plugin descriptor and Docker image enable one-click fleet deployment
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
@@ -184,7 +227,11 @@ Phases execute in numeric order: 1 → 2 → 3
 | 6. Agent Intelligence & Knowledge Graphs | 6/6 | Complete   | 2026-02-28 |
 | 7. Edit Mode | 7/7 | Complete    | 2026-02-28 |
 | 8. Directory Browser | 6/6 | Complete   | 2026-03-01 |
+| 9. Split-Pane Directory Browser | 3/3 | Complete   | 2026-03-01 |
+| 10. Agent Output Contracts & Chunk Search | TBD | Planned    | — |
+| 11. PageIndex Integration | TBD | Planned    | — |
+| 12. MCP Server & Live Indexing | TBD | Planned    | — |
 
-**Current Status: All 8 phases COMPLETE**
-**Previous Completion: All 7 phases complete (2026-02-28)**
-**Total Project Duration: 4 days (Phases 1-8)**
+**Current Status: 9 phases COMPLETE, 3 phases PLANNED**
+**Previous Completion: All 9 phases complete (2026-03-01)**
+**Total Project Duration: 4 days (Phases 1-9), expanding with PageIndex integration (Phases 10-12)**
