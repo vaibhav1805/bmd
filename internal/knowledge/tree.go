@@ -25,14 +25,21 @@ type FileTree struct {
 	Root *TreeNode `json:"root"`
 }
 
-// SaveTreeFile persists ft to a .bmd-tree.json file in dir.  The output
-// filename is derived from ft.File: e.g. "docs/api.md" → "api.bmd-tree.json".
+// SaveTreeFile persists ft to a .json file in dir/.bmd/trees/.  The output
+// filename is derived from ft.File: e.g. "docs/api.md" → ".bmd/trees/api.json".
 //
+// Creates .bmd/trees/ directory if it doesn't exist.
 // The file is written with 0644 permissions and 2-space indented JSON.
 func SaveTreeFile(dir string, ft FileTree) error {
+	// Create .bmd/trees directory if it doesn't exist
+	treesDir := filepath.Join(dir, ".bmd", "trees")
+	if err := os.MkdirAll(treesDir, 0755); err != nil {
+		return fmt.Errorf("SaveTreeFile: mkdir %q: %w", treesDir, err)
+	}
+
 	base := filepath.Base(ft.File)
 	stem := strings.TrimSuffix(base, ".md")
-	outPath := filepath.Join(dir, stem+".bmd-tree.json")
+	outPath := filepath.Join(treesDir, stem+".json")
 
 	data, err := json.MarshalIndent(ft, "", "  ")
 	if err != nil {
@@ -46,11 +53,12 @@ func SaveTreeFile(dir string, ft FileTree) error {
 	return nil
 }
 
-// LoadTreeFiles reads all *.bmd-tree.json files from dir and unmarshals them
+// LoadTreeFiles reads all *.json files from dir/.bmd/trees/ and unmarshals them
 // into FileTree values.  Malformed files are logged to stderr and skipped.
-// Returns a nil (empty) slice with no error when dir contains no tree files.
+// Returns a nil (empty) slice with no error when dir/.bmd/trees contains no tree files.
 func LoadTreeFiles(dir string) ([]FileTree, error) {
-	pattern := filepath.Join(dir, "*.bmd-tree.json")
+	treesDir := filepath.Join(dir, ".bmd", "trees")
+	pattern := filepath.Join(treesDir, "*.json")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("LoadTreeFiles: glob %q: %w", pattern, err)

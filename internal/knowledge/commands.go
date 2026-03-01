@@ -926,7 +926,7 @@ func isBoolFlag(name string) bool {
 
 // defaultDBPath returns the default database path for a given directory.
 func defaultDBPath(dir string) string {
-	return filepath.Join(dir, "knowledge.db")
+	return filepath.Join(dir, ".bmd", "knowledge.db")
 }
 
 // openOrBuildIndex opens an existing database at dbPath, or if one does not
