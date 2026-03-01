@@ -1159,7 +1159,7 @@ index_version: 2
 ├── internal/
 │   ├── ast/                 # AST manipulation
 │   ├── editor/              # Text editing engine
-│   ├── mcp/                 # MCP server integration (Phase 12)
+│   ├── mcp/                 # MCP server integration
 │   ├── knowledge/           # Search, graph, persistence
 │   ├── parser/              # Goldmark wrapper
 │   ├── renderer/            # ANSI rendering, image support
@@ -1169,10 +1169,10 @@ index_version: 2
 │   ├── tui/                 # TUI components (bubbletea)
 │   └── nav/                 # Navigation (link following, history)
 ├── test-data/               # Test files
-├── .planning/               # GSD planning documents
+├── .planning/               # Project planning documents
 │   ├── PROJECT.md           # Project vision & decisions
-│   ├── ROADMAP.md           # 12 phases, all complete
-│   └── phases/              # Phase directories with plans
+│   ├── ROADMAP.md           # Implementation roadmap
+│   └── phases/              # Feature implementation plans
 ├── .bmd-index.json          # Generated search index
 ├── .bmd-graph.json          # Generated knowledge graph
 └── go.mod                   # Dependencies (Go 1.18+)
@@ -1240,15 +1240,17 @@ go tool unused ./...
 
 ### Project Status Dashboard
 
-**Phases Complete:** 12/12 (100%) ✅
-- Phase 1-5: Core rendering, navigation, UI polish (5 phases)
-- Phase 6: Agent intelligence, knowledge graphs (1 phase)
-- Phase 7: Edit mode with syntax highlighting (1 phase)
-- Phase 8: Directory browser with split-pane (1 phase)
-- Phase 9: Split-pane navigation and polish (1 phase)
-- Phase 10: JSON contracts, chunk-level search (1 phase)
-- Phase 11: PageIndex semantic search integration (1 phase)
-- Phase 12: MCP server, OpenClaw, live indexing (1 phase)
+**Features Complete:** 100% ✅
+- ✅ Core rendering (headings, code, tables, lists, blockquotes)
+- ✅ Navigation (keyboard shortcuts, link following, history)
+- ✅ Search (BM25 full-text indexing, pattern matching)
+- ✅ Edit mode (syntax highlighting, undo/redo, file persistence)
+- ✅ Directory browser (split-pane view with live preview)
+- ✅ Agent tools (knowledge graphs, service detection, dependency analysis)
+- ✅ Semantic search (PageIndex integration with LLM reasoning)
+- ✅ JSON contracts (machine-readable agent responses)
+- ✅ MCP server (native agent integration without subprocess overhead)
+- ✅ Multiple themes (5 built-in color schemes)
 
 **Test Coverage:** 321+ tests, all passing ✅
 - Unit tests: 150+
@@ -1279,9 +1281,9 @@ For major changes, please open an issue first to discuss what you would like to 
 
 **Current Status:** ✅ **PRODUCTION READY**
 
-All 12 phases complete. Full documentation platform for humans (editing, viewing, navigation) and agents (indexing, search, graphs, MCP integration).
+Complete documentation platform for humans (editing, viewing, navigation) and agents (indexing, search, graphs, MCP integration).
 
-**Last Updated:** 2026-03-01 (Phase 12 complete with MCP server integration, OpenClaw plugin, and live indexing support)
+**Last Updated:** 2026-03-01 (MCP server integration, OpenClaw plugin, and live indexing support)
 
 **Quick Links:**
 - 📖 [ARCHITECTURE.md](./ARCHITECTURE.md) — Component-based architecture overview
