@@ -193,9 +193,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — JSON Envelope Contracts (ContractResponse, error codes, CmdQuery/Graph/Services/Depends wiring)
-- [ ] 10-02-PLAN.md — Chunk-Level Search Results (chunk.go, BM25 per-chunk indexing, SearchResult extension)
-- [ ] 10-03-PLAN.md — Repository Cleanup & Verification (git rm --cached, .gitignore, full test suite 291+)
+- [x] 10-01-PLAN.md — JSON Envelope Contracts (ContractResponse, error codes, CmdQuery/Graph/Services/Depends wiring)
+- [x] 10-02-PLAN.md — Chunk-Level Search Results (chunk.go, BM25 per-chunk indexing, SearchResult extension)
+- [x] 10-03-PLAN.md — Repository Cleanup & Verification (git rm --cached, .gitignore, full test suite 655 passing)
 
 ### Phase 11: PageIndex Integration & Reasoning-Based Retrieval
 **Goal**: Add reasoning-based semantic search via PageIndex, enabling agents to query by intent rather than keywords
@@ -233,10 +233,10 @@ Phases execute in numeric order: 1 → 2 → 3
 | 7. Edit Mode | 7/7 | Complete    | 2026-02-28 |
 | 8. Directory Browser | 6/6 | Complete   | 2026-03-01 |
 | 9. Split-Pane Directory Browser | 3/3 | Complete   | 2026-03-01 |
-| 10. Agent Output Contracts & Chunk Search | 2/3 | In Progress|  |
+| 10. Agent Output Contracts & Chunk Search | 3/3 | Complete   | 2026-03-01 |
 | 11. PageIndex Integration | TBD | Planned    | — |
 | 12. MCP Server & Live Indexing | TBD | Planned    | — |
 
-**Current Status: 9 phases COMPLETE, Phase 10 IN PROGRESS, 2 phases PLANNED**
+**Current Status: 10 phases COMPLETE, 2 phases PLANNED**
 **Previous Completion: All 9 phases complete (2026-03-01)**
 **Total Project Duration: 4 days (Phases 1-9), expanding with PageIndex integration (Phases 10-12)**
