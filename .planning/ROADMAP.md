@@ -205,7 +205,12 @@ Plans:
   1. bmd query --strategy pageindex uses LLM reasoning to find relevant sections for natural language queries
   2. New bmd context command assembles ready-to-inject RAG context blocks from multiple sections
   3. PageIndex trees generated during indexing, BM25 remains default fast-path
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 11-01-PLAN.md — PageIndex tree infrastructure: tree.go types, pageindex.go subprocess runner, CmdIndex --strategy flag (PAGEINDEX-01)
+- [ ] 11-02-PLAN.md — bmd context command: RAG block assembly, citation formatting, BM25 fallback (CONTEXT-01)
+- [ ] 11-03-PLAN.md — Reasoning-based query mode: --strategy pageindex flag, reasoning_trace output, CONTRACT-01 compatible (REASONING-01)
 
 ### Phase 12: MCP Server & Live Indexing Infrastructure
 **Goal**: Transform bmd into a persistent documentation intelligence service with native MCP integration for agent fleets
@@ -233,10 +238,10 @@ Phases execute in numeric order: 1 → 2 → 3
 | 7. Edit Mode | 7/7 | Complete    | 2026-02-28 |
 | 8. Directory Browser | 6/6 | Complete   | 2026-03-01 |
 | 9. Split-Pane Directory Browser | 3/3 | Complete   | 2026-03-01 |
-| 10. Agent Output Contracts & Chunk Search | 3/3 | Complete   | 2026-03-01 |
-| 11. PageIndex Integration | TBD | Planned    | — |
+| 10. Agent Output Contracts & Chunk Search | 3/3 | Complete    | 2026-03-01 |
+| 11. PageIndex Integration | 0/3 | In Progress | — |
 | 12. MCP Server & Live Indexing | TBD | Planned    | — |
 
-**Current Status: 10 phases COMPLETE, 2 phases PLANNED**
+**Current Status: 10 phases COMPLETE, Phase 11 IN PROGRESS, Phase 12 PLANNED**
 **Previous Completion: All 9 phases complete (2026-03-01)**
 **Total Project Duration: 4 days (Phases 1-9), expanding with PageIndex integration (Phases 10-12)**
