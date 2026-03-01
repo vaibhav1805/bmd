@@ -201,6 +201,9 @@ Recent decisions affecting current work:
 - [Phase 12]: Docker image requires explicit python3+py3-pip on alpine for PageIndex; pip install uses --break-system-packages per PEP 668
 - [Phase 12]: OpenClaw tests use static file validation (no Docker daemon required) for CI portability
 - [Phase 12]: SearchAllDocumentsPageIndex falls back to BM25 on any PageIndex error (missing trees or binary); actual strategy returned from SearchAllFiles so header always reflects truth
+- [Phase 12-mcp-infrastructure]: mark3labs/mcp-go chosen as MCP SDK — ServeStdio convenience function, clean tool registration API
+- [Phase 12-mcp-infrastructure]: captureOutput pattern delegates to existing Cmd* functions — reuses CONTRACT-01 compliance without duplicating logic
+- [Phase 12-mcp-infrastructure]: MCP handlers return IsError result for missing params — correct MCP protocol error semantics vs Go errors
 
 ### Pending Todos
 
