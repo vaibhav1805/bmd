@@ -184,10 +184,25 @@ None.
 
 ## Session Continuity
 
-Current session: 2026-03-01 (continued) — Post-Phase 9 Refinements
-Status: All 9 phases complete + post-phase fixes applied, project PRODUCTION READY
+Current session: 2026-03-01 (continued, resumed) — Bug fixes + documentation
+Status: All 9 phases complete + bug fixes + docs updated, project PRODUCTION READY
 
-**Post-Phase 9 Fixes (YOLO mode):**
+**Post-Phase 9 Refinements (2026-03-01 resumed):**
+- **Bug fix: Debug logs removed**: Removed 4 [DEBUG] statements from renderImage() that were printing to stderr
+  * Commit: ff6cacd
+- **Bug fix: Split-pane UI alignment**: Added missing header and status bar to split-pane view
+  * Split-pane and directory listing views now properly wrapped with renderHeader() and renderStatusBar()
+  * Fixes display alignment and consistency with other view modes
+  * Commit: 4b460b1
+- **Documentation: README & ARCHITECTURE updated**
+  * README restructured: emphasizes dual purpose (editor for humans + agent tool for AI/scripts)
+  * Directory browser marked as Beta feature throughout docs
+  * Binary name changed: all examples now use `bmd` instead of `beautiful-markdown-editor`
+  * ARCHITECTURE.md converted to component-based structure (no phases)
+  * Added split-pane directory browser to features list
+  * Commit: 293d48c
+
+**Previous Post-Phase 9 Fixes (YOLO mode):**
 - **Split-pane preview styling**: Now uses viewer renderer for full markdown formatting
   * Files display with proper ANSI colors, bold/italic, syntax highlighting
   * Respects split-pane width and scroll offset
@@ -259,10 +274,11 @@ Status: All 9 phases complete + post-phase fixes applied, project PRODUCTION REA
 
 **Project Completion Summary:**
   - **All 9 phases complete** (39+ plans executed)
-  - **291+ tests passing** (TUI: 289 tests)
+  - **291+ tests passing** (TUI: 289 tests, all passing after bug fixes)
   - **Zero regressions** across all phases
   - **Binary**: 16MB, fully functional, ready to ship
-  - **Features shipped**: Core rendering, navigation, search, indexing, graphs, editing, split-pane, themes, mouse
+  - **Features shipped**: Core rendering, navigation, search, indexing, graphs, editing, split-pane, themes, mouse, directory browser
+  - **Documentation**: Updated to position as editor + agent tool, all examples use `bmd` binary name
   - **Status**: PRODUCTION READY 🚀
 
 Previous session Phase 7 details:

@@ -31,6 +31,11 @@ bmd depends auth-service
 bmd services
 ```
 
+**See it in action:**
+
+![Split-Pane Directory Browser](docs/screenshots/01-split-pane-browser.png)
+*Browse markdown files with live preview in split-pane mode. Navigate with arrow keys, press 's' to toggle split view.*
+
 ### Features
 
 **Editing & Viewing:**
