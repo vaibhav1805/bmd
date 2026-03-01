@@ -31,11 +31,6 @@ bmd depends auth-service
 bmd services
 ```
 
-**See it in action:**
-
-![Split-Pane Directory Browser](docs/screenshots/01-split-pane-browser.png)
-*Browse markdown files with live preview in split-pane mode. Navigate with arrow keys, press 's' to toggle split view.*
-
 ### Features
 
 **Editing & Viewing:**
@@ -172,6 +167,9 @@ Creates `.bmd-index.json` and `.bmd-graph.json` with:
 | `graph [--format json\|dot]` | Export relationship graph | `bmd graph --format dot` |
 
 ## Rendering Features
+
+![Beautiful File View with Syntax Highlighting](docs/screenshots/02-file-view-rendering.png)
+*Full markdown rendering with syntax-highlighted code, styled text, and beautiful typography*
 
 BMD renders all markdown elements beautifully:
 
