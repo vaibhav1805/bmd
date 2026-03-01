@@ -987,3 +987,266 @@ func TestIntegration_PersistenceWorkflow(t *testing.T) {
 
 	t.Log("Integration test PASSED")
 }
+
+// ─── Index auto-refresh (staleness detection) ─────────────────────────────────
+
+func TestGetIndexBuiltAt_ReturnsTimestamp(t *testing.T) {
+	db := tempDB(t)
+	idx := smallIndex(3)
+	if err := db.SaveIndex(idx); err != nil {
+		t.Fatalf("SaveIndex: %v", err)
+	}
+
+	builtAt := db.GetIndexBuiltAt()
+	if builtAt.IsZero() {
+		t.Error("expected non-zero built_at timestamp after SaveIndex")
+	}
+
+	// Should be recent (within the last 10 seconds).
+	if time.Since(builtAt) > 10*time.Second {
+		t.Errorf("built_at too old: %v (now: %v)", builtAt, time.Now())
+	}
+}
+
+func TestGetIndexBuiltAt_ZeroWhenMissing(t *testing.T) {
+	db := tempDB(t)
+	// No SaveIndex called — built_at should be zero.
+	builtAt := db.GetIndexBuiltAt()
+	if !builtAt.IsZero() {
+		t.Errorf("expected zero time for missing built_at, got %v", builtAt)
+	}
+}
+
+func TestIsIndexStale_FreshIndex(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "a.md"), "# Alpha\nContent about alpha")
+	writeFile(t, filepath.Join(dir, "b.md"), "# Beta\nContent about beta")
+
+	// Build via CmdIndex to populate the database with built_at.
+	dbPath := filepath.Join(dir, "test.db")
+	if err := CmdIndex([]string{"--dir", dir, "--db", dbPath}); err != nil {
+		t.Fatalf("CmdIndex: %v", err)
+	}
+
+	db, err := OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	defer db.Close()
+
+	stale, err := db.IsIndexStale(dir)
+	if err != nil {
+		t.Fatalf("IsIndexStale: %v", err)
+	}
+	if stale {
+		t.Error("expected fresh index immediately after build")
+	}
+}
+
+func TestIsIndexStale_NewFile(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "a.md"), "# Alpha\nContent")
+
+	dbPath := filepath.Join(dir, "test.db")
+	if err := CmdIndex([]string{"--dir", dir, "--db", dbPath}); err != nil {
+		t.Fatalf("CmdIndex: %v", err)
+	}
+
+	// Add a new file after indexing.
+	time.Sleep(50 * time.Millisecond) // ensure mtime is after built_at
+	writeFile(t, filepath.Join(dir, "new.md"), "# New\nBrand new file")
+
+	db, err := OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	defer db.Close()
+
+	stale, err := db.IsIndexStale(dir)
+	if err != nil {
+		t.Fatalf("IsIndexStale: %v", err)
+	}
+	if !stale {
+		t.Error("expected stale index after adding a new file")
+	}
+}
+
+func TestIsIndexStale_ModifiedFile(t *testing.T) {
+	dir := t.TempDir()
+	fpath := filepath.Join(dir, "doc.md")
+	writeFile(t, fpath, "# Original\nOriginal content")
+
+	dbPath := filepath.Join(dir, "test.db")
+	if err := CmdIndex([]string{"--dir", dir, "--db", dbPath}); err != nil {
+		t.Fatalf("CmdIndex: %v", err)
+	}
+
+	// Modify the file after indexing.
+	time.Sleep(50 * time.Millisecond)
+	writeFile(t, fpath, "# Modified\nCompletely different content")
+
+	db, err := OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	defer db.Close()
+
+	stale, err := db.IsIndexStale(dir)
+	if err != nil {
+		t.Fatalf("IsIndexStale: %v", err)
+	}
+	if !stale {
+		t.Error("expected stale index after modifying a file")
+	}
+}
+
+func TestIsIndexStale_DeletedFile(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "a.md"), "# Alpha")
+	writeFile(t, filepath.Join(dir, "b.md"), "# Beta")
+
+	dbPath := filepath.Join(dir, "test.db")
+	if err := CmdIndex([]string{"--dir", dir, "--db", dbPath}); err != nil {
+		t.Fatalf("CmdIndex: %v", err)
+	}
+
+	// Delete a file after indexing.
+	if err := os.Remove(filepath.Join(dir, "b.md")); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+
+	db, err := OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	defer db.Close()
+
+	stale, err := db.IsIndexStale(dir)
+	if err != nil {
+		t.Fatalf("IsIndexStale: %v", err)
+	}
+	if !stale {
+		t.Error("expected stale index after deleting a file")
+	}
+}
+
+func TestIsIndexStale_OldDatabaseWithoutBuiltAt(t *testing.T) {
+	db := tempDB(t)
+	// Manually insert a document without setting built_at metadata.
+	_, err := db.conn.Exec(
+		`INSERT INTO documents (id, path, title, content_hash, last_modified, indexed_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		"old.md", "/fake/old.md", "Old", "hash123",
+		time.Now().UnixNano(), time.Now().UnixNano(),
+	)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "old.md"), "# Old\nContent")
+
+	stale, err := db.IsIndexStale(dir)
+	if err != nil {
+		t.Fatalf("IsIndexStale: %v", err)
+	}
+	if !stale {
+		t.Error("expected stale for old database without built_at timestamp")
+	}
+}
+
+func TestOpenOrBuildIndex_RefreshesStale(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "a.md"), "# Alpha\nContent about alpha")
+
+	dbPath := filepath.Join(dir, "test.db")
+	if err := CmdIndex([]string{"--dir", dir, "--db", dbPath}); err != nil {
+		t.Fatalf("CmdIndex: %v", err)
+	}
+
+	// Add a new file, making the index stale.
+	time.Sleep(50 * time.Millisecond)
+	writeFile(t, filepath.Join(dir, "new.md"), "# Kubernetes\nKubernetes deployment guide")
+
+	// openOrBuildIndex should detect staleness and rebuild.
+	db, err := openOrBuildIndex(dir, dbPath)
+	if err != nil {
+		t.Fatalf("openOrBuildIndex: %v", err)
+	}
+	defer db.Close()
+
+	// The rebuilt index should contain the new file.
+	idx := NewIndex()
+	if err := db.LoadIndex(idx); err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+	if idx.DocCount() != 2 {
+		t.Errorf("DocCount after refresh: got %d, want 2", idx.DocCount())
+	}
+}
+
+func TestOpenOrBuildIndex_UsesCacheWhenFresh(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "a.md"), "# Alpha\nContent")
+
+	dbPath := filepath.Join(dir, "test.db")
+	if err := CmdIndex([]string{"--dir", dir, "--db", dbPath}); err != nil {
+		t.Fatalf("CmdIndex: %v", err)
+	}
+
+	// Get the database file modification time before opening.
+	info1, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatalf("stat before: %v", err)
+	}
+
+	// Open without changes — should use cache (no rebuild).
+	db, err := openOrBuildIndex(dir, dbPath)
+	if err != nil {
+		t.Fatalf("openOrBuildIndex: %v", err)
+	}
+	defer db.Close()
+
+	// Verify the index is still valid.
+	idx := NewIndex()
+	if err := db.LoadIndex(idx); err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+	if idx.DocCount() != 1 {
+		t.Errorf("DocCount: got %d, want 1", idx.DocCount())
+	}
+
+	// DB file should not have been rewritten (mtime unchanged or close).
+	info2, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatalf("stat after: %v", err)
+	}
+	// Allow 1 second tolerance for filesystem mtime granularity.
+	if info2.ModTime().Sub(info1.ModTime()) > time.Second {
+		t.Error("database file was rewritten even though index was fresh")
+	}
+}
+
+func TestBuiltAtTimestamp_UpdatedOnRebuild(t *testing.T) {
+	db := tempDB(t)
+
+	// First build.
+	idx1 := smallIndex(3)
+	if err := db.SaveIndex(idx1); err != nil {
+		t.Fatalf("first SaveIndex: %v", err)
+	}
+	builtAt1 := db.GetIndexBuiltAt()
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Second build.
+	idx2 := smallIndex(5)
+	if err := db.SaveIndex(idx2); err != nil {
+		t.Fatalf("second SaveIndex: %v", err)
+	}
+	builtAt2 := db.GetIndexBuiltAt()
+
+	if !builtAt2.After(builtAt1) {
+		t.Errorf("second built_at (%v) should be after first (%v)", builtAt2, builtAt1)
+	}
+}

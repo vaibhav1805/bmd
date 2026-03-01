@@ -545,12 +545,30 @@ func defaultDBPath(dir string) string {
 
 // openOrBuildIndex opens an existing database at dbPath, or if one does not
 // exist, tries to build it from the directory at absDir.
+//
+// When the database exists, it checks whether the index is stale (any markdown
+// file modified, added, or removed since the last build) and silently rebuilds
+// if needed.  Old databases without a built_at timestamp are also rebuilt.
 func openOrBuildIndex(absDir, dbPath string) (*Database, error) {
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		// Auto-build index if database doesn't exist.
 		fmt.Fprintln(os.Stderr, "No index found, building...")
 		if err2 := CmdIndex([]string{"--dir", absDir, "--db", dbPath}); err2 != nil {
 			return nil, fmt.Errorf("auto-build index: %w", err2)
+		}
+	} else {
+		// Database exists — check if the index is stale.
+		db, openErr := OpenDB(dbPath)
+		if openErr != nil {
+			return nil, fmt.Errorf("open db %q: %w", dbPath, openErr)
+		}
+		stale, staleErr := db.IsIndexStale(absDir)
+		_ = db.Close()
+		if staleErr == nil && stale {
+			// Silently rebuild (CmdIndex writes to stderr only, which is fine).
+			if err2 := CmdIndex([]string{"--dir", absDir, "--db", dbPath}); err2 != nil {
+				return nil, fmt.Errorf("auto-refresh index: %w", err2)
+			}
 		}
 	}
 	db, err := OpenDB(dbPath)

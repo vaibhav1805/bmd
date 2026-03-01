@@ -384,8 +384,133 @@ func (db *Database) SaveIndex(idx *Index) error {
 			}
 		}
 
+		// Record the build timestamp in metadata for staleness detection.
+		_, err = tx.Exec(
+			`INSERT OR REPLACE INTO metadata (key, value) VALUES ('built_at', ?)`,
+			fmt.Sprintf("%d", now),
+		)
+		if err != nil {
+			return fmt.Errorf("write built_at: %w", err)
+		}
+
 		return nil
 	})
+}
+
+// GetIndexBuiltAt returns the Unix nanosecond timestamp when the index was last
+// built, or zero if no timestamp is recorded (backwards-compatible with old
+// databases that don't have the built_at metadata key).
+func (db *Database) GetIndexBuiltAt() time.Time {
+	var val string
+	err := db.conn.QueryRow(
+		`SELECT value FROM metadata WHERE key='built_at'`,
+	).Scan(&val)
+	if err != nil {
+		return time.Time{} // zero time — treat as stale
+	}
+	var ns int64
+	fmt.Sscanf(val, "%d", &ns)
+	if ns == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, ns)
+}
+
+// IsIndexStale returns true if any markdown file under root has been modified
+// since the index was last built, or if files have been added or removed.
+// It compares file modification times on disk against the stored built_at
+// timestamp and the document list in the database.
+//
+// Returns true (stale) when:
+//   - Any .md file has an mtime newer than the index build time
+//   - A .md file exists on disk but is not in the database (new file)
+//   - A document in the database no longer exists on disk (deleted file)
+//   - The built_at timestamp is missing (old index, backwards-compatible)
+func (db *Database) IsIndexStale(root string) (bool, error) {
+	builtAt := db.GetIndexBuiltAt()
+	if builtAt.IsZero() {
+		return true, nil // no timestamp — consider stale
+	}
+
+	// Collect document IDs from the database.
+	rows, err := db.conn.Query(`SELECT id FROM documents`)
+	if err != nil {
+		return false, fmt.Errorf("knowledge.Database.IsIndexStale: query documents: %w", err)
+	}
+	defer rows.Close()
+
+	dbDocs := make(map[string]struct{})
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return false, fmt.Errorf("knowledge.Database.IsIndexStale: scan: %w", err)
+		}
+		dbDocs[id] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("knowledge.Database.IsIndexStale: iterate: %w", err)
+	}
+
+	// Walk disk and compare.
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false, fmt.Errorf("knowledge.Database.IsIndexStale: abs: %w", err)
+	}
+
+	diskDocs := make(map[string]struct{})
+	stale := false
+
+	walkErr := filepath.Walk(absRoot, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return nil // skip unreadable
+		}
+		if info.IsDir() {
+			name := info.Name()
+			if strings.HasPrefix(name, ".") && path != absRoot {
+				return filepath.SkipDir
+			}
+			if _, skip := map[string]struct{}{
+				"node_modules": {}, ".git": {}, ".svn": {},
+			}[name]; skip {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(strings.ToLower(info.Name()), ".md") {
+			return nil
+		}
+		rel, relErr := filepath.Rel(absRoot, path)
+		if relErr != nil {
+			return nil
+		}
+		id := filepath.ToSlash(rel)
+		diskDocs[id] = struct{}{}
+
+		// New file?
+		if _, inDB := dbDocs[id]; !inDB {
+			stale = true
+		}
+		// Modified after index build?
+		if info.ModTime().After(builtAt) {
+			stale = true
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return false, fmt.Errorf("knowledge.Database.IsIndexStale: walk: %w", walkErr)
+	}
+
+	// Deleted files?
+	if !stale {
+		for id := range dbDocs {
+			if _, onDisk := diskDocs[id]; !onDisk {
+				stale = true
+				break
+			}
+		}
+	}
+
+	return stale, nil
 }
 
 // LoadIndex reconstructs idx from the database, replacing its current state.
