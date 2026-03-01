@@ -119,6 +119,14 @@ type Viewer struct {
 	// Directory browser mode (DIR-01): interactive file listing when bmd is run with no args.
 	directoryMode  bool           // true when in directory listing mode
 	directoryState DirectoryState // state for directory listing view
+
+	// DIR-02: View state tracking — tracks which view is currently shown.
+	// Values: "directory" | "file" | "search" | "graph"
+	currentView string
+
+	// DIR-02: When true, the current file was opened from directory mode.
+	// Used to enable 'h'/Backspace to return to directory view.
+	openedFromDirectory bool
 }
 
 // FileMetadata holds metadata for a single markdown file discovered during directory scan.
@@ -136,6 +144,23 @@ type DirectoryState struct {
 	RootPath      string         // directory being browsed
 	Files         []FileMetadata // all .md files found, sorted by name
 	SelectedIndex int            // currently highlighted file (0-based)
+
+	// DIR-02: Saved cursor position when switching to file view, for restoration.
+	SavedSelectedIndex int    // remembered selected file index before switching to file view
+	SavedFilePath      string // remembered directory path before switching to file view
+}
+
+// SaveDirectorySelection stores the current cursor position so it can be
+// restored when returning to directory view from a file.
+func (ds *DirectoryState) SaveDirectorySelection() {
+	ds.SavedSelectedIndex = ds.SelectedIndex
+	ds.SavedFilePath = ds.RootPath
+}
+
+// RestoreDirectorySelection restores the saved cursor position after
+// returning from file view to directory view.
+func (ds *DirectoryState) RestoreDirectorySelection() {
+	ds.SelectedIndex = ds.SavedSelectedIndex
 }
 
 // GraphViewState holds all state for graph visualization.
@@ -216,6 +241,7 @@ func NewDirectoryViewer(dirPath string, th theme.Theme, width int) Viewer {
 		themeDialog:      NewThemeDialog(theme.ThemeDefault),
 		currentThemeName: theme.ThemeDefault,
 		directoryMode:    true,
+		currentView:      "directory",
 		directoryState:   DirectoryState{RootPath: dirPath},
 	}
 }
@@ -294,6 +320,7 @@ func (v *Viewer) LoadDirectory(path string) error {
 	})
 
 	v.directoryMode = true
+	v.currentView = "directory"
 	v.directoryState = DirectoryState{
 		RootPath:      absPath,
 		Files:         files,
@@ -301,6 +328,40 @@ func (v *Viewer) LoadDirectory(path string) error {
 	}
 	v.startDir = absPath
 	return nil
+}
+
+// OpenFileFromDirectory saves the directory selection state then opens the
+// selected file in file view. Sets openedFromDirectory=true so 'h' can return.
+func (v Viewer) OpenFileFromDirectory() (Viewer, tea.Cmd) {
+	if len(v.directoryState.Files) == 0 {
+		return v, nil
+	}
+	// Save cursor position for restoration when returning.
+	v.directoryState.SaveDirectorySelection()
+
+	selected := v.directoryState.Files[v.directoryState.SelectedIndex]
+	v.directoryMode = false
+	v.openedFromDirectory = true
+	v.currentView = "file"
+
+	return v.loadFile(selected.Path)
+}
+
+// BackToDirectory restores the directory view, re-entering directory mode with
+// the cursor position restored to where it was before opening the file.
+func (v Viewer) BackToDirectory() (Viewer, tea.Cmd) {
+	if !v.openedFromDirectory {
+		return v, nil
+	}
+	v.directoryMode = true
+	v.openedFromDirectory = false
+	v.currentView = "directory"
+	v.directoryState.RestoreDirectorySelection()
+	// Reset file view state.
+	v.Offset = 0
+	v.searchState = NewSearchState()
+	v.searchMode = false
+	return v, nil
 }
 
 // LoadGraph loads the Phase 6 knowledge graph from the database at rootPath.
@@ -576,9 +637,24 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch msg.String() {
-		case "?", "h":
+		case "h":
+			// 'h' returns to directory when file was opened from directory mode (DIR-02).
+			// Otherwise it toggles the help overlay.
+			if v.openedFromDirectory {
+				return v.BackToDirectory()
+			}
 			v.helpOpen = !v.helpOpen
 			return v, nil
+
+		case "?":
+			v.helpOpen = !v.helpOpen
+			return v, nil
+
+		case "backspace":
+			// Backspace returns to directory when file was opened from directory mode (DIR-02).
+			if v.openedFromDirectory {
+				return v.BackToDirectory()
+			}
 
 		case "e", "E":
 			// Toggle edit mode
@@ -1055,10 +1131,8 @@ func (v Viewer) updateDirectory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter", "l", "right":
 		if n > 0 {
-			selected := files[v.directoryState.SelectedIndex]
-			// Switch out of directory mode and into file mode.
-			v.directoryMode = false
-			return v.loadFile(selected.Path)
+			// Use OpenFileFromDirectory() to save cursor state for return navigation.
+			return v.OpenFileFromDirectory()
 		}
 		return v, nil
 
@@ -1643,10 +1717,23 @@ func (v Viewer) renderMarkdownSyntax() string {
 // state, navigation back indicator, or error message).
 // Enhanced with colors, better visual hierarchy, and decorative elements.
 func (v Viewer) renderHeader() string {
-	// Left side: "filename  (parent/)"
-	filename := filepath.Base(v.FilePath)
-	parent := filepath.Base(filepath.Dir(v.FilePath))
-	left := filename + "  (" + parent + "/)"
+	// Left side: breadcrumb when opened from directory, or "filename  (parent/)" normally.
+	var left string
+	if v.openedFromDirectory {
+		// DIR-02: Breadcrumb shows directory context: "[~/docs] filename.md"
+		filename := filepath.Base(v.FilePath)
+		dirDisplay := v.directoryState.RootPath
+		if home, err := os.UserHomeDir(); err == nil {
+			if strings.HasPrefix(dirDisplay, home) {
+				dirDisplay = "~" + dirDisplay[len(home):]
+			}
+		}
+		left = "[" + dirDisplay + "] " + filename
+	} else {
+		filename := filepath.Base(v.FilePath)
+		parent := filepath.Base(filepath.Dir(v.FilePath))
+		left = filename + "  (" + parent + "/)"
+	}
 
 	// Right side: context-sensitive
 	var right string
@@ -1661,6 +1748,9 @@ func (v Viewer) renderHeader() string {
 	} else if v.searchState.Active && v.searchState.Query != "" {
 		// No matches in muted color
 		right = "\x1b[33m🔍 " + v.searchState.Query + " (no matches)\x1b[0m"
+	} else if v.openedFromDirectory {
+		// DIR-02: back-to-directory hint when file was opened from directory mode
+		right = "\x1b[38;5;117m← h/Backspace: back to directory\x1b[0m"
 	} else if v.history.CanGoBack() {
 		// Navigation hint in subtle color
 		right = "\x1b[38;5;117m← Back (Ctrl+B)\x1b[0m"
@@ -1675,6 +1765,8 @@ func (v Viewer) renderHeader() string {
 		rightLen = len([]rune("✗ " + v.errorMsg))
 	} else if v.searchState.Active {
 		rightLen = len([]rune("🔍 " + v.searchState.Query + " (X/Y)"))
+	} else if v.openedFromDirectory {
+		rightLen = len([]rune("← h/Backspace: back to directory"))
 	} else if v.history.CanGoBack() {
 		rightLen = len([]rune("← Back (Ctrl+B)"))
 	}
