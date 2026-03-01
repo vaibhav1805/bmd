@@ -145,6 +145,9 @@ bmd graph --format dot > architecture.dot
 
 ## Knowledge System (For Agents)
 
+![Full-Text Search Results](docs/screenshots/03-search-results.png)
+*BM25-ranked search across all files with highlighted matches and context snippets*
+
 Beyond editing, BMD can index markdown directories and answer architectural questions
 programmatically.
 
@@ -185,6 +188,9 @@ BMD renders all markdown elements beautifully:
 - **Blockquotes** — Indented with distinct styling
 - **Links** — Clickable and navigable
 - **Images** — Rendered in compatible terminals
+
+![Service Dependency Graph](docs/screenshots/04-graph-view.png)
+*Visualize document relationships and microservice dependencies with interactive graphs*
 
 ## Theme Switching
 
