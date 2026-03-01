@@ -67,11 +67,15 @@ func FormatGraph(graph *Graph, format string) string {
 // ─── search result formatters ─────────────────────────────────────────────────
 
 type searchResultJSON struct {
-	Rank    int     `json:"rank"`
-	File    string  `json:"file"`
-	Title   string  `json:"title"`
-	Score   float64 `json:"score"`
-	Snippet string  `json:"snippet"`
+	Rank           int     `json:"rank"`
+	File           string  `json:"file"`
+	Title          string  `json:"title"`
+	Score          float64 `json:"score"`
+	Snippet        string  `json:"snippet"`
+	HeadingPath    string  `json:"heading_path,omitempty"`
+	StartLine      int     `json:"start_line,omitempty"`
+	EndLine        int     `json:"end_line,omitempty"`
+	ContentPreview string  `json:"content_preview,omitempty"`
 }
 
 type searchResponseJSON struct {
@@ -85,11 +89,15 @@ func formatSearchResultsJSON(results []SearchResult, query string, queryTimeMs i
 	items := make([]searchResultJSON, len(results))
 	for i, r := range results {
 		items[i] = searchResultJSON{
-			Rank:    i + 1,
-			File:    r.RelPath,
-			Title:   r.Title,
-			Score:   roundFloat(r.Score, 4),
-			Snippet: r.Snippet,
+			Rank:           i + 1,
+			File:           r.RelPath,
+			Title:          r.Title,
+			Score:          roundFloat(r.Score, 4),
+			Snippet:        r.Snippet,
+			HeadingPath:    r.HeadingPath,
+			StartLine:      r.StartLine,
+			EndLine:        r.EndLine,
+			ContentPreview: r.ContentPreview,
 		}
 	}
 	resp := searchResponseJSON{

@@ -55,10 +55,14 @@ func extractChunks(relPath, content string) []Chunk {
 		lineNum := i + 1
 		level, text, isHeading := parseHeading(line)
 
-		if isHeading && i > 0 {
-			// Emit the accumulated chunk before starting a new one.
-			if len(chunkLines) > 0 {
-				chunks = append(chunks, buildChunk(relPath, currentPath, chunkStart, lineNum-1, chunkLines))
+		if isHeading {
+			if i > 0 {
+				// Emit the accumulated chunk before starting a new one.
+				if len(chunkLines) > 0 {
+					chunks = append(chunks, buildChunk(relPath, currentPath, chunkStart, lineNum-1, chunkLines))
+				}
+				chunkStart = lineNum
+				chunkLines = nil
 			}
 			// Update heading stack: set current level, clear all deeper levels.
 			headingStack[level] = text
@@ -66,8 +70,6 @@ func extractChunks(relPath, content string) []Chunk {
 				headingStack[l] = ""
 			}
 			currentPath = buildPath(headingStack)
-			chunkStart = lineNum
-			chunkLines = nil
 		}
 		chunkLines = append(chunkLines, line)
 	}
