@@ -696,3 +696,350 @@ func TestSearchAllDocumentsLargeResultSet(t *testing.T) {
 		}
 	}
 }
+
+// ====== DIR-04: Snippet Extraction Tests ======
+
+// TestGetContextSnippetBasicMatch verifies snippet extraction around a known match.
+func TestGetContextSnippetBasicMatch(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "# Title\nThis document explains the microservices architecture pattern in detail.",
+	})
+	snippet := knowledge.GetContextSnippet(filepath.Join(dir, "doc.md"), "microservices", 100)
+	if snippet == "" {
+		t.Fatal("Expected non-empty snippet")
+	}
+	if !strings.Contains(strings.ToLower(snippet), "microservices") {
+		t.Errorf("Expected snippet to contain 'microservices', got: %s", snippet)
+	}
+}
+
+// TestGetContextSnippetNoMatch verifies fallback when query not found.
+func TestGetContextSnippetNoMatch(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "# Title\nSome content here about databases and storage.",
+	})
+	snippet := knowledge.GetContextSnippet(filepath.Join(dir, "doc.md"), "xyznonexistent", 100)
+	// Should return beginning of file as fallback.
+	if snippet == "" {
+		t.Fatal("Expected non-empty snippet even without match")
+	}
+	if !strings.Contains(snippet, "Title") {
+		t.Errorf("Expected snippet to start with file beginning, got: %s", snippet)
+	}
+}
+
+// TestGetContextSnippetEmptyFile verifies empty file returns empty snippet.
+func TestGetContextSnippetEmptyFile(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"empty.md": "",
+	})
+	snippet := knowledge.GetContextSnippet(filepath.Join(dir, "empty.md"), "test", 100)
+	if snippet != "" {
+		t.Errorf("Expected empty snippet for empty file, got: %q", snippet)
+	}
+}
+
+// TestGetContextSnippetMissingFile verifies missing file returns empty snippet.
+func TestGetContextSnippetMissingFile(t *testing.T) {
+	snippet := knowledge.GetContextSnippet("/nonexistent/path.md", "test", 100)
+	if snippet != "" {
+		t.Errorf("Expected empty snippet for missing file, got: %q", snippet)
+	}
+}
+
+// TestGetContextSnippetEmptyQuery verifies empty query returns file start.
+func TestGetContextSnippetEmptyQuery(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "# Heading\nContent goes here.",
+	})
+	snippet := knowledge.GetContextSnippet(filepath.Join(dir, "doc.md"), "", 100)
+	if snippet == "" {
+		t.Fatal("Expected non-empty snippet for empty query")
+	}
+}
+
+// TestGetContextSnippetTruncation verifies ellipsis when content is truncated.
+func TestGetContextSnippetTruncation(t *testing.T) {
+	longContent := strings.Repeat("word ", 200)
+	dir := buildTmpSearchDir(t, map[string]string{
+		"long.md": longContent,
+	})
+	snippet := knowledge.GetContextSnippet(filepath.Join(dir, "long.md"), "word", 50)
+	if len([]rune(snippet)) > 60 { // allow for "..." padding
+		t.Errorf("Snippet too long: %d runes", len([]rune(snippet)))
+	}
+}
+
+// TestGetContextSnippetMatchAtStart verifies snippet when match is at file beginning.
+func TestGetContextSnippetMatchAtStart(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "API gateway handles requests to microservices for load balancing.",
+	})
+	snippet := knowledge.GetContextSnippet(filepath.Join(dir, "doc.md"), "API", 100)
+	if !strings.Contains(snippet, "API") {
+		t.Errorf("Expected snippet to contain 'API', got: %s", snippet)
+	}
+	// Should NOT start with "..." since match is at beginning.
+	if strings.HasPrefix(snippet, "...") {
+		t.Error("Snippet should not start with '...' when match is at beginning")
+	}
+}
+
+// TestGetContextSnippetMatchAtEnd verifies snippet when match is near end.
+func TestGetContextSnippetMatchAtEnd(t *testing.T) {
+	content := strings.Repeat("filler ", 50) + "microservices pattern"
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": content,
+	})
+	snippet := knowledge.GetContextSnippet(filepath.Join(dir, "doc.md"), "microservices", 60)
+	if !strings.Contains(strings.ToLower(snippet), "microservices") {
+		t.Errorf("Expected snippet to contain 'microservices', got: %s", snippet)
+	}
+}
+
+// TestGetContextSnippetCaseInsensitive verifies case-insensitive matching.
+func TestGetContextSnippetCaseInsensitive(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "The Authentication service handles login and JWT tokens.",
+	})
+	snippet := knowledge.GetContextSnippet(filepath.Join(dir, "doc.md"), "authentication", 100)
+	if !strings.Contains(snippet, "Authentication") {
+		t.Errorf("Expected snippet to contain original case 'Authentication', got: %s", snippet)
+	}
+}
+
+// TestGetContextSnippetWhitespaceCollapsed verifies newlines become spaces.
+func TestGetContextSnippetWhitespaceCollapsed(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "# Heading\n\nParagraph one.\n\nParagraph two with search term here.",
+	})
+	snippet := knowledge.GetContextSnippet(filepath.Join(dir, "doc.md"), "search", 100)
+	if strings.Contains(snippet, "\n") {
+		t.Error("Snippet should not contain newlines")
+	}
+}
+
+// TestGetContextSnippetSpecialChars verifies special characters in query.
+func TestGetContextSnippetSpecialChars(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "Use the GET /api/v1/users endpoint for user listing.",
+	})
+	// Should not crash with regex-special characters.
+	snippet := knowledge.GetContextSnippet(filepath.Join(dir, "doc.md"), "/api/v1", 100)
+	if !strings.Contains(snippet, "/api/v1") {
+		t.Errorf("Expected snippet to contain '/api/v1', got: %s", snippet)
+	}
+}
+
+// ====== DIR-04: Highlight Tests ======
+
+// TestHighlightQueryInSnippetBasic verifies highlighting is applied.
+func TestHighlightQueryInSnippetBasic(t *testing.T) {
+	result := highlightQueryInSnippet("the microservices pattern", "microservices", "\x1b[38;5;250m", "\x1b[1;38;5;226m", "\x1b[0m")
+	if !strings.Contains(result, "\x1b[1;38;5;226m") {
+		t.Error("Expected highlight escape code in result")
+	}
+	if !strings.Contains(result, "microservices") {
+		t.Error("Expected query text to appear in result")
+	}
+}
+
+// TestHighlightQueryInSnippetCaseInsensitive verifies case-insensitive highlighting.
+func TestHighlightQueryInSnippetCaseInsensitive(t *testing.T) {
+	result := highlightQueryInSnippet("The API gateway", "api", "\x1b[38;5;250m", "\x1b[1m", "\x1b[0m")
+	// Should highlight "API" even though query is lowercase "api".
+	if !strings.Contains(result, "\x1b[1m") {
+		t.Error("Expected highlight for case-insensitive match")
+	}
+}
+
+// TestHighlightQueryInSnippetMultipleMatches verifies all occurrences are highlighted.
+func TestHighlightQueryInSnippetMultipleMatches(t *testing.T) {
+	result := highlightQueryInSnippet("api calls to api endpoints via api", "api", "", "\x1b[1m", "\x1b[0m")
+	count := strings.Count(result, "\x1b[1m")
+	if count != 3 {
+		t.Errorf("Expected 3 highlights, got %d", count)
+	}
+}
+
+// TestHighlightQueryInSnippetEmptyQuery verifies empty query returns unchanged.
+func TestHighlightQueryInSnippetEmptyQuery(t *testing.T) {
+	result := highlightQueryInSnippet("some text", "", "", "", "")
+	if result != "some text" {
+		t.Errorf("Expected unchanged text for empty query, got: %s", result)
+	}
+}
+
+// TestHighlightQueryInSnippetEmptySnippet verifies empty snippet returns empty.
+func TestHighlightQueryInSnippetEmptySnippet(t *testing.T) {
+	result := highlightQueryInSnippet("", "query", "", "", "")
+	if result != "" {
+		t.Errorf("Expected empty result for empty snippet, got: %s", result)
+	}
+}
+
+// ====== DIR-04: Render Tests with Snippets ======
+
+// TestRenderCrossSearchResultsShowsSnippet verifies snippet appears in rendered output.
+func TestRenderCrossSearchResultsShowsSnippet(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"svc.md": "# Service\nThe payment microservices handle billing and invoices.",
+	})
+	v := newTestViewerWithDir(t, dir)
+	v.crossSearchActive = true
+	v.crossSearchQuery = "microservices"
+	v.crossSearchResults = []knowledge.SearchResult{
+		{RelPath: "svc.md", Score: 8.2, Path: filepath.Join(dir, "svc.md"), Snippet: "payment microservices handle billing"},
+	}
+	v.crossSearchSelected = 0
+
+	out := v.renderCrossSearchResults(20)
+	// Check that either the GetContextSnippet output or the fallback Snippet appears.
+	lowerOut := strings.ToLower(out)
+	if !strings.Contains(lowerOut, "microservices") {
+		t.Error("Expected snippet content containing 'microservices' in rendered output")
+	}
+}
+
+// TestRenderCrossSearchResultsFallbackSnippet verifies fallback when file is missing.
+func TestRenderCrossSearchResultsFallbackSnippet(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestViewerWithDir(t, dir)
+	v.crossSearchActive = true
+	v.crossSearchQuery = "test"
+	v.crossSearchResults = []knowledge.SearchResult{
+		{RelPath: "missing.md", Score: 5.0, Path: "/nonexistent/missing.md", Snippet: "fallback snippet text"},
+	}
+	v.crossSearchSelected = 0
+
+	out := v.renderCrossSearchResults(20)
+	if !strings.Contains(out, "fallback snippet text") {
+		t.Error("Expected fallback snippet in rendered output when file is missing")
+	}
+}
+
+// ====== DIR-04: File Navigation from Search Tests ======
+
+// TestOpenFileFromSearchSetsState verifies state is set when opening file from search.
+func TestOpenFileFromSearchSetsState(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"target.md": "# Target\nSome content here.",
+	})
+	v := newTestViewerWithDir(t, dir)
+	v.crossSearchActive = true
+	v.crossSearchSelected = 0
+	v.crossSearchResults = []knowledge.SearchResult{
+		{RelPath: "target.md", Score: 5.0, Path: filepath.Join(dir, "target.md")},
+	}
+
+	// Simulate pressing 'l' to open.
+	lKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
+	model, _ := v.Update(lKey)
+	result := model.(Viewer)
+
+	if !result.openedFromSearch {
+		t.Error("Expected openedFromSearch=true after opening file from search")
+	}
+	if result.crossSearchActive {
+		t.Error("Expected crossSearchActive=false after opening file")
+	}
+}
+
+// TestBackToSearchResultsRestoresState verifies returning to search preserves cursor.
+func TestBackToSearchResultsRestoresState(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"a.md": "# Doc A\nContent A.",
+		"b.md": "# Doc B\nContent B.",
+	})
+	v := newTestViewerWithDir(t, dir)
+	v.crossSearchQuery = "content"
+	v.crossSearchResults = []knowledge.SearchResult{
+		{RelPath: "a.md", Score: 5.0, Path: filepath.Join(dir, "a.md")},
+		{RelPath: "b.md", Score: 4.0, Path: filepath.Join(dir, "b.md")},
+	}
+	v.crossSearchSelected = 1
+	v.openedFromSearch = true
+	v.crossSearchActive = false
+
+	backV, _ := v.BackToSearchResults()
+	if !backV.crossSearchActive {
+		t.Error("Expected crossSearchActive=true after returning to search")
+	}
+	if backV.openedFromSearch {
+		t.Error("Expected openedFromSearch=false after returning to search")
+	}
+	if backV.crossSearchSelected != 1 {
+		t.Errorf("Expected crossSearchSelected=1 (preserved), got %d", backV.crossSearchSelected)
+	}
+}
+
+// TestBackToSearchResultsNotOpenedFromSearch verifies no-op when not from search.
+func TestBackToSearchResultsNotOpenedFromSearch(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestViewerWithDir(t, dir)
+	v.openedFromSearch = false
+
+	backV, _ := v.BackToSearchResults()
+	if backV.crossSearchActive {
+		t.Error("Expected crossSearchActive=false when not opened from search")
+	}
+}
+
+// TestHKeyReturnsToSearchFromFile verifies 'h' returns to search results.
+func TestHKeyReturnsToSearchFromFile(t *testing.T) {
+	dir := buildTmpSearchDir(t, map[string]string{
+		"doc.md": "# Doc\nContent.",
+	})
+	v := newTestViewerWithDir(t, dir)
+	v.openedFromSearch = true
+	v.crossSearchQuery = "content"
+	v.crossSearchResults = []knowledge.SearchResult{
+		{RelPath: "doc.md", Score: 5.0, Path: filepath.Join(dir, "doc.md")},
+	}
+	v.crossSearchSelected = 0
+
+	hKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}
+	model, _ := v.Update(hKey)
+	result := model.(Viewer)
+
+	if !result.crossSearchActive {
+		t.Error("Expected crossSearchActive=true after 'h' from file opened from search")
+	}
+	if result.openedFromSearch {
+		t.Error("Expected openedFromSearch=false after 'h'")
+	}
+}
+
+// TestStripANSIForLen verifies ANSI stripping for length calculation.
+func TestStripANSIForLen(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"plain text", "plain text"},
+		{"\x1b[1mBold\x1b[0m", "Bold"},
+		{"\x1b[38;5;226mYellow\x1b[0m text", "Yellow text"},
+		{"no escapes", "no escapes"},
+		{"", ""},
+	}
+	for _, tc := range tests {
+		got := stripANSIForLen(tc.input)
+		if got != tc.expected {
+			t.Errorf("stripANSIForLen(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+// TestHeaderShowsSearchBreadcrumb verifies header shows search context breadcrumb.
+func TestHeaderShowsSearchBreadcrumb(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestViewerWithDir(t, dir)
+	v.openedFromSearch = true
+	v.crossSearchQuery = "microservices"
+	v.Width = 80
+
+	header := v.renderHeader()
+	if !strings.Contains(header, "search: microservices") {
+		t.Errorf("Expected search breadcrumb in header, got: %s", header)
+	}
+}
