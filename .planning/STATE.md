@@ -66,6 +66,7 @@ Progress: [███████████████████████
 | Phase 08-directory-browser P08-04 | 46 | 4 tasks | 3 files |
 | Phase 10-agent-contracts P02 | 22 | 3 tasks | 7 files |
 | Phase 10-agent-contracts P01 | 4 | 3 tasks | 3 files |
+| Phase 10-agent-contracts P03 | 3 | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -182,6 +183,8 @@ Recent decisions affecting current work:
 - [Phase 10-agent-contracts]: RemoveDocumentsByRelPath replaces RemoveDocument for file-level removal of all chunks
 - [Phase 10-agent-contracts]: ContractResponse wraps all JSON output from agent commands; text/CSV/DOT paths unchanged
 - [Phase 10-agent-contracts]: classifyIndexError() maps error message content to INDEX_NOT_FOUND or INTERNAL_ERROR
+- [Phase 10-agent-contracts]: bmd-final and bmd-test added to .gitignore as named binary patterns — /bmd root-only pattern does not cover them
+- [Phase 10-agent-contracts]: *.bmd-index.json and *.bmd-tree.json added to .gitignore in anticipation of Phase 11 PageIndex outputs
 
 ### Pending Todos
 
