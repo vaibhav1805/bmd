@@ -69,6 +69,7 @@ Progress: [███████████████████████
 | Phase 10-agent-contracts P03 | 3 | 3 tasks | 1 files |
 | Phase 11-pageindex-integration P01 | 3 | 3 tasks | 6 files |
 | Phase 11-pageindex-integration P02 | 10 | 3 tasks | 3 files |
+| Phase 11-pageindex-integration P03 | 12 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -193,6 +194,8 @@ Recent decisions affecting current work:
 - [Phase 11-pageindex-integration]: BM25 fallback executes when no .bmd-tree.json files are present OR when RunPageIndexQuery fails — graceful degradation always wins
 - [Phase 11-pageindex-integration]: AssembleContextBlock uses § (U+00A7) as heading separator in context block citations; preamble sections (HeadingPath='') omit the § separator
 - [Phase 11-pageindex-integration]: bmd context --format json returns CONTRACT-01 ContractResponse envelope consistent with all other agent commands
+- [Phase 11-pageindex-integration]: Strategy routing added at top of CmdQuery (before BM25 path) for zero overhead on default callers; empty strategy and 'bm25' both use BM25 path
+- [Phase 11-pageindex-integration]: ErrCodePageIndexNotAvailable returned when pageindex binary absent; INDEX_NOT_FOUND when .bmd-tree.json files missing
 
 ### Pending Todos
 
