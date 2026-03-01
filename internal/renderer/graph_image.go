@@ -49,9 +49,14 @@ func GraphToDOT(g *knowledge.Graph) string {
 }
 
 // RenderGraphAsImage converts a graph to PNG using Graphviz and returns as Sixel/Kitty sequence.
-// Falls back to empty string if graphviz or imagemagick not available.
+// Falls back to empty string if graphviz not available.
 func RenderGraphAsImage(g *knowledge.Graph, width, height int) string {
 	if g == nil || len(g.Nodes) == 0 {
+		return ""
+	}
+
+	// Check if Graphviz is available first
+	if !GraphvizAvailable() {
 		return ""
 	}
 
@@ -67,33 +72,59 @@ func RenderGraphAsImage(g *knowledge.Graph, width, height int) string {
 		return ""
 	}
 
-	// Render PNG as Sixel/Kitty
-	return ImageToTerminal(pngData, "", "Graph Visualization", width, height)
+	// Render PNG as Kitty graphics (Alacritty native support)
+	// Use Kitty protocol directly for best Alacritty support
+	return ImageToKitty(pngData, width, height)
 }
 
 // dotToPNG converts Graphviz DOT format to PNG data.
 // Uses 'dot' command to render, with fallback to 'neato' for layout.
 func dotToPNG(dotStr string, width, height int) ([]byte, error) {
+	// Calculate reasonable size in inches (typical DPI for terminal graphics)
+	// Use at least 3x2 inches
+	sizeW := (width / 8)
+	sizeH := (height / 16)
+	if sizeW < 3 {
+		sizeW = 3
+	}
+	if sizeH < 2 {
+		sizeH = 2
+	}
+
+	sizeArg := fmt.Sprintf("-Gsize=%d,%d!", sizeW, sizeH)
+
 	// Try 'dot' first (hierarchical layout)
-	cmd := exec.Command("dot", "-Tpng", "-Gsize="+fmt.Sprintf("%d,%d", width/8, height/16), "-Gdpi=72")
+	cmd := exec.Command("dot", "-Tpng", sizeArg, "-Gdpi=72")
 	cmd.Stdin = strings.NewReader(dotStr)
 
 	var out bytes.Buffer
+	var errOut bytes.Buffer
 	cmd.Stdout = &out
+	cmd.Stderr = &errOut
 
 	if err := cmd.Run(); err != nil {
 		// Try 'neato' (spring-based layout)
-		cmd = exec.Command("neato", "-Tpng", "-Gsize="+fmt.Sprintf("%d,%d", width/8, height/16), "-Gdpi=72")
+		out.Reset()
+		errOut.Reset()
+
+		cmd = exec.Command("neato", "-Tpng", sizeArg, "-Gdpi=72")
 		cmd.Stdin = strings.NewReader(dotStr)
 		cmd.Stdout = &out
+		cmd.Stderr = &errOut
 
 		if err := cmd.Run(); err != nil {
-			// Neither dot nor neato available
-			return nil, err
+			// Neither dot nor neato available or both failed
+			return nil, fmt.Errorf("graphviz rendering failed: %v (stderr: %s)", err, errOut.String())
 		}
 	}
 
-	return out.Bytes(), nil
+	// Check if output is empty
+	pngData := out.Bytes()
+	if len(pngData) == 0 {
+		return nil, fmt.Errorf("graphviz produced no output")
+	}
+
+	return pngData, nil
 }
 
 // GraphvizAvailable checks if Graphviz (dot/neato) is installed.
@@ -113,6 +144,32 @@ func RequiredForGraphGraphics() string {
 		"  Ubuntu: sudo apt-get install graphviz\n" +
 		"  Alpine: apk add graphviz\n" +
 		"  Or: https://graphviz.org/download/"
+}
+
+// ExportGraphAsImage exports a knowledge graph as PNG image data.
+// Returns raw PNG bytes suitable for saving to a file.
+func ExportGraphAsImage(g *knowledge.Graph, width, height int) ([]byte, error) {
+	if g == nil || len(g.Nodes) == 0 {
+		return nil, fmt.Errorf("empty graph")
+	}
+
+	if !GraphvizAvailable() {
+		return nil, fmt.Errorf("graphviz not available")
+	}
+
+	// Generate DOT format
+	dotStr := GraphToDOT(g)
+	if dotStr == "" {
+		return nil, fmt.Errorf("failed to generate DOT")
+	}
+
+	// Convert to PNG
+	pngData, err := dotToPNG(dotStr, width, height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render graph: %v", err)
+	}
+
+	return pngData, nil
 }
 
 // escapeQuotes escapes double quotes for DOT format.

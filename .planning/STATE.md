@@ -227,16 +227,28 @@ Completed: Full Sixel graphics protocol implementation with ImageMagick integrat
 - Project status dashboard and quick reference guides
 - Commit: 9dde224
 
-**Post-Phase 12 Enhancement (2026-03-01 22:09Z) — Sixel Graphics Support:**
+**Post-Phase 12 Enhancements (2026-03-01 22:14Z) — Native Graphics for Images & Graphs:**
+
+**1. Sixel Graphics Support (22:09Z)**
 - Implemented full Sixel protocol using ImageMagick `convert` command
 - Added SixelAvailable() to verify ImageMagick is installed
 - Updated DetectImageProtocol() to validate tool availability
 - Added ProtocolCapabilities() for diagnostic help text
-- Added RequiredForSixel() with installation instructions (macOS, Linux, Alpine)
+- Added RequiredForSixel() with installation instructions
 - 6 new comprehensive tests (all passing)
-- Updated README with Sixel info and ImageMagick setup guides
 - Graceful fallback to Kitty/iTerm2/Unicode if ImageMagick unavailable
 - Commit: 1a6ff66 — "feat(image-rendering): implement full Sixel graphics support"
+
+**2. Native Graph Visualization (22:14Z) — **THIS FIXES YOUR ALACRITTY ISSUE**
+- Added GraphToDOT() to generate Graphviz DOT format from knowledge graphs
+- Added RenderGraphAsImage() to convert graphs to PNG via Graphviz
+- Added GraphvizAvailable() to detect Graphviz installation
+- Updated renderGraphView() to try graphics rendering before ASCII fallback
+- Native graphics support for Alacritty, Kitty, iTerm2 (Sixel/Kitty protocol)
+- ASCII art fallback if Graphviz not available or graph too large
+- 5 comprehensive tests (all passing)
+- Updated README with graph visualization and Graphviz setup
+- Commit: 5c9e7e6 — "feat(graphs): native graphics rendering with Graphviz fallback"
 
 **Post-Phase 9 Refinements (2026-03-01 resumed):**
 - **Bug fix: Debug logs removed**: Removed 4 [DEBUG] statements from renderImage() that were printing to stderr

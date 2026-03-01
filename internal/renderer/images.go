@@ -172,20 +172,24 @@ func ImageToKitty(imageData []byte, width, height int) string {
 		return ""
 	}
 
-	// Kitty graphics protocol with image ID:
-	// \x1b_Ga=T,i=ID,s=WIDTH,v=HEIGHT,f=100,m=0:base64data\x1b\\
-	// a=T (transmit), i=ID (unique image ID), s=width, v=height, f=100 (PNG), m=0 (final chunk)
 	encoded := base64.StdEncoding.EncodeToString(imageData)
 
-	// Debug output disabled
-	// len(imageData), len(encoded), width, height
+	// Kitty graphics protocol - minimal working format:
+	// \x1b_Ga=T,f=100,m=0:base64data\x1b\\
+	// - a=T: action transmit
+	// - f=100: format PNG
+	// - m=0: no more chunks
+	//
+	// Note: For graph images, we don't need to specify width/height as Alacritty
+	// will scale to fit the terminal based on the PNG's intrinsic dimensions
+	// and the current terminal cell size.
 
-	// Generate unique ID based on data hash (simple approach)
-	imageID := 1 // Use static ID - Alacritty may need this
+	payload := fmt.Sprintf(
+		"\x1b_Ga=T,f=100,m=0:%s\x1b\\",
+		encoded,
+	)
 
-	// m=0 means final chunk (no more data coming)
-	payload := fmt.Sprintf("\x1b_Ga=T,i=%d,s=%d,v=%d,f=100,m=0:%s\x1b\\", imageID, width, height, encoded)
-	return payload + "\n"
+	return payload
 }
 
 // ImageToSixel converts image data to Sixel format using ImageMagick's convert command.

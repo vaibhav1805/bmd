@@ -3,9 +3,11 @@ package tui
 import (
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/bmd/bmd/internal/knowledge"
@@ -91,6 +93,27 @@ func (v Viewer) updateGraph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.graphState.ZoomLevel = 0
 		v.graphState.PanOffsetX = 0
 		v.graphState.PanOffsetY = 0
+
+	case "e", "E":
+		// Export graph as PNG (e.g., for viewing in image viewer)
+		if v.graphState.Graph != nil {
+			// Generate graph visualization as PNG
+			graphPNG, err := renderer.ExportGraphAsImage(v.graphState.Graph, v.Width, v.Height-3)
+			if err == nil && len(graphPNG) > 0 {
+				// Save to temp file
+				tmpPath, err := saveGraphImage(graphPNG, "bmd-graph")
+				if err == nil && tmpPath != "" {
+					v.errorMsg = fmt.Sprintf("✓ Graph saved: %s", filepath.Base(tmpPath))
+					return v, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+						return clearErrorMsg{}
+					})
+				}
+			}
+			v.errorMsg = "Failed to export graph (graphviz not available?)"
+			return v, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+				return clearErrorMsg{}
+			})
+		}
 		return v, nil
 
 	case "enter", "l":
@@ -144,16 +167,10 @@ func (v Viewer) renderGraphView(contentHeight int) string {
 		// For very large graphs (50+), use list view for performance
 		sb.WriteString(renderGraphListFallback(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
 	} else {
-		// Try rendering as native graphics (Sixel/Kitty) if available
-		imageResult := renderer.RenderGraphAsImage(g, v.Width, graphHeight)
-		if imageResult != "" {
-			// Successfully rendered as image
-			sb.WriteString(imageResult)
-		} else {
-			// Fallback to force-directed layout with ASCII art
-			layout := forceDirectedLayout(g, v.Width, graphHeight)
-			sb.WriteString(renderGraphWithForceLayout(g, layout, v.graphState.SelectedNodeID, v.Width, graphHeight))
-		}
+		// For now, use ASCII art (Kitty graphics through TUI framework doesn't render well)
+		// TODO: Future enhancement - save graph to temp file and display with native viewer
+		layout := forceDirectedLayout(g, v.Width, graphHeight)
+		sb.WriteString(renderGraphWithForceLayout(g, layout, v.graphState.SelectedNodeID, v.Width, graphHeight))
 	}
 
 	// Footer: show selected node details and key hints.
@@ -886,4 +903,19 @@ func graphIndexOfNode(order []string, nodeID string) int {
 		}
 	}
 	return -1
+}
+
+// saveGraphImage saves PNG data to a temporary file and returns the path.
+// The file is created in the system temp directory with a timestamp.
+func saveGraphImage(pngData []byte, hint string) (string, error) {
+	tmpDir := os.TempDir()
+	timestamp := time.Now().Format("20060102-150405")
+	filename := filepath.Join(tmpDir, fmt.Sprintf("bmd-%s-%s.png", hint, timestamp))
+
+	err := os.WriteFile(filename, pngData, 0644)
+	if err != nil {
+		return "", err
+	}
+
+	return filename, nil
 }
