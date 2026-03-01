@@ -9,7 +9,9 @@ import (
 
 // SearchResult is the user-facing result returned by Index.Search.
 type SearchResult struct {
-	// DocID is the document's unique identifier (relative path, forward slashes).
+	// DocID is the document's unique identifier.
+	// After chunk-level indexing this is the chunk DocID:
+	// "relPath#HeadingPath:L{startLine}". RelPath continues to identify the file.
 	DocID string `json:"docId"`
 
 	// Path is the absolute filesystem path to the source file.
@@ -33,6 +35,12 @@ type SearchResult struct {
 	// MatchCount is the number of distinct query terms that appeared in this
 	// document.
 	MatchCount int `json:"matchCount"`
+
+	// New chunk-level fields (zero value = file-level result, backward compatible)
+	HeadingPath    string `json:"heading_path,omitempty"`
+	StartLine      int    `json:"start_line,omitempty"`
+	EndLine        int    `json:"end_line,omitempty"`
+	ContentPreview string `json:"content_preview,omitempty"`
 }
 
 // indexPersisted is the on-disk serialisation format for Index.
@@ -47,12 +55,15 @@ type indexPersisted struct {
 
 // persistedDoc is the serialised form of indexedDoc (which is unexported).
 type persistedDoc struct {
-	ID      string `json:"id"`
-	Path    string `json:"path"`
-	RelPath string `json:"relPath"`
-	Title   string `json:"title"`
-	Content string `json:"content"`
-	Len     int    `json:"len"`
+	ID          string `json:"id"`
+	Path        string `json:"path"`
+	RelPath     string `json:"relPath"`
+	Title       string `json:"title"`
+	Content     string `json:"content"`
+	Len         int    `json:"len"`
+	HeadingPath string `json:"heading_path,omitempty"`
+	StartLine   int    `json:"start_line,omitempty"`
+	EndLine     int    `json:"end_line,omitempty"`
 }
 
 // Index is the top-level, user-facing API for knowledge base indexing and
@@ -133,13 +144,17 @@ func (idx *Index) Search(query string, topK int) ([]SearchResult, error) {
 		matchCount := countMatchedTerms(content, queryTerms, idx.tokenizer)
 
 		results = append(results, SearchResult{
-			DocID:      r.DocID,
-			Path:       r.Path,
-			RelPath:    r.RelPath,
-			Title:      r.Title,
-			Score:      r.Score,
-			Snippet:    snippet,
-			MatchCount: matchCount,
+			DocID:          r.DocID,
+			Path:           r.Path,
+			RelPath:        r.RelPath,
+			Title:          r.Title,
+			Score:          r.Score,
+			Snippet:        snippet,
+			MatchCount:     matchCount,
+			HeadingPath:    r.HeadingPath,
+			StartLine:      r.StartLine,
+			EndLine:        r.EndLine,
+			ContentPreview: contentPreview(content, 200),
 		})
 	}
 
@@ -157,12 +172,15 @@ func (idx *Index) Save(path string) error {
 	}
 	for i, d := range idx.bm25.docs {
 		p.Docs[i] = persistedDoc{
-			ID:      d.id,
-			Path:    d.path,
-			RelPath: d.relPath,
-			Title:   d.title,
-			Content: d.content,
-			Len:     d.len,
+			ID:          d.id,
+			Path:        d.path,
+			RelPath:     d.relPath,
+			Title:       d.title,
+			Content:     d.content,
+			Len:         d.len,
+			HeadingPath: d.headingPath,
+			StartLine:   d.startLine,
+			EndLine:     d.endLine,
 		}
 	}
 
@@ -204,12 +222,15 @@ func (idx *Index) Load(path string) error {
 	idx.bm25.docs = make([]indexedDoc, len(p.Docs))
 	for i, pd := range p.Docs {
 		idx.bm25.docs[i] = indexedDoc{
-			id:      pd.ID,
-			path:    pd.Path,
-			relPath: pd.RelPath,
-			title:   pd.Title,
-			content: pd.Content,
-			len:     pd.Len,
+			id:          pd.ID,
+			path:        pd.Path,
+			relPath:     pd.RelPath,
+			title:       pd.Title,
+			content:     pd.Content,
+			len:         pd.Len,
+			headingPath: pd.HeadingPath,
+			startLine:   pd.StartLine,
+			endLine:     pd.EndLine,
 		}
 	}
 	idx.bm25.postings = p.Postings
@@ -268,7 +289,10 @@ func (idx *Index) IsStale(root string) (bool, error) {
 // Documents whose content hash has not changed are skipped automatically.
 func (idx *Index) UpdateDocuments(changed []Document, removed []string) error {
 	for _, id := range removed {
-		idx.bm25.RemoveDocument(id)
+		// id is the document ID (= RelPath). After chunk-level indexing, each
+		// file is stored as multiple index entries keyed by chunk DocID, so we
+		// remove by RelPath rather than by exact DocID.
+		idx.bm25.RemoveDocumentsByRelPath(id)
 		delete(idx.docMeta, id)
 	}
 
@@ -280,8 +304,8 @@ func (idx *Index) UpdateDocuments(changed []Document, removed []string) error {
 			continue
 		}
 
-		// Remove old version if it exists.
-		idx.bm25.RemoveDocument(doc.ID)
+		// Remove old version (all chunks) if it exists.
+		idx.bm25.RemoveDocumentsByRelPath(doc.RelPath)
 
 		// Re-index.
 		idx.bm25.AddDocument(doc)

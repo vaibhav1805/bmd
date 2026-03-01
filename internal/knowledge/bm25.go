@@ -3,6 +3,7 @@ package knowledge
 import (
 	"math"
 	"sort"
+	"strings"
 )
 
 // BM25Params holds the tuning constants for the Okapi BM25 algorithm.
@@ -39,6 +40,11 @@ type indexedDoc struct {
 	title   string
 	content string // plain text, for snippet extraction
 	len     int    // token count
+
+	// chunk-level fields (zero value = file-level document, backward compatible)
+	headingPath string
+	startLine   int
+	endLine     int
 }
 
 // IndexStats holds corpus-level statistics required for IDF computation.
@@ -54,7 +60,7 @@ type IndexStats struct {
 
 // RankedResult pairs a document identifier with its BM25 relevance score.
 type RankedResult struct {
-	// DocID is the document identifier (typically the relative file path).
+	// DocID is the document identifier (chunk DocID after chunk-level indexing).
 	DocID string
 	// Path is the absolute filesystem path.
 	Path string
@@ -64,6 +70,10 @@ type RankedResult struct {
 	Title string
 	// Score is the raw sum of per-term BM25 contributions.
 	Score float64
+	// chunk-level fields (zero value = file-level document, backward compatible)
+	HeadingPath string
+	StartLine   int
+	EndLine     int
 }
 
 // BM25Index provides in-memory BM25 indexing and search.
@@ -101,38 +111,67 @@ func NewBM25Index(params BM25Params, tok *Tokenizer) *BM25Index {
 	}
 }
 
-// AddDocument indexes a single document.  It can be called incrementally;
-// corpus statistics are updated after every addition.
+// AddDocument indexes a single document at chunk granularity.
+// Each section (bounded by ATX headings) is indexed as a separate entry so
+// that search results can identify the precise section containing a query term.
+// Corpus statistics are recalculated once after all chunks are added.
 func (idx *BM25Index) AddDocument(doc Document) {
-	tokens := idx.tokenizer.Tokenize(doc.PlainText)
-
-	// Build term-frequency map for this document.
-	tf := make(map[string]int, len(tokens))
-	for _, t := range tokens {
-		tf[t]++
+	// Use Content (raw markdown) for chunk extraction when available.
+	// Fall back to PlainText for documents created without Content (legacy/test data).
+	indexContent := doc.Content
+	if strings.TrimSpace(indexContent) == "" {
+		indexContent = doc.PlainText
 	}
 
-	docIndex := len(idx.docs)
-	idx.docs = append(idx.docs, indexedDoc{
-		id:      doc.ID,
-		path:    doc.Path,
-		relPath: doc.RelPath,
-		title:   doc.Title,
-		content: doc.PlainText,
-		len:     len(tokens),
-	})
+	chunks := extractChunks(doc.RelPath, indexContent)
+	if len(chunks) == 0 {
+		// Fallback: index whole document as a single chunk.
+		lineCount := strings.Count(indexContent, "\n") + 1
+		chunks = []Chunk{{
+			DocID:       doc.ID,
+			RelPath:     doc.RelPath,
+			HeadingPath: "",
+			StartLine:   1,
+			EndLine:     lineCount,
+			Content:     indexContent,
+		}}
+	}
 
-	// Update posting lists and DF counts.
-	for term, freq := range tf {
-		existing := idx.postings[term]
-		idx.postings[term] = append(existing, PostingEntry{
-			DocIndex: docIndex,
-			TF:       freq,
+	for _, chunk := range chunks {
+		plainText := stripMarkdown(chunk.Content)
+		tokens := idx.tokenizer.Tokenize(plainText)
+
+		// Build term-frequency map for this chunk.
+		tf := make(map[string]int, len(tokens))
+		for _, t := range tokens {
+			tf[t]++
+		}
+
+		docIndex := len(idx.docs)
+		idx.docs = append(idx.docs, indexedDoc{
+			id:          chunk.DocID,
+			path:        doc.Path,    // parent document path for file opening
+			relPath:     chunk.RelPath,
+			title:       doc.Title,   // parent document title
+			content:     plainText,
+			len:         len(tokens),
+			headingPath: chunk.HeadingPath,
+			startLine:   chunk.StartLine,
+			endLine:     chunk.EndLine,
 		})
-		idx.stats.TermDocs[term]++
+
+		// Update posting lists and DF counts.
+		for term, freq := range tf {
+			existing := idx.postings[term]
+			idx.postings[term] = append(existing, PostingEntry{
+				DocIndex: docIndex,
+				TF:       freq,
+			})
+			idx.stats.TermDocs[term]++
+		}
 	}
 
-	// Recalculate corpus statistics after adding the document.
+	// Recalculate corpus statistics once after adding all chunks.
 	idx.rebuildStats()
 }
 
@@ -209,11 +248,14 @@ func (idx *BM25Index) Search(query string, topK int) []RankedResult {
 	for docIndex, score := range scores {
 		d := idx.docs[docIndex]
 		results = append(results, RankedResult{
-			DocID:   d.id,
-			Path:    d.path,
-			RelPath: d.relPath,
-			Title:   d.title,
-			Score:   score,
+			DocID:       d.id,
+			Path:        d.path,
+			RelPath:     d.relPath,
+			Title:       d.title,
+			Score:       score,
+			HeadingPath: d.headingPath,
+			StartLine:   d.startLine,
+			EndLine:     d.endLine,
 		})
 	}
 
@@ -248,6 +290,38 @@ func (idx *BM25Index) RemoveDocument(docID string) bool {
 		return false
 	}
 
+	idx.removeAtIndex(docIndex)
+	idx.rebuildStats()
+	return true
+}
+
+// RemoveDocumentsByRelPath removes all chunks belonging to the document
+// identified by relPath. This is required after chunk-level indexing, where a
+// single file is represented by multiple index entries (one per section).
+// Returns the number of chunks removed.
+func (idx *BM25Index) RemoveDocumentsByRelPath(relPath string) int {
+	// Collect all doc indices with this relPath (in descending order so
+	// removal by index stays correct).
+	var indices []int
+	for i, d := range idx.docs {
+		if d.relPath == relPath {
+			indices = append(indices, i)
+		}
+	}
+	if len(indices) == 0 {
+		return 0
+	}
+	// Remove in reverse order so earlier indices remain stable.
+	for i := len(indices) - 1; i >= 0; i-- {
+		idx.removeAtIndex(indices[i])
+	}
+	idx.rebuildStats()
+	return len(indices)
+}
+
+// removeAtIndex removes the indexedDoc at position i and updates posting lists.
+// Does NOT call rebuildStats — callers are responsible for calling it once.
+func (idx *BM25Index) removeAtIndex(docIndex int) {
 	// Remove from posting lists.  We rebuild affected lists rather than
 	// compacting indices, which keeps the implementation simple.
 	for term, postings := range idx.postings {
@@ -277,9 +351,17 @@ func (idx *BM25Index) RemoveDocument(docID string) bool {
 
 	// Remove the doc from the docs slice.
 	idx.docs = append(idx.docs[:docIndex], idx.docs[docIndex+1:]...)
-	idx.rebuildStats()
-	return true
 }
 
 // DocCount returns the number of documents currently indexed.
 func (idx *BM25Index) DocCount() int { return len(idx.docs) }
+
+// contentPreview returns the first maxRunes runes of content, trimmed of leading whitespace.
+// Used for the content_preview field in chunk search results.
+func contentPreview(content string, maxRunes int) string {
+	runes := []rune(strings.TrimSpace(content))
+	if len(runes) <= maxRunes {
+		return string(runes)
+	}
+	return string(runes[:maxRunes]) + "..."
+}

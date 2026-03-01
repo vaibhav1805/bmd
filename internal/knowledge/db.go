@@ -43,7 +43,7 @@ import (
 
 // SchemaVersion is incremented each time the database schema changes.
 // Migrations run automatically in Migrate() when an older database is opened.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // Database wraps an open SQLite connection and provides domain-level
 // read/write operations for indexes and knowledge graphs.
@@ -125,15 +125,21 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 CREATE INDEX IF NOT EXISTS idx_documents_path ON documents(path);
 
--- index_entries: inverted index — one row per (term, document) pair.
+-- index_entries: inverted index — one row per (term, document/chunk) pair.
 -- positions is a JSON array: [line, offset, ...] (currently unused but
 -- reserved for future phrase-search support).
+-- chunk_id is the full chunk DocID ("relPath#HeadingPath:L{startLine}").
+-- heading_path, start_line, end_line carry chunk-level location metadata.
 CREATE TABLE IF NOT EXISTS index_entries (
-  id        INTEGER PRIMARY KEY,
-  term      TEXT    NOT NULL,
-  doc_id    TEXT    NOT NULL,
-  positions TEXT,
-  frequency INTEGER NOT NULL,
+  id           INTEGER PRIMARY KEY,
+  term         TEXT    NOT NULL,
+  doc_id       TEXT    NOT NULL,
+  positions    TEXT,
+  frequency    INTEGER NOT NULL,
+  chunk_id     TEXT,
+  heading_path TEXT,
+  start_line   INTEGER,
+  end_line     INTEGER,
   FOREIGN KEY(doc_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_index_terms ON index_entries(term);
@@ -243,9 +249,11 @@ func (db *Database) GetVersion() int {
 func (db *Database) Migrate() error {
 	current := db.GetVersion()
 
-	// Migrations for future schema versions go here.
-	// Example:
-	//   if current < 2 { if err := db.migrateV1ToV2(); err != nil { return err } }
+	if current < 2 {
+		if err := db.migrateV1ToV2(); err != nil {
+			return fmt.Errorf("knowledge.Database.Migrate: v1→v2: %w", err)
+		}
+	}
 
 	// Ensure the stored version reflects the latest schema.
 	if current < SchemaVersion {
@@ -254,6 +262,28 @@ func (db *Database) Migrate() error {
 			fmt.Sprintf("%d", SchemaVersion),
 		); err != nil {
 			return fmt.Errorf("knowledge.Database.Migrate: update version: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateV1ToV2 adds chunk metadata columns to index_entries.
+// These columns are nullable and default to NULL for pre-existing rows.
+func (db *Database) migrateV1ToV2() error {
+	alterStatements := []string{
+		`ALTER TABLE index_entries ADD COLUMN chunk_id     TEXT`,
+		`ALTER TABLE index_entries ADD COLUMN heading_path TEXT`,
+		`ALTER TABLE index_entries ADD COLUMN start_line   INTEGER`,
+		`ALTER TABLE index_entries ADD COLUMN end_line     INTEGER`,
+	}
+	for _, stmt := range alterStatements {
+		if _, err := db.conn.Exec(stmt); err != nil {
+			// SQLite returns an error if the column already exists (from a CREATE TABLE
+			// that included the column on a fresh database).  Ignore "duplicate column"
+			// errors so Initialize() + Migrate() is idempotent.
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("exec %q: %w", stmt, err)
+			}
 		}
 	}
 	return nil
@@ -300,14 +330,36 @@ func (db *Database) SaveIndex(idx *Index) error {
 		now := time.Now().UnixNano()
 
 		// Insert documents in batches.
+		// After chunk-level indexing, multiple indexedDoc entries share the same
+		// relPath.  We deduplicate: the documents table stores one row per FILE
+		// (keyed by relPath), not one row per chunk.
 		docs := idx.bm25.docs
-		for start := 0; start < len(docs); start += batchSize {
-			end := start + batchSize
-			if end > len(docs) {
-				end = len(docs)
+
+		// Build a deduplicated file-level view for the documents table.
+		type fileDoc struct {
+			relPath string
+			path    string
+			title   string
+		}
+		seenFiles := make(map[string]bool, len(docs))
+		var fileDocs []fileDoc
+		for _, d := range docs {
+			if seenFiles[d.relPath] {
+				continue
 			}
-			for _, d := range docs[start:end] {
-				meta, hasMeta := idx.docMeta[d.id]
+			seenFiles[d.relPath] = true
+			fileDocs = append(fileDocs, fileDoc{relPath: d.relPath, path: d.path, title: d.title})
+		}
+
+		for start := 0; start < len(fileDocs); start += batchSize {
+			end := start + batchSize
+			if end > len(fileDocs) {
+				end = len(fileDocs)
+			}
+			for _, fd := range fileDocs[start:end] {
+				// docMeta is keyed by the document ID (= RelPath for file-level docs).
+				// After chunk indexing, the relPath is still the file-relative path.
+				meta, hasMeta := idx.docMeta[fd.relPath]
 				hash := meta.Hash
 				lastMod := meta.LastModified
 				if !hasMeta {
@@ -318,29 +370,40 @@ func (db *Database) SaveIndex(idx *Index) error {
 					`INSERT OR REPLACE INTO documents
 					 (id, path, title, content_hash, last_modified, indexed_at)
 					 VALUES (?, ?, ?, ?, ?, ?)`,
-					d.id, d.path, d.title, hash, lastMod, now,
+					fd.relPath, fd.path, fd.title, hash, lastMod, now,
 				)
 				if err != nil {
-					return fmt.Errorf("insert document %q: %w", d.id, err)
+					return fmt.Errorf("insert document %q: %w", fd.relPath, err)
 				}
 			}
 		}
 
 		// Insert index entries in batches.
+		// doc_id references the file-level documents.id (= relPath).
+		// chunk_id stores the full chunk DocID for reconstruction on load.
 		type entry struct {
-			term  string
-			docID string
-			freq  int
+			term        string
+			docID       string // file-level relPath (FK → documents.id)
+			chunkID     string // full chunk DocID
+			freq        int
+			headingPath string
+			startLine   int
+			endLine     int
 		}
-		// Build a flat list of (term, docID, freq) entries.
+		// Build a flat list of entries.
 		var entries []entry
 		for term, postings := range idx.bm25.postings {
 			for _, pe := range postings {
 				if pe.DocIndex < len(docs) {
+					d := docs[pe.DocIndex]
 					entries = append(entries, entry{
-						term:  term,
-						docID: docs[pe.DocIndex].id,
-						freq:  pe.TF,
+						term:        term,
+						docID:       d.relPath,  // file-level FK
+						chunkID:     d.id,       // chunk-level unique ID
+						freq:        pe.TF,
+						headingPath: d.headingPath,
+						startLine:   d.startLine,
+						endLine:     d.endLine,
 					})
 				}
 			}
@@ -352,9 +415,10 @@ func (db *Database) SaveIndex(idx *Index) error {
 			}
 			for _, e := range entries[start:end] {
 				_, err := tx.Exec(
-					`INSERT INTO index_entries (term, doc_id, positions, frequency)
-					 VALUES (?, ?, ?, ?)`,
-					e.term, e.docID, nil, e.freq,
+					`INSERT INTO index_entries
+					 (term, doc_id, positions, frequency, chunk_id, heading_path, start_line, end_line)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+					e.term, e.docID, nil, e.freq, e.chunkID, e.headingPath, e.startLine, e.endLine,
 				)
 				if err != nil {
 					return fmt.Errorf("insert index_entry (%q, %q): %w", e.term, e.docID, err)
@@ -517,7 +581,7 @@ func (db *Database) IsIndexStale(root string) (bool, error) {
 // The Index must have been created via NewIndex(); it is safe to call on an
 // empty or partially populated Index.
 func (db *Database) LoadIndex(idx *Index) error {
-	// Load documents.
+	// Load file-level documents for docMeta and path information.
 	rows, err := db.conn.Query(
 		`SELECT id, path, title, content_hash, last_modified FROM documents`,
 	)
@@ -526,71 +590,94 @@ func (db *Database) LoadIndex(idx *Index) error {
 	}
 	defer rows.Close()
 
-	type docRow struct {
-		id           string
+	type fileDocRow struct {
+		id           string // file-level relPath
 		path         string
 		title        string
 		contentHash  string
 		lastModified int64
 	}
-	var docRows []docRow
+	var fileDocRows []fileDocRow
 	for rows.Next() {
-		var r docRow
+		var r fileDocRow
 		if err := rows.Scan(&r.id, &r.path, &r.title, &r.contentHash, &r.lastModified); err != nil {
 			return fmt.Errorf("knowledge.Database.LoadIndex: scan document: %w", err)
 		}
-		docRows = append(docRows, r)
+		fileDocRows = append(fileDocRows, r)
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("knowledge.Database.LoadIndex: iterate documents: %w", err)
 	}
 
-	// Build a map from docID → slice index for posting reconstruction.
-	docIndexMap := make(map[string]int, len(docRows))
-
 	// Reset the index.
 	idx.bm25 = NewBM25Index(idx.params, idx.tokenizer)
-	idx.docMeta = make(map[string]docMeta, len(docRows))
+	idx.docMeta = make(map[string]docMeta, len(fileDocRows))
 
-	for i, dr := range docRows {
-		// We need a relPath.  Use id as relPath (it equals relPath on write).
-		relPath := filepath.FromSlash(dr.id)
-		idx.bm25.docs = append(idx.bm25.docs, indexedDoc{
-			id:      dr.id,
-			path:    dr.path,
-			relPath: relPath,
-			title:   dr.title,
-			content: "", // plain text not stored; snippets from doc on disk
-		})
-		docIndexMap[dr.id] = i
+	// Build a map from file-level ID → file metadata for chunk reconstruction.
+	type fileMeta struct {
+		path  string
+		title string
+	}
+	fileMetaMap := make(map[string]fileMeta, len(fileDocRows))
+	for _, dr := range fileDocRows {
+		fileMetaMap[dr.id] = fileMeta{path: dr.path, title: dr.title}
 		idx.docMeta[dr.id] = docMeta{
 			Hash:         dr.contentHash,
 			LastModified: dr.lastModified,
 		}
 	}
 
-	// Load index entries.
+	// Load index entries (one row per (term, chunk)).
+	// We reconstruct chunk-level indexedDoc entries from the stored chunk metadata.
 	eRows, err := db.conn.Query(
-		`SELECT term, doc_id, frequency FROM index_entries`,
+		`SELECT term, doc_id, frequency, chunk_id, heading_path, start_line, end_line
+		 FROM index_entries`,
 	)
 	if err != nil {
 		return fmt.Errorf("knowledge.Database.LoadIndex: query index_entries: %w", err)
 	}
 	defer eRows.Close()
 
+	// chunkIndex maps chunk_id → position in idx.bm25.docs.
+	chunkIndexMap := make(map[string]int)
 	postings := make(map[string][]PostingEntry)
 	termDocs := make(map[string]int)
 
 	for eRows.Next() {
 		var term, docID string
 		var freq int
-		if err := eRows.Scan(&term, &docID, &freq); err != nil {
+		var chunkID, headingPath sql.NullString
+		var startLine, endLine sql.NullInt64
+		if err := eRows.Scan(&term, &docID, &freq, &chunkID, &headingPath, &startLine, &endLine); err != nil {
 			return fmt.Errorf("knowledge.Database.LoadIndex: scan index_entry: %w", err)
 		}
-		di, ok := docIndexMap[docID]
-		if !ok {
-			continue // orphaned entry (should not happen with FK constraints)
+
+		// Determine the effective chunk ID.
+		// Legacy rows (before v2) have NULL chunk_id; fall back to doc_id.
+		effectiveChunkID := docID
+		if chunkID.Valid && chunkID.String != "" {
+			effectiveChunkID = chunkID.String
 		}
+
+		// Get or create the indexedDoc for this chunk.
+		di, exists := chunkIndexMap[effectiveChunkID]
+		if !exists {
+			fm := fileMetaMap[docID]
+			relPath := filepath.FromSlash(docID)
+			di = len(idx.bm25.docs)
+			idx.bm25.docs = append(idx.bm25.docs, indexedDoc{
+				id:          effectiveChunkID,
+				path:        fm.path,
+				relPath:     relPath,
+				title:       fm.title,
+				content:     "", // plain text not stored; snippets from doc on disk
+				headingPath: headingPath.String,
+				startLine:   int(startLine.Int64),
+				endLine:     int(endLine.Int64),
+			})
+			chunkIndexMap[effectiveChunkID] = di
+		}
+
 		postings[term] = append(postings[term], PostingEntry{DocIndex: di, TF: freq})
 		termDocs[term]++
 	}

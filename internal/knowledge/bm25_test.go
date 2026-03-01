@@ -54,9 +54,9 @@ func TestBM25Index_AddAndSearch(t *testing.T) {
 		t.Fatal("expected results for 'authentication', got none")
 	}
 
-	// auth.md should be the top result.
-	if results[0].DocID != "auth.md" {
-		t.Errorf("top result = %q, want %q", results[0].DocID, "auth.md")
+	// auth.md should be the top result (DocID is now chunk-level; check RelPath).
+	if results[0].RelPath != "auth.md" {
+		t.Errorf("top result RelPath = %q, want %q", results[0].RelPath, "auth.md")
 	}
 
 	// Score should be positive.
@@ -76,8 +76,9 @@ func TestBM25Index_RankingAccuracy(t *testing.T) {
 	if len(results) == 0 {
 		t.Fatal("expected results for 'api gateway'")
 	}
-	if results[0].DocID != "gateway.md" {
-		t.Errorf("top result for 'api gateway' = %q, want %q", results[0].DocID, "gateway.md")
+	// gateway.md should be the top result (check RelPath, DocID is now chunk-level).
+	if results[0].RelPath != "gateway.md" {
+		t.Errorf("top result for 'api gateway' RelPath = %q, want %q", results[0].RelPath, "gateway.md")
 	}
 }
 
@@ -174,8 +175,10 @@ func TestBM25Index_IDFFormula(t *testing.T) {
 	if len(results) == 0 {
 		t.Fatal("expected results for 'rare'")
 	}
-	if results[0].DocID != "a.md" {
-		t.Errorf("top result for 'rare' = %q, want %q", results[0].DocID, "a.md")
+	// "rare" (df=1) should rank a.md above results from "common" (df=3).
+	// Check RelPath since DocID is now chunk-level.
+	if results[0].RelPath != "a.md" {
+		t.Errorf("top result for 'rare' RelPath = %q, want %q", results[0].RelPath, "a.md")
 	}
 }
 
@@ -185,9 +188,10 @@ func TestBM25Index_RemoveDocument(t *testing.T) {
 		idx.AddDocument(d)
 	}
 
-	removed := idx.RemoveDocument("auth.md")
-	if !removed {
-		t.Fatal("RemoveDocument should return true for existing doc")
+	// After chunk-level indexing, remove by RelPath (not by exact chunk DocID).
+	removed := idx.RemoveDocumentsByRelPath("auth.md")
+	if removed == 0 {
+		t.Fatal("RemoveDocumentsByRelPath should remove at least one chunk for existing doc")
 	}
 	if idx.DocCount() != 2 {
 		t.Fatalf("DocCount after remove = %d, want 2", idx.DocCount())
@@ -196,7 +200,7 @@ func TestBM25Index_RemoveDocument(t *testing.T) {
 	// Searching for "authentication" should now not return auth.md.
 	results := idx.Search("authentication", 10)
 	for _, r := range results {
-		if r.DocID == "auth.md" {
+		if r.RelPath == "auth.md" {
 			t.Error("removed doc auth.md still appears in results")
 		}
 	}

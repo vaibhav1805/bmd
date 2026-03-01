@@ -34,8 +34,9 @@ func TestIndex_Search_ReturnsRankedResults(t *testing.T) {
 	if len(results) == 0 {
 		t.Fatal("expected results for 'authentication'")
 	}
-	if results[0].DocID != "auth.md" {
-		t.Errorf("top result = %q, want auth.md", results[0].DocID)
+	// DocID is now chunk-level; check RelPath for the file identity.
+	if results[0].RelPath != "auth.md" {
+		t.Errorf("top result RelPath = %q, want auth.md", results[0].RelPath)
 	}
 }
 
