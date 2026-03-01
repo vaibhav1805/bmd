@@ -11,11 +11,37 @@ import (
 
 // Error code constants for ContractResponse.Code.
 const (
-	ErrCodeIndexNotFound = "INDEX_NOT_FOUND"
-	ErrCodeFileNotFound  = "FILE_NOT_FOUND"
-	ErrCodeInvalidQuery  = "INVALID_QUERY"
-	ErrCodeInternalError = "INTERNAL_ERROR"
+	ErrCodeIndexNotFound       = "INDEX_NOT_FOUND"
+	ErrCodeFileNotFound        = "FILE_NOT_FOUND"
+	ErrCodeInvalidQuery        = "INVALID_QUERY"
+	ErrCodeInternalError       = "INTERNAL_ERROR"
+	ErrCodePageIndexNotAvailable = "PAGEINDEX_NOT_AVAILABLE"
 )
+
+// reasoningResultJSON is the per-section output when strategy=pageindex.
+// It extends searchResultJSON with a reasoning_trace field explaining why
+// the section was selected by the LLM.
+type reasoningResultJSON struct {
+	Rank           int     `json:"rank"`
+	File           string  `json:"file"`
+	HeadingPath    string  `json:"heading_path,omitempty"`
+	StartLine      int     `json:"start_line,omitempty"`
+	EndLine        int     `json:"end_line,omitempty"`
+	ContentPreview string  `json:"content_preview,omitempty"`
+	Score          float64 `json:"score"`
+	ReasoningTrace string  `json:"reasoning_trace,omitempty"`
+}
+
+// pageindexResponseJSON is the data payload for strategy=pageindex results.
+// It is wrapped in a ContractResponse envelope (CONTRACT-01).
+type pageindexResponseJSON struct {
+	Query       string                `json:"query"`
+	Strategy    string                `json:"strategy"`
+	Model       string                `json:"model"`
+	Results     []reasoningResultJSON `json:"results"`
+	Count       int                   `json:"count"`
+	QueryTimeMs int64                 `json:"query_time_ms"`
+}
 
 // ContractResponse is the top-level JSON envelope for all agent-facing commands.
 // status: "ok" | "error" | "empty"

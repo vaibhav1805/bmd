@@ -27,10 +27,12 @@ type IndexArgs struct {
 
 // QueryArgs holds parsed arguments for CmdQuery.
 type QueryArgs struct {
-	Query  string
-	Dir    string
-	Format string
-	Top    int
+	Query    string
+	Dir      string
+	Format   string
+	Top      int
+	Strategy string // "" | "bm25" | "pageindex" — default "" (BM25)
+	Model    string // LLM model for pageindex strategy; default "claude-sonnet-4-5"
 }
 
 // DependsArgs holds parsed arguments for CmdDepends.
@@ -99,6 +101,8 @@ func ParseQueryArgs(args []string) (*QueryArgs, error) {
 	fs.StringVar(&a.Dir, "dir", ".", "Directory that was indexed")
 	fs.StringVar(&a.Format, "format", "json", "Output format (json|text|csv)")
 	fs.IntVar(&a.Top, "top", 10, "Maximum number of results to return")
+	fs.StringVar(&a.Strategy, "strategy", "", "Search strategy: '' or 'bm25' (default) | 'pageindex'")
+	fs.StringVar(&a.Model, "model", "claude-sonnet-4-5", "LLM model for pageindex strategy")
 
 	if err := fs.Parse(flags); err != nil {
 		return nil, fmt.Errorf("query: %w", err)
