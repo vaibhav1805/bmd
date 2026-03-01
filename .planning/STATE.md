@@ -65,6 +65,7 @@ Progress: [████████████████████░░] P
 | Phase 06-agent-intelligence P05 | 6 | 9 tasks | 4 files |
 | Phase 08-directory-browser P08-05 | 20 | 4 tasks | 2 files |
 | Phase 08-directory-browser P08-01 | 20 | 4 tasks | 4 files |
+| Phase 08-directory-browser P08-04 | 46 | 4 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -172,6 +173,10 @@ Recent decisions affecting current work:
 - [Phase 08-directory-browser]: SearchAllDocuments() reuses Phase 6 openOrBuildIndex — zero new indexing logic needed
 - [Phase 08-directory-browser]: directoryMode field in Viewer routes View/Update to directory handlers, consistent with editMode/graphMode pattern
 - [Phase 08-directory-browser]: Auto-detect directory mode: no args + at least 1 .md in cwd triggers directory browser
+- [Phase 08-directory-browser]: GetContextSnippet() centers context around first match with configurable maxChars, ellipsis padding
+- [Phase 08-directory-browser]: Bold yellow (ANSI 226) for query term highlighting in snippets, light gray for surrounding text
+- [Phase 08-directory-browser]: openedFromSearch flag enables file-to-search-results back navigation with cursor preservation
+- [Phase 08-directory-browser]: collapseWhitespace() replaces newlines/tabs with spaces for clean single-line snippet display
 
 ### Pending Todos
 
