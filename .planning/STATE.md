@@ -11,18 +11,15 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 
 ## Current Position
 
-Phase: 8 of 8 (Directory Browser) — COMPLETE
-Plan: All 6 plans complete (08-01 through 08-06)
-Status: COMPLETE — All waves executed, verified, shipped
-Last activity: 2026-03-01 — 08-06 COMPLETE (verification & polish)
-  - 08-01: Directory listing with metadata and navigation ✓
-  - 08-02: Directory-file navigation with breadcrumb and state tracking ✓
-  - 08-03: Cross-document search with BM25 index ✓
-  - 08-04: Search result snippets with highlighting and navigation ✓
-  - 08-05: Graph visualization with ASCII art rendering ✓
-  - 08-06: Verification & polish — 55 tests, help docs, zero regressions ✓
+Phase: 9 of 9 (Split-Pane Directory Browser) — COMPLETE
+Plan: All 3 plans complete (09-01 through 09-03)
+Status: COMPLETE — All tasks executed, tested, production-ready
+Last activity: 2026-03-01 — 09-03 COMPLETE (polish & testing)
+  - 09-01: Split-pane rendering with 35/65 left/right layout ✓
+  - 09-02: Keyboard navigation ('s' toggle, arrow keys, file operations) ✓
+  - 09-03: Edge case testing, performance validation, final polish ✓
 
-Progress: [██████████████████████] Phase 8 COMPLETE (6/6 plans)
+Progress: [██████████████████████] Phase 9 COMPLETE (3/3 plans)
 
 ## Performance Metrics
 
@@ -187,8 +184,8 @@ None.
 
 ## Session Continuity
 
-Current session: 2026-03-01 — Phase 8 Execution Wave 3-4 in progress
-Status: YOLO mode parallel execution
+Current session: 2026-03-01 — Phase 9 (Split-Pane) COMPLETE
+Status: All 9 phases complete, project PRODUCTION READY
 
 **Wave 1-2 Completion Summary (from earlier session):**
 
@@ -225,6 +222,34 @@ Status: YOLO mode parallel execution
       - Now EXECUTING after Wave 3 completion signal
       - Estimated duration: ~15-20 minutes
     * Total Phase 8 estimated completion: ~60-75 minutes from start
+
+**Phase 09 (Split-Pane Directory Browser) COMPLETE** (2026-03-01 12:03Z):
+  - **09-01: Split-pane rendering** ✓ (17 tests)
+    * Dual-pane layout (35% left file list, 65% right preview)
+    * Scroll position state tracking
+    * Page indicator in preview pane
+  - **09-02: Keyboard navigation** ✓ (10 tests)
+    * 's' key to toggle split mode
+    * ↑/↓ arrows navigate file list, update preview
+    * 'l'/Enter to open file full-screen
+    * 'h'/Backspace to go back to directory
+    * Help documentation updated
+  - **09-03: Polish & testing** ✓ (15 new tests)
+    * Edge cases: special chars, large directories (100 files), long content
+    * Performance: split-pane rendering 1.97ms, toggle 49.7µs (all < targets)
+    * Memory stability: 150 navigations without leaks
+    * Stress tests: rapid toggle (100 iterations), extreme narrow terminal (40 cols)
+    * All 289 TUI tests passing, binary builds cleanly
+  - **Total Phase 9**: 42 tests, 3 commits, 2.4 min execution
+  - **Status**: PRODUCTION READY ✅
+
+**Project Completion Summary:**
+  - **All 9 phases complete** (39+ plans executed)
+  - **291+ tests passing** (TUI: 289 tests)
+  - **Zero regressions** across all phases
+  - **Binary**: 16MB, fully functional, ready to ship
+  - **Features shipped**: Core rendering, navigation, search, indexing, graphs, editing, split-pane, themes, mouse
+  - **Status**: PRODUCTION READY 🚀
 
 Previous session Phase 7 details:
 
