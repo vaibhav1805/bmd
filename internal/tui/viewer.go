@@ -191,6 +191,13 @@ type GraphViewState struct {
 
 	// Loaded indicates if a graph has been loaded.
 	Loaded bool
+
+	// ZoomLevel controls zoom in graph view (0=normal, 1=zoom in, -1=zoom out)
+	ZoomLevel int
+
+	// PanOffsetX, PanOffsetY are for panning the graph view
+	PanOffsetX int
+	PanOffsetY int
 }
 
 // New creates a new Viewer for the given document and file path.

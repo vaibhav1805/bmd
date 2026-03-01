@@ -71,6 +71,27 @@ func (v Viewer) updateGraph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return v, nil
 
+	case "+", "=":
+		// Zoom in
+		if v.graphState.ZoomLevel < 3 {
+			v.graphState.ZoomLevel++
+		}
+		return v, nil
+
+	case "-", "_":
+		// Zoom out
+		if v.graphState.ZoomLevel > -2 {
+			v.graphState.ZoomLevel--
+		}
+		return v, nil
+
+	case "0":
+		// Reset zoom and pan
+		v.graphState.ZoomLevel = 0
+		v.graphState.PanOffsetX = 0
+		v.graphState.PanOffsetY = 0
+		return v, nil
+
 	case "enter", "l":
 		// Open the file corresponding to the selected node.
 		// node.ID is a relative path; resolve it against the graph's rootPath.
@@ -129,15 +150,20 @@ func (v Viewer) renderGraphView(contentHeight int) string {
 
 	// Footer: show selected node details and key hints.
 	var footerContent string
+	zoomStr := ""
+	if v.graphState.ZoomLevel != 0 {
+		zoomStr = fmt.Sprintf("  [Zoom: %+d]", v.graphState.ZoomLevel)
+	}
+
 	if v.graphState.SelectedNodeID != "" {
 		node := g.Nodes[v.graphState.SelectedNodeID]
 		label := nodeLabel(node)
 		inCount := len(g.GetIncoming(v.graphState.SelectedNodeID))
 		outCount := len(g.GetOutgoing(v.graphState.SelectedNodeID))
-		footerContent = fmt.Sprintf(" Selected: %-20s  in:%-3d out:%-3d  [↑/↓] Navigate  [l] Open  [h] Back  [q] Quit",
-			truncateStr(label, 20), inCount, outCount)
+		footerContent = fmt.Sprintf(" Selected: %-15s  in:%-2d out:%-2d%s  [+/-]Zoom [h]Back [q]Quit",
+			truncateStr(label, 15), inCount, outCount, zoomStr)
 	} else {
-		footerContent = " [↑/↓] Navigate nodes  [l] Open file  [h/Esc] Back  [q] Quit"
+		footerContent = fmt.Sprintf(" [↑/↓]Navigate [l]Open [+/-]Zoom [0]Reset%s [h]Back [q]Quit", zoomStr)
 	}
 	runes = []rune(footerContent)
 	if len(runes) > v.Width {
