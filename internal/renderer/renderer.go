@@ -1,7 +1,6 @@
 package renderer
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -239,12 +238,7 @@ func (r *Renderer) renderImage(img *ast.Image) string {
 		basePath, _ = os.Getwd()
 	}
 
-	fmt.Fprintf(os.Stderr, "[DEBUG] renderImage: URL=%s, docDir=%s, basePath=%s\n",
-		imageURL, r.docDir, basePath)
-
 	resolvedPath, isLocal := ResolveImageURL(imageURL, basePath)
-
-	fmt.Fprintf(os.Stderr, "[DEBUG] resolved: %s (isLocal=%v)\n", resolvedPath, isLocal)
 
 	// Load image data
 	var imageData []byte
@@ -257,11 +251,8 @@ func (r *Renderer) renderImage(img *ast.Image) string {
 
 	// If image couldn't be loaded, fall back to alt text
 	if imageData == nil {
-		fmt.Fprintf(os.Stderr, "[DEBUG] imageData is nil for %s\n", resolvedPath)
 		return theme.FgCode(r.theme.LinkColor()) + "[img: " + alt + "]" + theme.Reset
 	}
-
-	fmt.Fprintf(os.Stderr, "[DEBUG] imageData loaded: %d bytes\n", len(imageData))
 
 	// Render using terminal image protocol
 	// Use reasonable dimensions: 60% of terminal width, aspect-ratio-preserved height
