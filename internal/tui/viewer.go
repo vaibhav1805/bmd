@@ -62,9 +62,9 @@ type Viewer struct {
 
 	// Search state
 	// Ctrl+F = search (not forward nav; forward nav uses Ctrl+Right/Alt+Right per design decision)
-	searchState SearchState // committed search state (matches, current index)
-	searchInput string      // query being typed (before Enter commits it)
-	searchMode  bool        // true when Ctrl+F was pressed and the input prompt is open
+	searchState *SearchState // committed search state (matches, current index)
+	searchInput string        // query being typed (before Enter commits it)
+	searchMode  bool          // true when Ctrl+F was pressed and the input prompt is open
 
 	// File browser panel
 	browserOpen  bool

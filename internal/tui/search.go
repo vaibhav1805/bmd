@@ -25,8 +25,8 @@ type SearchState struct {
 }
 
 // NewSearchState returns a zeroed SearchState with Current = -1.
-func NewSearchState() SearchState {
-	return SearchState{Current: -1}
+func NewSearchState() *SearchState {
+	return &SearchState{Current: -1}
 }
 
 // Run executes search.FindMatches against displayLines for the current Query.
@@ -89,8 +89,8 @@ func (s *SearchState) CurrentMatch() (search.Match, bool) {
 //
 // The th parameter is accepted for future extensibility but highlights use
 // hardcoded ANSI 256-color constants (SearchMatchBg, SearchCurrentBg).
-func ApplyHighlights(lines []string, state SearchState, th theme.Theme) []string {
-	if !state.Active || len(state.Matches) == 0 {
+func ApplyHighlights(lines []string, state *SearchState, th theme.Theme) []string {
+	if state == nil || !state.Active || len(state.Matches) == 0 {
 		// Return a copy unchanged
 		out := make([]string, len(lines))
 		copy(out, lines)

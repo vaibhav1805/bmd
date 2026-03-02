@@ -175,7 +175,7 @@ func TestApplyHighlights_Inactive_ReturnsUnchanged(t *testing.T) {
 
 func TestApplyHighlights_NoMatches_ReturnsUnchanged(t *testing.T) {
 	lines := []string{"hello world"}
-	state := SearchState{Active: true, Query: "zzz", Matches: nil, Current: -1}
+	state := &SearchState{Active: true, Query: "zzz", Matches: nil, Current: -1}
 	th := theme.NewThemeForScheme(theme.Dark)
 
 	result := ApplyHighlights(lines, state, th)
@@ -186,7 +186,7 @@ func TestApplyHighlights_NoMatches_ReturnsUnchanged(t *testing.T) {
 
 func TestApplyHighlights_SingleMatch_ContainsHighlight(t *testing.T) {
 	lines := []string{"hello world"}
-	state := SearchState{
+	state := &SearchState{
 		Active:  true,
 		Query:   "world",
 		Current: 0,
@@ -221,7 +221,7 @@ func TestApplyHighlights_SingleMatch_ContainsHighlight(t *testing.T) {
 func TestApplyHighlights_CurrentVsNonCurrent_DifferentColors(t *testing.T) {
 	// Line 0: match 0 (non-current), Line 1: match 1 (current)
 	lines := []string{"find this", "find this"}
-	state := SearchState{
+	state := &SearchState{
 		Active:  true,
 		Query:   "find",
 		Current: 1, // second match is focused
@@ -252,7 +252,7 @@ func TestApplyHighlights_CurrentVsNonCurrent_DifferentColors(t *testing.T) {
 
 func TestApplyHighlights_PreservesUnmatchedLines(t *testing.T) {
 	lines := []string{"no match here", "find this", "also no match"}
-	state := SearchState{
+	state := &SearchState{
 		Active:  true,
 		Query:   "find",
 		Current: 0,
@@ -277,7 +277,7 @@ func TestApplyHighlights_PreservesUnmatchedLines(t *testing.T) {
 
 func TestApplyHighlights_MultipleMatchesOnOneLine(t *testing.T) {
 	lines := []string{"foo bar foo"}
-	state := SearchState{
+	state := &SearchState{
 		Active:  true,
 		Query:   "foo",
 		Current: 0,
@@ -303,7 +303,7 @@ func TestApplyHighlights_MultipleMatchesOnOneLine(t *testing.T) {
 
 func TestApplyHighlights_LinesNotAffectedBySearch_AreCopied(t *testing.T) {
 	original := []string{"line one", "line two"}
-	state := SearchState{Active: true, Query: "xyz", Matches: nil, Current: -1}
+	state := &SearchState{Active: true, Query: "xyz", Matches: nil, Current: -1}
 	th := theme.NewThemeForScheme(theme.Dark)
 
 	result := ApplyHighlights(original, state, th)
