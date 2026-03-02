@@ -257,6 +257,208 @@ Search Index Database
     index_entries (term postings, TF-IDF scores)
 ```
 
+### PageIndex Semantic Search Architecture
+
+PageIndex adds LLM-powered semantic search on top of BM25, enabling intent-based queries with reasoning traces.
+
+```
+Markdown Document: auth-service.md
+┌──────────────────────────────────────────────┐
+│ # OAuth2 Service                             │
+│                                              │
+│ Handles token validation and JWT signing.   │
+│                                              │
+│ ## Architecture                              │
+│ - Validates JWT tokens                      │
+│ - Caches tokens in redis                    │
+│ - Exposes /auth/validate endpoint           │
+│                                              │
+│ ## Usage Examples                            │
+│ - POST /auth/validate with JWT              │
+│ - Returns 401 for invalid tokens            │
+└──────────────────────────────────────────────┘
+    ↓ (bmd index --strategy pageindex)
+    ↓ (Hierarchical tree construction)
+
+PageIndex Tree File (.bmd-tree.json)
+    │
+    └── FileTree
+        ├── FilePath: "auth-service.md"
+        ├── Title: "OAuth2 Service"
+        ├── Summary: "Service for OAuth2 token validation, JWT signing..."
+        │
+        └── Children (Sections)
+            ├── TreeNode
+            │   ├── Content: "Handles token validation and JWT signing."
+            │   ├── Heading: "# OAuth2 Service"
+            │   ├── Summary: "Core service that validates OAuth2 tokens..."
+            │   └── Children
+            │       ├── TreeNode
+            │       │   ├── Content: "- Validates JWT tokens..."
+            │       │   ├── Heading: "## Architecture"
+            │       │   ├── Summary: "Architectural components: JWT validation..."
+            │       │   └── Children: [...]
+            │       │
+            │       └── TreeNode
+            │           ├── Content: "- POST /auth/validate with JWT..."
+            │           ├── Heading: "## Usage Examples"
+            │           ├── Summary: "How to call the OAuth2 service API..."
+            │           └── Children: [...]
+            │
+            └── TreeNode
+                ├── Content: "Returns 401 for invalid tokens"
+                ├── Heading: "## Error Handling"
+                └── Summary: "Error responses and status codes..."
+
+    ↓ (Run subprocess: pageindex index --file auth-service.md)
+
+PageIndex Indexing Process (Subprocess)
+    │
+    └── pageindex index
+        ├── Input: Tree JSON (headings, content, summaries)
+        ├── Model: "claude-opus" (default LLM)
+        ├── Embeddings: Generate semantic vectors for each section
+        │   └── [0.234, 0.891, 0.124, ...] ← embedding vector
+        │
+        └── Output: Indexed tree with embeddings
+
+    ↓ (Save tree file locally)
+
+Stored Tree Files
+    ├── docs/auth-service.bmd-tree.json
+    ├── docs/api-gateway.bmd-tree.json
+    └── docs/user-service.bmd-tree.json
+
+Query Processing with PageIndex:
+
+    Query: "How do we validate user tokens?"
+
+    ↓ (bmd query "How do we validate tokens?" --strategy pageindex)
+
+    Step 1: Load all .bmd-tree.json files from indexed directory
+
+    Step 2: Generate query embedding
+        pageindex query --query "How do we validate user tokens?"
+        ├── Input: Natural language question
+        ├── Model: "claude-opus"
+        └── Output: Query embedding [0.156, 0.923, 0.087, ...]
+
+    Step 3: Semantic similarity search
+        For each tree section:
+        ├── Compute cosine similarity(query_embedding, section_embedding)
+        │   auth-service.md § Architecture: 0.87 ✓ HIGH MATCH
+        │   auth-service.md § Usage: 0.79 ✓ MATCH
+        │   api-gateway.md § Error Handling: 0.45 ✗ low match
+        │   user-service.md § Permissions: 0.31 ✗ very low match
+        │
+        └── Rank by similarity score
+
+    Step 4: Return top results with reasoning trace
+        [1] auth-service.md § Architecture (score: 0.87)
+            "Covers JWT token validation, the core mechanism..."
+            Content: "- Validates JWT tokens
+                      - Checks signature and expiry..."
+
+        [2] auth-service.md § Usage (score: 0.79)
+            "Explains how to call token validation API..."
+            Content: "- POST /auth/validate with JWT
+                      - Returns 200 with validated token..."
+
+Comparison: BM25 vs PageIndex
+
+    BM25 Search (Keyword-based):
+    ├── Query: "token validation"
+    ├── Matching: Exact terms "token" + "validation"
+    ├── Results:
+    │   [1] auth-service.md (contains both terms)
+    │   [2] api-gateway.md (contains "token")
+    │   [3] user-service.md (contains "validation")
+    ├── Speed: <8ms
+    └── Cost: 0 (no LLM)
+
+    PageIndex Search (Semantic):
+    ├── Query: "How do we validate user tokens?"
+    ├── Matching: Intent-based (token validation concept)
+    ├── Results:
+    │   [1] auth-service.md § Architecture (0.87 similarity)
+    │   [2] auth-service.md § Usage (0.79 similarity)
+    │   [3] api-gateway.md § Request Flow (0.62 similarity)
+    ├── Speed: ~200ms (includes LLM)
+    └── Cost: LLM API calls per query
+
+Strategy Selection (Command-line):
+
+    # Fast keyword search (no dependencies)
+    bmd query "token validation" --strategy bm25 --dir ./docs
+
+    # Semantic search with reasoning (requires pageindex)
+    bmd query "How do we validate tokens?" --strategy pageindex --dir ./docs
+
+    # Auto-detection (tries pageindex, falls back to BM25)
+    bmd query "token validation" --dir ./docs
+
+Fallback Behavior:
+
+    User: bmd query "validate tokens" --strategy pageindex --dir ./docs
+
+    ↓
+
+    Check: Are .bmd-tree.json files present?
+    ├── YES → Use PageIndex semantic search
+    │
+    └── NO → Fall back to BM25
+                ├── Warn: "PageIndex trees not found, using BM25"
+                ├── Command: "Run 'bmd index --strategy pageindex' first"
+                └── Return: BM25 results instead
+
+    Check: Is pageindex binary installed?
+    ├── YES → Use it
+    │
+    └── NO → Fall back to BM25
+                ├── Error: "pageindex binary not found"
+                ├── Suggestion: "pip install pageindex"
+                └── Return: BM25 results with warning
+
+Integration with Knowledge System:
+
+    Graph Building (Phase 13):
+    ├── BM25 index ✓ (always)
+    └── Knowledge graph ✓ (always)
+
+    + PageIndex Trees (Phase 11):
+    ├── Optional .bmd-tree.json files
+    ├── Parallel to BM25 (no interference)
+    └── Used only when --strategy pageindex requested
+
+    + Context Assembly (Phase 11):
+    ├── bmd context "question" --dir ./docs
+    ├── Uses PageIndex if trees exist
+    ├── Falls back to BM25 if not
+    └── Returns assembled context blocks (§ notation)
+
+Files and Dependencies:
+
+    Core (always present):
+    ├── .bmd/knowledge.db (SQLite: BM25 + graph)
+    └── internal/knowledge/search.go (BM25 implementation)
+
+    PageIndex (optional):
+    ├── ~/.local/bin/pageindex (subprocess binary)
+    ├── .bmd-tree.json files (one per markdown)
+    └── internal/knowledge/pageindex.go (integration)
+
+Environment Variables:
+
+    # Default strategy for all commands
+    export BMD_STRATEGY=pageindex
+
+    # pageindex subprocess path (auto-detected if in PATH)
+    export BMD_PAGEINDEX_BIN=/usr/local/bin/pageindex
+
+    # Model for embedding generation
+    export BMD_PAGEINDEX_MODEL=claude-opus
+```
+
 ### Knowledge Graph Construction
 
 The knowledge graph is built by extracting relationships from markdown content (links, code mentions, service references).
