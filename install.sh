@@ -1,7 +1,8 @@
 #!/bin/bash
+
 # BMD (Beast Markdown Document) Installer
-# Downloads and installs the latest bmd binary for your system
-# Usage: curl -fsSL https://github.com/vaibhav1805/bmd/releases/latest/download/install.sh | bash
+# This script detects your OS/architecture and downloads the latest bmd binary
+# Installation: curl -fsSL https://github.com/vaibhav1805/bmd/releases/latest/download/install.sh | bash
 
 set -e
 
@@ -11,160 +12,147 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Detect OS and architecture
-OS=$(uname -s)
-ARCH=$(uname -m)
-
-# Normalize architecture names
-case "$ARCH" in
-    arm64)
-        ARCH="arm64"
-        ;;
-    x86_64|amd64)
-        ARCH="amd64"
-        ;;
-    aarch64)
-        ARCH="arm64"
-        ;;
-    *)
-        echo -e "${RED}Error: Unsupported architecture: $ARCH${NC}"
-        exit 1
-        ;;
-esac
-
-# Normalize OS names
-case "$OS" in
-    Darwin)
-        OS="darwin"
-        ;;
-    Linux)
-        OS="linux"
-        ;;
-    MINGW64_NT*|MSYS_NT*)
-        OS="windows"
-        ARCH="amd64"  # Assuming 64-bit Windows
-        ;;
-    *)
-        echo -e "${RED}Error: Unsupported OS: $OS${NC}"
-        exit 1
-        ;;
-esac
-
-echo -e "${YELLOW}🚀 BMD Installer${NC}"
-echo "Detected: $OS / $ARCH"
-
-# Determine binary name
-if [ "$OS" = "windows" ]; then
-    BINARY_NAME="bmd.exe"
-else
-    BINARY_NAME="bmd"
-fi
-
-# Determine download URL
+# Configuration
 REPO="vaibhav1805/bmd"
-RELEASE_URL="https://github.com/$REPO/releases/latest/download"
-BINARY_URL="$RELEASE_URL/bmd-$OS-$ARCH"
+GITHUB_API="https://api.github.com/repos/${REPO}/releases"
+INSTALL_PREFIX="${HOME}/.local/bin"
+BINARY_NAME="bmd"
 
-if [ "$OS" = "windows" ]; then
-    BINARY_URL="$RELEASE_URL/bmd-windows-$ARCH.exe"
-fi
+# Detect OS and Architecture
+detect_platform() {
+    local os
+    local arch
 
-echo "Downloading from: $BINARY_URL"
+    case "$(uname -s)" in
+        Darwin)
+            os="darwin"
+            ;;
+        Linux)
+            os="linux"
+            ;;
+        MINGW* | MSYS* | CYGWIN*)
+            os="windows"
+            ;;
+        *)
+            echo -e "${RED}Error: Unsupported OS: $(uname -s)${NC}" >&2
+            exit 1
+            ;;
+    esac
 
-# Create temporary directory
-TEMP_DIR=$(mktemp -d)
-trap "rm -rf $TEMP_DIR" EXIT
+    case "$(uname -m)" in
+        x86_64 | amd64)
+            arch="amd64"
+            ;;
+        aarch64 | arm64)
+            arch="arm64"
+            ;;
+        *)
+            echo -e "${RED}Error: Unsupported architecture: $(uname -m)${NC}" >&2
+            exit 1
+            ;;
+    esac
 
-cd "$TEMP_DIR"
-
-# Download binary
-echo -e "${YELLOW}⬇️  Downloading bmd binary...${NC}"
-if command -v curl &> /dev/null; then
-    curl -fsSL -o "$BINARY_NAME" "$BINARY_URL"
-elif command -v wget &> /dev/null; then
-    wget -q -O "$BINARY_NAME" "$BINARY_URL"
-else
-    echo -e "${RED}Error: curl or wget required${NC}"
-    exit 1
-fi
-
-if [ ! -f "$BINARY_NAME" ]; then
-    echo -e "${RED}Error: Failed to download binary${NC}"
-    exit 1
-fi
-
-# Make executable
-chmod +x "$BINARY_NAME"
-
-# Test binary
-echo -e "${YELLOW}✓ Testing binary...${NC}"
-./"$BINARY_NAME" --version 2>/dev/null || {
-    echo -e "${RED}Warning: Could not verify binary. Continuing anyway...${NC}"
-}
-
-# Determine installation location
-INSTALL_DIR=""
-
-# Try ~/.local/bin first (preferred, user-local)
-if [ -d "$HOME/.local/bin" ]; then
-    INSTALL_DIR="$HOME/.local/bin"
-    SUDO=""
-elif [ -w "/usr/local/bin" ]; then
-    INSTALL_DIR="/usr/local/bin"
-    SUDO=""
-else
-    # Try with sudo
-    INSTALL_DIR="/usr/local/bin"
-    SUDO="sudo"
-fi
-
-echo -e "${YELLOW}📦 Installing to: $INSTALL_DIR${NC}"
-
-# Create directory if needed
-if [ ! -d "$INSTALL_DIR" ]; then
-    $SUDO mkdir -p "$INSTALL_DIR"
-fi
-
-# Install binary
-$SUDO mv "$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
-
-# Verify installation
-if command -v "$BINARY_NAME" &> /dev/null || [ -f "$INSTALL_DIR/$BINARY_NAME" ]; then
-    echo -e "${GREEN}✅ BMD installed successfully!${NC}"
-    echo ""
-    echo "Location: $INSTALL_DIR/$BINARY_NAME"
-    echo ""
-
-    # Check if in PATH
-    if ! command -v bmd &> /dev/null; then
-        echo -e "${YELLOW}⚠️  bmd not in PATH. Add this to your shell config:${NC}"
-        echo "export PATH=\"$INSTALL_DIR:\$PATH\""
-        echo ""
-        echo "Then reload your shell:"
-        echo "source ~/.bashrc   # or ~/.zshrc, ~/.config/fish/config.fish, etc."
+    if [ "$os" = "windows" ]; then
+        BINARY_NAME="bmd-windows-amd64.exe"
+    else
+        BINARY_NAME="bmd-${os}-${arch}"
     fi
 
-    echo -e "${GREEN}Getting started:${NC}"
-    echo "  bmd README.md          # View a file"
-    echo "  bmd                    # Browse directory"
-    echo "  bmd index ./docs       # Index for agents"
-    echo "  bmd query \"topic\"      # Search"
-    echo ""
-    echo -e "${YELLOW}📖 Documentation:${NC}"
-    echo "  Run: bmd --help"
-    echo "  Or visit: https://github.com/vaibhav1805/bmd"
-else
-    echo -e "${RED}Error: Installation failed${NC}"
-    exit 1
-fi
+    echo "Detected: ${os} ${arch}"
+}
 
-# Optional: Install PageIndex for semantic search
-echo ""
-echo -e "${YELLOW}Optional: Semantic search support${NC}"
-echo "To enable semantic search (PageIndex), run:"
-echo "  pip install pageindex"
-echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-echo ""
-echo "Then use:"
-echo "  bmd query \"question\" --strategy pageindex"
-echo ""
+# Get latest release info
+get_latest_release() {
+    local latest_url="${GITHUB_API}/latest"
+    echo -e "${YELLOW}Fetching latest release from ${REPO}...${NC}"
+
+    local response
+    response=$(curl -s "${latest_url}")
+
+    if echo "$response" | grep -q "\"message\""; then
+        echo -e "${RED}Error: Failed to fetch release info${NC}" >&2
+        echo "$response" >&2
+        exit 1
+    fi
+
+    echo "$response"
+}
+
+# Extract download URL for the binary
+get_download_url() {
+    local release_data=$1
+    local binary_name=$2
+
+    echo "$release_data" | grep -o "\"browser_download_url\": \"[^\"]*${binary_name}\"" | head -1 | cut -d'"' -f4
+}
+
+# Download binary
+download_binary() {
+    local url=$1
+    local target=$2
+
+    echo -e "${YELLOW}Downloading from: ${url}${NC}"
+
+    if ! curl -fL --progress-bar "$url" -o "$target"; then
+        echo -e "${RED}Error: Failed to download binary${NC}" >&2
+        rm -f "$target"
+        exit 1
+    fi
+
+    chmod +x "$target"
+    echo -e "${GREEN}Downloaded to: ${target}${NC}"
+}
+
+# Ensure install directory exists
+ensure_install_dir() {
+    if [ ! -d "$INSTALL_PREFIX" ]; then
+        echo -e "${YELLOW}Creating directory: ${INSTALL_PREFIX}${NC}"
+        mkdir -p "$INSTALL_PREFIX"
+    fi
+}
+
+# Update PATH if needed
+check_path() {
+    if ! echo "$PATH" | grep -q "$INSTALL_PREFIX"; then
+        echo ""
+        echo -e "${YELLOW}Note: ${INSTALL_PREFIX} is not in your PATH${NC}"
+        echo "Add to your shell configuration (~/.bashrc, ~/.zshrc, etc.):"
+        echo ""
+        echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+        echo ""
+        echo "Then reload your shell: source ~/.bashrc"
+    fi
+}
+
+# Main installation flow
+main() {
+    echo -e "${GREEN}=== BMD Installer ===${NC}"
+    echo ""
+
+    detect_platform
+    release_data=$(get_latest_release)
+    download_url=$(get_download_url "$release_data" "$BINARY_NAME")
+
+    if [ -z "$download_url" ]; then
+        echo -e "${RED}Error: Could not find binary for ${BINARY_NAME} in the latest release${NC}" >&2
+        echo ""
+        echo "Available binaries:"
+        echo "$release_data" | grep "browser_download_url" | grep -o '"browser_download_url": "[^"]*"' | head -10
+        exit 1
+    fi
+
+    ensure_install_dir
+    download_binary "$download_url" "${INSTALL_PREFIX}/${BINARY_NAME%.*}"
+
+    echo ""
+    echo -e "${GREEN}✓ Installation complete!${NC}"
+    echo ""
+    echo "Try it out:"
+    echo "    bmd --help"
+    echo "    bmd README.md"
+    echo ""
+
+    check_path
+}
+
+main "$@"

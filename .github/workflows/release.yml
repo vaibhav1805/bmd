@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to release (e.g., v1.0.0)'
+        required: true
+
+jobs:
+  build:
+    name: Build Release Binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            goarch: arm64
+            goos: darwin
+            output_name: bmd-darwin-arm64
+          - os: macos-latest
+            goarch: amd64
+            goos: darwin
+            output_name: bmd-darwin-amd64
+          - os: ubuntu-latest
+            goarch: amd64
+            goos: linux
+            output_name: bmd-linux-amd64
+          - os: ubuntu-latest
+            goarch: arm64
+            goos: linux
+            output_name: bmd-linux-arm64
+          - os: windows-latest
+            goarch: amd64
+            goos: windows
+            output_name: bmd-windows-amd64.exe
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version: 1.21
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p releases
+          go build -o releases/${{ matrix.output_name }} ./cmd/bmd
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: releases/${{ matrix.output_name }}
+
+  create-release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: all-binaries
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find all-binaries -type f -name "bmd-*" -exec cp {} release-assets/ \;
+          ls -la release-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release-assets/bmd-*
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-install-script:
+    name: Upload Install Script
+    needs: create-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload install.sh to release
+        run: |
+          # Get the release tag from the git ref
+          TAG=${{ github.ref_name }}
+
+          # Update install.sh with the latest tag
+          sed -i "s|LATEST_TAG=.*|LATEST_TAG=${TAG}|" install.sh
+
+          # Upload via gh CLI (requires GitHub token)
+          gh release upload "$TAG" install.sh --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

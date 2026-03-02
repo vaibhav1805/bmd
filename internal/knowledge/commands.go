@@ -975,9 +975,24 @@ func CmdCrawl(args []string) error {
 		return fmt.Errorf("crawl: load graph: %w", err)
 	}
 
+	// Normalize file paths to match graph node IDs.
+	// Graph node IDs are stored as relative paths with forward slashes (e.g., "services/user.md").
+	// User input may be relative ("./services/user.md") or absolute paths that need normalization.
+	normalizedFiles := make([]string, len(a.FromMultiple))
+	for i, f := range a.FromMultiple {
+		// Clean path and convert to forward slashes.
+		cleaned := filepath.Clean(f)
+		normalized := filepath.ToSlash(cleaned)
+
+		// Remove leading "./" if present.
+		normalized = strings.TrimPrefix(normalized, "./")
+
+		normalizedFiles[i] = normalized
+	}
+
 	// Validate that at least one start file exists in the graph.
 	validFiles := 0
-	for _, f := range a.FromMultiple {
+	for _, f := range normalizedFiles {
 		if _, ok := graph.Nodes[f]; ok {
 			validFiles++
 		}
@@ -993,7 +1008,7 @@ func CmdCrawl(args []string) error {
 
 	// Execute crawl.
 	result := graph.CrawlMulti(CrawlOptions{
-		FromFiles:     a.FromMultiple,
+		FromFiles:     normalizedFiles,
 		Direction:     a.Direction,
 		MaxDepth:      a.Depth,
 		IncludeCycles: true,

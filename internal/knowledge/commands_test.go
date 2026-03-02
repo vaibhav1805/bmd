@@ -653,13 +653,13 @@ func TestCmdComponents_JSON(t *testing.T) {
 		t.Error("JSON missing top-level 'data' field")
 	}
 
-	// Verify data payload contains services.
+	// Verify data payload contains components.
 	data, ok := envelope["data"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("data field is not an object: %v", envelope["data"])
 	}
-	if _, ok := data["services"]; !ok {
-		t.Error("JSON data missing 'services' field")
+	if _, ok := data["components"]; !ok {
+		t.Error("JSON data missing 'components' field")
 	}
 }
 
