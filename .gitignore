@@ -13,7 +13,7 @@
 
 # Build artifacts
 /bmd
-bin/
+bin/bmd*
 vendor/
 *.test
 *.out

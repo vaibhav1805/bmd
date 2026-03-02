@@ -21,9 +21,12 @@ curl -fsSL \
 
 This script:
 - Detects your OS (macOS, Linux, Windows) and architecture (arm64, x86_64)
-- Downloads the latest release binary
-- Places it in `$HOME/.local/bin` or `/usr/local/bin` (with sudo if needed)
-- Adds to PATH automatically
+- Downloads the latest release binary and renames it to `bmd`
+- Downloads the `pageindex` wrapper script (optional, for semantic search)
+- Places both in `$HOME/.local/bin`
+- Adds to PATH automatically if needed
+
+Both `bmd` and `pageindex` will be ready to use immediately after installation.
 
 **Or build from source:**
 ```bash
@@ -43,14 +46,38 @@ mv bmd ~/.local/bin/
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### For Agents
+### PageIndex Wrapper (For Semantic Search)
 
-If you're integrating bmd with AI agents, LLM frameworks, or MCP servers, see **[AGENT.md](./AGENT.md)** for complete setup including:
-- PageIndex semantic search installation
+The `pageindex` wrapper script is **automatically installed** with the one-line installer. It enables semantic search with hierarchical markdown indexing.
+
+**What's installed:**
+```bash
+~/.local/bin/pageindex  # Python wrapper for hierarchical indexing
+```
+
+**Verify installation:**
+```bash
+pageindex --help
+# Should show: usage: pageindex [-h] {index,query} ...
+```
+
+**Manual installation** (if needed):
+```bash
+# Option 1: Download from GitHub
+curl -fsSL https://raw.githubusercontent.com/vaibhav1805/bmd/main/bin/pageindex.py \
+  -o ~/.local/bin/pageindex
+chmod +x ~/.local/bin/pageindex
+
+# Option 2: Ensure Python 3 is installed
+python3 --version  # Should be 3.6+
+```
+
+**For agents and advanced PageIndex configuration**, see **[AGENT.md](./AGENT.md)** for:
+- Semantic search with reasoning traces
+- Custom LLM models
 - MCP server configuration
-- Environment variables for agents
-- Integration with LangChain, Python, Node.js
-- Troubleshooting for agent workflows
+- Integration with agent frameworks
+- Troubleshooting
 
 ## Quick Overview
 
@@ -393,6 +420,26 @@ find . -name "*.md" | wc -l
 - MCP server issues
 - JSON parsing errors
 - Docker integration
+
+#### PageIndex binary not found
+
+If you see `"pageindex executable not found"` when using semantic search:
+
+```bash
+# Check if pageindex is installed
+which pageindex
+
+# If not found, install it
+curl -fsSL https://raw.githubusercontent.com/vaibhav1805/bmd/main/bin/pageindex.py \
+  -o ~/.local/bin/pageindex
+chmod +x ~/.local/bin/pageindex
+
+# Verify Python 3 is available
+python3 --version
+
+# Test pageindex
+pageindex index --help
+```
 
 ### Human Editor Issues
 

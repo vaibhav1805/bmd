@@ -22,21 +22,20 @@ curl -fsSL \
   https://github.com/vaibhav1805/bmd/releases/latest/download/install.sh \
   | bash
 
-# 2. Install Python 3 and pip (required for PageIndex semantic search)
+# 2. Verify Python 3 is installed (required for PageIndex wrapper)
 # macOS:
 brew install python3
 
 # Linux (Ubuntu/Debian):
-sudo apt-get install python3 python3-pip
+sudo apt-get install python3
 
-# 3. Install PageIndex (REQUIRED for --strategy pageindex)
-# Without this, --strategy pageindex will fail with "pageindex binary not found"
-pip install pageindex
+# Verify installation
+python3 --version
 
 # 4. Create a .bmd config file in your documentation root
 cat > docs/.bmd-config.yaml << 'EOF'
 # BMD Configuration File for Agents
-strategy: pageindex          # pageindex for semantic search (requires pip install pageindex)
+strategy: pageindex          # pageindex for semantic search (auto-installed, requires Python 3)
                             # or bm25 for fast keyword search
 theme: default              # (ignored by agents, only for human UI)
 output_format: json         # Default output format for agent queries
@@ -60,17 +59,27 @@ export BMD_OUTPUT_FORMAT="json"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### PageIndex Requirement
+### PageIndex Wrapper
 
-**Default behavior (BM25):** Works without PageIndex — fast keyword-based search
-**Semantic search (PageIndex):** REQUIRES `pip install pageindex` before using `--strategy pageindex`
+**Default behavior (BM25):** Works out-of-the-box — fast keyword-based search
+**Semantic search (PageIndex):** `pageindex` wrapper is **automatically installed** with the one-line installer
 
-If pageindex is not installed and you use `--strategy pageindex`, you'll get:
+The wrapper is installed to `~/.local/bin/pageindex` and requires **Python 3** (3.6+).
+
+If you get `"pageindex binary not found"`:
+```bash
+# Ensure Python 3 is installed
+python3 --version
+
+# Reinstall pageindex wrapper
+curl -fsSL https://raw.githubusercontent.com/vaibhav1805/bmd/main/bin/pageindex.py \
+  -o ~/.local/bin/pageindex
+chmod +x ~/.local/bin/pageindex
+
+# Verify
+which pageindex
+pageindex --help
 ```
-Error: pageindex binary not found
-```
-
-**Solution:** Install with `pip install pageindex` and ensure `~/.local/bin` is in your PATH.
 
 ---
 
@@ -326,11 +335,15 @@ bmd context "topic" --dir ./docs
 unset BMD_STRATEGY
 ```
 
-**Setup PageIndex (one-time):**
+**PageIndex is already installed** when you run the one-line installer. It's available at:
 ```bash
-pip install pageindex
-# Creates ~/.local/bin/pageindex wrapper script automatically
-export PATH="$HOME/.local/bin:$PATH"
+~/.local/bin/pageindex
+```
+
+Just ensure Python 3 is available and `~/.local/bin` is in PATH:
+```bash
+python3 --version
+echo $PATH | grep -q "$HOME/.local/bin" || export PATH="$HOME/.local/bin:$PATH"
 ```
 
 ---
@@ -591,7 +604,7 @@ bm25:
   k1: 2.0                        # Term frequency saturation (default 2.0)
   b: 0.75                        # Field length normalization (0-1, default 0.75)
 
-# PageIndex semantic search (requires pip install pageindex)
+# PageIndex semantic search (auto-installed, requires Python 3)
 pageindex:
   model: claude-3-5-sonnet       # LLM model for reasoning
   top_k: 5                       # Number of results per query
@@ -652,35 +665,36 @@ echo "auto_index: true" >> .bmd-config.yaml
 
 ### "pageindex binary not found" or "PAGEINDEX_NOT_AVAILABLE"
 
-**This happens when you try to use `--strategy pageindex` without installing PageIndex.**
+**This happens when the pageindex wrapper is missing or Python 3 is not available.**
 
 ```bash
-# Step 1: Verify if PageIndex is installed
+# Step 1: Verify if Python 3 is installed
+python3 --version  # Should be 3.6+
+
+# Step 2: Check if pageindex is installed
 which pageindex
-pageindex --version
+pageindex --help
 
-# Step 2: If not found, install it (REQUIRED for semantic search)
-pip install pageindex
+# Step 3: If not found, reinstall it
+curl -fsSL https://raw.githubusercontent.com/vaibhav1805/bmd/main/bin/pageindex.py \
+  -o ~/.local/bin/pageindex
+chmod +x ~/.local/bin/pageindex
 
-# Step 3: Ensure ~/.local/bin is in PATH
+# Step 4: Ensure ~/.local/bin is in PATH
 echo $PATH | grep -q "$HOME/.local/bin" || echo "NOT IN PATH"
 export PATH="$HOME/.local/bin:$PATH"
 
-# Step 4: Verify installation worked
+# Step 5: Verify installation worked
 which pageindex
-pageindex --version
+pageindex --help
 
-# Step 5: Now you can use semantic search
+# Step 6: Now you can use semantic search
 bmd index ./docs --strategy pageindex
 bmd query "how do we...?" --dir ./docs --strategy pageindex
 
 # Alternative: Fall back to BM25 if PageIndex not needed
 export BMD_STRATEGY="bm25"
 bmd query "topic" --dir ./docs
-
-# Troubleshooting: Test PageIndex directly
-echo '{"headings": ["# Title"], "content": ["Main content"]}' |\
-  pageindex query --query "title" --model claude-3-5-sonnet --format json
 ```
 
 ### MCP server not responding
@@ -757,7 +771,7 @@ data = json.loads(result.stdout)
 ```
 
 **Q: Should I use BM25 or PageIndex?**
-A: Use **PageIndex for semantic queries** ("How do we handle auth?"), **BM25 for exact keywords** ("async patterns"). PageIndex requires `pip install pageindex` but gives better reasoning.
+A: Use **PageIndex for semantic queries** ("How do we handle auth?"), **BM25 for exact keywords** ("async patterns"). PageIndex is auto-installed (needs Python 3) and gives better reasoning.
 
 **Q: How do I cache results?**
 A: Index once with `bmd index ./docs`, then all queries use the cached index. Rebuild with same command to refresh.

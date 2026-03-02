@@ -17,6 +17,7 @@ REPO="vaibhav1805/bmd"
 GITHUB_API="https://api.github.com/repos/${REPO}/releases"
 INSTALL_PREFIX="${HOME}/.local/bin"
 BINARY_NAME="bmd"
+PAGEINDEX_URL="https://raw.githubusercontent.com/${REPO}/main/bin/pageindex.py"
 
 # Detect OS and Architecture
 detect_platform() {
@@ -103,6 +104,42 @@ download_binary() {
     echo -e "${GREEN}Downloaded to: ${target}${NC}"
 }
 
+# Check if Python 3 is available
+check_python3() {
+    if ! command -v python3 &> /dev/null; then
+        echo -e "${YELLOW}Warning: Python 3 not found${NC}" >&2
+        echo -e "${YELLOW}  pageindex (semantic search) requires Python 3.6+${NC}" >&2
+        echo -e "${YELLOW}  Install with: brew install python3 (macOS) or apt install python3 (Linux)${NC}" >&2
+        return 1
+    fi
+
+    local python_version
+    python_version=$(python3 --version 2>&1 | awk '{print $2}')
+    echo -e "${GREEN}✓ Python 3 (${python_version}) available${NC}"
+    return 0
+}
+
+# Download and install pageindex wrapper script
+install_pageindex() {
+    local pageindex_path="${INSTALL_PREFIX}/pageindex"
+
+    echo -e "${YELLOW}Installing pageindex wrapper script...${NC}"
+
+    # Check for Python 3 first
+    if ! check_python3; then
+        echo -e "${YELLOW}  Skipping pageindex installation (optional)${NC}"
+        return 0
+    fi
+
+    if ! curl -fL --progress-bar "$PAGEINDEX_URL" -o "$pageindex_path"; then
+        echo -e "${YELLOW}Warning: Failed to download pageindex (optional dependency)${NC}" >&2
+        return 0
+    fi
+
+    chmod +x "$pageindex_path"
+    echo -e "${GREEN}✓ Installed pageindex to: ${pageindex_path}${NC}"
+}
+
 # Ensure install directory exists
 ensure_install_dir() {
     if [ ! -d "$INSTALL_PREFIX" ]; then
@@ -142,7 +179,19 @@ main() {
     fi
 
     ensure_install_dir
-    download_binary "$download_url" "${INSTALL_PREFIX}/${BINARY_NAME%.*}"
+
+    # Download binary with platform-specific name, then rename to 'bmd'
+    local temp_binary="${INSTALL_PREFIX}/${BINARY_NAME%.*}"
+    download_binary "$download_url" "$temp_binary"
+
+    # Rename to final name
+    if [ "$temp_binary" != "${INSTALL_PREFIX}/bmd" ]; then
+        mv "$temp_binary" "${INSTALL_PREFIX}/bmd"
+        echo -e "${GREEN}✓ Renamed to: ${INSTALL_PREFIX}/bmd${NC}"
+    fi
+
+    # Install pageindex wrapper script
+    install_pageindex
 
     echo ""
     echo -e "${GREEN}✓ Installation complete!${NC}"
