@@ -53,14 +53,22 @@ curl -fsSL \
   https://github.com/vaibhav1805/bmd/releases/latest/download/install.sh \
   | bash
 
-# 2. Install PageIndex for semantic search (optional but recommended)
-pip install pageindex
-export PATH="$HOME/.local/bin:$PATH"
+# 2. Install Python 3 and pip (required)
+# macOS:
+brew install python3
 
-# 3. Create a .bmd config file in your documentation root
+# Linux (Ubuntu/Debian):
+sudo apt-get install python3 python3-pip
+
+# 3. Install PageIndex (REQUIRED for --strategy pageindex)
+# Without this, --strategy pageindex will fail with "pageindex binary not found"
+pip install pageindex
+
+# 4. Create a .bmd config file in your documentation root
 cat > docs/.bmd-config.yaml << 'EOF'
 # BMD Configuration File
 strategy: pageindex          # Default search strategy (bm25 or pageindex)
+                            # NOTE: Requires pageindex installation (step 3 above)
 theme: default              # Editor theme (default, ocean, forest, sunset, midnight)
 mouse_enabled: true         # Enable mouse support
 auto_index: true            # Auto-index on startup
@@ -76,12 +84,18 @@ output_format: json         # Default output format (json, text, csv, dot)
 mcp_mode: false            # Set to true for MCP server mode
 EOF
 
-# 4. Set environment variables for your agent
+# 5. Set environment variables for your agent
 export BMD_DIR="./docs"
 export BMD_STRATEGY="pageindex"
 export BMD_CACHE_DIR="$HOME/.cache/bmd"
 export PATH="$HOME/.local/bin:$PATH"
 ```
+
+**⚠️ Important: PageIndex Requirement**
+- **Default behavior (BM25)**: Works without PageIndex — fast keyword-based search
+- **Semantic search (PageIndex)**: REQUIRES `pip install pageindex` before using `--strategy pageindex`
+- If pageindex is not installed and you use `--strategy pageindex`, you'll get: `Error: pageindex binary not found`
+- Solution: Install it with `pip install pageindex` and ensure it's in your PATH
 
 ## Quick Overview
 
@@ -104,8 +118,8 @@ bmd README.md
 # Press '/' to search within the file, or Ctrl+F in edit mode
 
 # Search across all markdown files in directory
-bmd query "topic" --dir ./docs              # BM25 keyword search
-bmd query "how do we..." --dir ./docs --strategy pageindex  # Semantic search
+bmd query "topic" --dir ./docs              # BM25 keyword search (no dependencies)
+bmd query "how do we..." --dir ./docs --strategy pageindex  # Semantic search (requires: pip install pageindex)
 ```
 
 ### As an Agent Tool
@@ -955,24 +969,36 @@ bmd index ./docs
 echo "auto_index: true" >> .bmd-config.yaml
 ```
 
-#### PageIndex not found / "PAGEINDEX_NOT_AVAILABLE"
+#### "pageindex binary not found" or "PAGEINDEX_NOT_AVAILABLE"
+
+**This happens when you try to use `--strategy pageindex` without installing PageIndex.**
 
 ```bash
-# Check if pageindex is installed
+# Step 1: Verify if PageIndex is installed
 which pageindex
 pageindex --version
 
-# Install if missing
+# Step 2: If not found, install it (REQUIRED for semantic search)
 pip install pageindex
-# Verify PATH includes ~/.local/bin
+
+# Step 3: Ensure ~/.local/bin is in PATH
+echo $PATH | grep -q "$HOME/.local/bin" || echo "NOT IN PATH"
 export PATH="$HOME/.local/bin:$PATH"
 
-# Fallback to BM25 if PageIndex unavailable
+# Step 4: Verify installation worked
+which pageindex
+pageindex --version
+
+# Step 5: Now you can use semantic search
+bmd index ./docs --strategy pageindex
+bmd query "how do we..." --dir ./docs --strategy pageindex
+
+# Alternative: Fall back to BM25 if PageIndex not needed
 export BMD_STRATEGY="bm25"
 bmd query "topic" --dir ./docs
 
-# Test PageIndex directly
-echo '{"headings": ["# Title"], "content": ["Main content"]}' | \
+# Troubleshooting: Test PageIndex directly
+echo '{"headings": ["# Title"], "content": ["Main content"]}' |\
   pageindex query --query "title" --model claude-3-5-sonnet --format json
 ```
 
