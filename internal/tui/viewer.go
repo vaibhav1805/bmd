@@ -1088,10 +1088,11 @@ func (v *Viewer) scrollToMatch() {
 		return
 	}
 	lineIdx := m.LineIndex
+	contentHeight := v.Height - 2 // header + status bar
 	if lineIdx < v.Offset {
 		v.Offset = lineIdx
-	} else if lineIdx >= v.Offset+v.Height-1 {
-		v.Offset = lineIdx - v.Height/2
+	} else if lineIdx >= v.Offset+contentHeight {
+		v.Offset = lineIdx - contentHeight/2
 		if v.Offset < 0 {
 			v.Offset = 0
 		}
