@@ -71,6 +71,36 @@ bmd README.md
 bmd query "topic" --dir ./docs              # Keyword search across files
 ```
 
+### Export & Deploy Knowledge
+
+**Package knowledge for distribution:**
+```bash
+# Export documentation + indexes as portable tar
+bmd export --from ./docs --output knowledge.tar.gz --version 1.0.0
+
+# Import in a new location
+bmd import knowledge.tar.gz --dir /tmp/knowledge
+
+# Run headless for agents (no TUI)
+bmd serve --headless --mcp --knowledge-tar knowledge.tar.gz
+
+# Publish to cloud storage
+bmd export --from ./docs --publish s3://my-bucket/knowledge
+bmd import s3://my-bucket/knowledge-v1.0.0.tar.gz
+```
+
+**Deploy in containers:**
+```bash
+# Build Docker image with embedded knowledge
+docker build -t bmd-service .
+
+# Run with Docker Compose (agent + BMD sidecar)
+docker-compose up
+
+# Deploy to Kubernetes
+kubectl apply -f kubernetes/
+```
+
 ### For Agents
 
 BMD provides a complete knowledge system for AI agents: full-text search, semantic retrieval, graph analysis, and MCP server integration.
@@ -78,6 +108,7 @@ BMD provides a complete knowledge system for AI agents: full-text search, semant
 🤖 **See [AGENT.md](./AGENT.md) for:**
 - Agent command reference (`bmd query`, `bmd context`, `bmd depends`, `bmd graph`, `bmd crawl`)
 - MCP server setup for seamless integration
+- Export/import for containerized workflows
 - Integration examples (LangChain, Python, Node.js)
 - Configuration for semantic search with PageIndex
 
@@ -759,11 +790,13 @@ For major changes, please open an issue first to discuss what you would like to 
 
 ---
 
-**Current Status:** ✅ **PRODUCTION READY**
+**Current Status:** ✅ **PRODUCTION READY** — Phases 1-16 Complete
 
-Complete documentation platform for humans (editing, viewing, navigation) and agents (indexing, search, graphs, MCP integration).
+Complete documentation platform for humans (editing, viewing, navigation) and agents (indexing, search, graphs, MCP integration, portable artifacts, container deployment).
 
-**Last Updated:** 2026-03-01 (MCP server integration, OpenClaw plugin, and live indexing support)
+**Latest:** Portable knowledge artifacts with export/import, Docker/Kubernetes deployment, semantic versioning, and S3 distribution (Phases 14-16)
+
+**Last Updated:** 2026-03-02 (Export/import infrastructure, container deployment, knowledge versioning)
 
 **Quick Links:**
 - 📖 [ARCHITECTURE.md](./ARCHITECTURE.md) — Component-based architecture overview

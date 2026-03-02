@@ -2185,7 +2185,7 @@ func (v Viewer) renderHeader() string {
 	if v.errorMsg != "" {
 		// Error message in red with bold for visual prominence
 		right = "\x1b[1;31m✗ " + v.errorMsg + "\x1b[0m"
-	} else if v.searchState.Active && len(v.searchState.Matches) > 0 {
+	} else if v.searchState.Active && len(v.searchState.Matches) > 0 && v.searchState.Current >= 0 {
 		// Search with highlights in bright colors
 		current := v.searchState.Current + 1
 		total := len(v.searchState.Matches)

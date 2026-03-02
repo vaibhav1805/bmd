@@ -861,18 +861,55 @@ Benchmarks on 100-document corpus:
 | Split-pane rendering | <3ms |
 | Graph crawl (50 nodes) | <1ms |
 
+## Export & Import Infrastructure
+
+**Goal:** Package knowledge artifacts (markdown + indexes + graphs) as portable tar files for container deployment
+
+- `bmd export --from <dir>` — Package markdown + .bmd indexes into knowledge.tar.gz
+- `bmd import <tar> --dir <dest>` — Extract with SHA256 checksum validation
+- `bmd serve --headless --knowledge-tar <tar>` — Run MCP-only mode (no TUI) for containers
+- Git provenance metadata (version, tag, commit, remote URL)
+- S3 publish/download integration
+
+**Files:** `internal/knowledge/export.go`, `internal/knowledge/importtar.go`
+
+## Container Deployment
+
+**Goal:** Deploy BMD as sidecar service for agent fleets
+
+- **Dockerfile** — Multi-stage build, <30MB image, alpine-based
+- **docker-compose.yml** — Sidecar pattern with health checks, resource limits
+- **Kubernetes manifests** — Deployment (w/ InitContainer), Service, ConfigMap, Namespace
+
+**Files:** `Dockerfile`, `docker-compose.yaml`, `kubernetes/` (5 manifests)
+
+## Knowledge Versioning & Distribution
+
+**Goal:** Enable knowledge artifacts as versioned, distributable assets
+
+- SHA256 deterministic checksums (sorted archive paths)
+- Semantic versioning (`--version 2.0`, `--git-version` auto-detect)
+- Git provenance auto-detection (remote, tag, commit hash)
+- S3 cloud distribution (`--publish s3://`, `import s3://`)
+- Automatic checksum validation on import
+
+**Files:** Extended `internal/knowledge/export.go` with version/checksum/S3 functions
+
 ## Project Status
 
-All core features complete and production-ready:
+All 16 phases complete and production-ready:
 - ✅ Rendering engine with syntax highlighting
 - ✅ Full editor with persistence and undo/redo
 - ✅ Navigation and link following
 - ✅ Full-text search and BM25 indexing
 - ✅ Knowledge graph and component detection
-- ✅ Directory browser with split-pane view (Beta)
+- ✅ Directory browser with split-pane view
 - ✅ Image rendering support
 - ✅ MCP server (`bmd serve --mcp`) for native agent integration
 - ✅ Graph traversal with multi-start BFS and cycle detection
-- ✅ 356+ unit tests
+- ✅ **Export/import infrastructure with tar packaging (Phase 14)**
+- ✅ **Container deployment (Docker, Compose, Kubernetes) (Phase 15)**
+- ✅ **Knowledge versioning and S3 distribution (Phase 16)**
+- ✅ 415+ unit tests
 
-**Current Status:** Feature-complete. Ready for production use.
+**Current Status:** Feature-complete. All phases shipped. Production-ready.
