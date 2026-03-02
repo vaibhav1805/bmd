@@ -94,7 +94,7 @@ func TestOpenClawDescriptor_QueryCommand(t *testing.T) {
 }
 
 // TestDockerfile_Valid validates that the Dockerfile exists and contains required
-// build stages and runtime configuration.
+// build stages, multi-stage build, and production configuration.
 func TestDockerfile_Valid(t *testing.T) {
 	root := projectRoot(t)
 	dockerfilePath := filepath.Join(root, "Dockerfile")
@@ -116,11 +116,11 @@ func TestDockerfile_Valid(t *testing.T) {
 		{"CGO_ENABLED=0", "static binary build"},
 		{"./cmd/bmd", "correct build target"},
 		{"/usr/local/bin/bmd", "binary install location"},
-		{"pageindex", "PageIndex installation"},
 		{"HEALTHCHECK", "health check directive"},
-		{"bmd serve --mcp", "MCP server health check"},
-		{`ENTRYPOINT ["bmd"]`, "entrypoint"},
-		{`CMD ["serve", "--mcp"]`, "default MCP serve command"},
+		{"knowledge.tar.gz", "knowledge tar packaging"},
+		{"--headless", "headless MCP mode"},
+		{"ENTRYPOINT", "entrypoint directive"},
+		{"-ldflags", "stripped binary flags"},
 	}
 
 	for _, rf := range requiredFields {
@@ -131,7 +131,7 @@ func TestDockerfile_Valid(t *testing.T) {
 }
 
 // TestDockerCompose_Valid validates that docker-compose.yaml exists and has
-// required volume mounts and environment variables.
+// required services, health checks, and resource limits.
 func TestDockerCompose_Valid(t *testing.T) {
 	root := projectRoot(t)
 	composePath := filepath.Join(root, "docker-compose.yaml")
@@ -147,11 +147,13 @@ func TestDockerCompose_Valid(t *testing.T) {
 		field string
 		desc  string
 	}{
-		{"version: '3.8'", "compose version"},
-		{"./docs:/docs:ro", "docs volume (read-only)"},
-		{"./data:/data", "data volume (persistent)"},
-		{"BMD_STRATEGY=pageindex", "strategy env var"},
-		{"BMD_DB=/data/bmd.db", "database path env var"},
+		{"bmd:", "BMD service definition"},
+		{"agent:", "agent sidecar service"},
+		{"depends_on", "service dependency ordering"},
+		{"BMD_STRATEGY", "strategy env var"},
+		{"healthcheck:", "health check configuration"},
+		{"restart:", "restart policy"},
+		{"memory:", "resource limits"},
 	}
 
 	for _, rf := range requiredFields {

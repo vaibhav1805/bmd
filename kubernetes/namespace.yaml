@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bmd
+  labels:
+    app.kubernetes.io/name: bmd
+    app.kubernetes.io/part-of: documentation-platform

@@ -1,0 +1,18 @@
+# BMD Kustomization — Deploy all BMD resources.
+#
+# Usage:
+#   kubectl apply -k kubernetes/
+#   kubectl delete -k kubernetes/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: bmd
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize

@@ -1,0 +1,24 @@
+# BMD ConfigMap — Configuration for the documentation sidecar.
+#
+# To use a pre-built knowledge tar:
+#   1. Build: bmd export --from ./docs --output knowledge.tar.gz
+#   2. Create ConfigMap from file:
+#      kubectl create configmap bmd-knowledge \
+#        --from-file=knowledge.tar.gz=./knowledge.tar.gz \
+#        -n bmd
+#
+# This ConfigMap holds environment configuration only.
+# Knowledge data is loaded via the knowledge-tar ConfigMap or PersistentVolume.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bmd-config
+  namespace: bmd
+  labels:
+    app.kubernetes.io/name: bmd
+    app.kubernetes.io/component: config
+data:
+  # Default search strategy (bm25 for speed, pageindex for semantic).
+  BMD_STRATEGY: "bm25"
+  # Database path inside the container.
+  BMD_DB: "/data/.bmd/knowledge.db"

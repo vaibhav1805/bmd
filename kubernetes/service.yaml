@@ -1,0 +1,23 @@
+# BMD Service — Exposes BMD sidecar to agents within the cluster.
+#
+# BMD communicates via MCP over stdio, so the primary integration pattern
+# is shared volumes. This service is provided for health monitoring and
+# potential future HTTP/gRPC endpoints.
+apiVersion: v1
+kind: Service
+metadata:
+  name: bmd
+  namespace: bmd
+  labels:
+    app.kubernetes.io/name: bmd
+    app.kubernetes.io/component: documentation-sidecar
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: bmd
+  ports:
+    # Reserved for future HTTP API endpoint.
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

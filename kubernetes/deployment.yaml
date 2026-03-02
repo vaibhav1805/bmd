@@ -1,0 +1,95 @@
+# BMD Deployment — Shared documentation sidecar for agent fleet.
+#
+# Architecture:
+#   - InitContainer extracts knowledge tar to shared volume
+#   - BMD container runs headless MCP server
+#   - Agent containers connect via shared volume or network
+#
+# Usage:
+#   kubectl apply -f kubernetes/
+#   kubectl logs -f deployment/bmd -n bmd
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bmd
+  namespace: bmd
+  labels:
+    app.kubernetes.io/name: bmd
+    app.kubernetes.io/component: documentation-sidecar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bmd
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bmd
+        app.kubernetes.io/component: documentation-sidecar
+    spec:
+      # InitContainer: Extract knowledge tar to shared volume.
+      initContainers:
+        - name: extract-knowledge
+          image: bmd:latest
+          command:
+            - /usr/local/bin/bmd
+            - import
+            - /knowledge.tar.gz
+            - --dir
+            - /data
+          volumeMounts:
+            - name: knowledge-data
+              mountPath: /data
+
+      # Main container: Headless MCP server.
+      containers:
+        - name: bmd
+          image: bmd:latest
+          command:
+            - /usr/local/bin/bmd
+            - serve
+            - --mcp
+            - --headless
+            - --knowledge-tar
+            - /knowledge.tar.gz
+          envFrom:
+            - configMapRef:
+                name: bmd-config
+          volumeMounts:
+            - name: knowledge-data
+              mountPath: /data
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command:
+                - /usr/local/bin/bmd
+                - --help
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /usr/local/bin/bmd
+                - --help
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+
+      volumes:
+        - name: knowledge-data
+          emptyDir:
+            sizeLimit: 500Mi
+
+      # Security context.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
