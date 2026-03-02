@@ -81,20 +81,15 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "import":
+			if err := runImport(args[1:]); err != nil {
+				fmt.Fprintln(os.Stderr, "bmd import:", err)
+				os.Exit(1)
+			}
+			return
 		case "serve":
-			if len(args) < 2 || args[1] != "--mcp" {
-				fmt.Fprintf(os.Stderr, "Usage: bmd serve --mcp\n")
-				os.Exit(1)
-			}
-			cwd, err := os.Getwd()
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "bmd: cannot get current directory:", err)
-				os.Exit(1)
-			}
-			dbPath := filepath.Join(cwd, ".bmd", "knowledge.db")
-			srv := bmcmp.NewServer(cwd, dbPath)
-			if err := srv.Start(context.Background()); err != nil {
-				fmt.Fprintln(os.Stderr, "bmd: MCP server error:", err)
+			if err := runServe(args[1:]); err != nil {
+				fmt.Fprintln(os.Stderr, "bmd:", err)
 				os.Exit(1)
 			}
 			return
@@ -217,6 +212,119 @@ func runViewer(filePath string) {
 	}
 }
 
+// runImport handles `bmd import <file.tar.gz|s3://...> [--dir <dest>]`.
+func runImport(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: bmd import <knowledge.tar.gz|s3://...> [--dir <dest>]")
+	}
+
+	source := args[0]
+	destDir := "."
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--dir" && i+1 < len(args) {
+			destDir = args[i+1]
+			i++
+		}
+	}
+
+	absDestDir, err := filepath.Abs(destDir)
+	if err != nil {
+		return fmt.Errorf("resolve dir %q: %w", destDir, err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Importing knowledge from %s to %s...\n", source, absDestDir)
+
+	var result *knowledge.ImportResult
+
+	if strings.HasPrefix(source, "s3://") {
+		result, err = knowledge.ImportKnowledgeFromS3(source, absDestDir)
+	} else {
+		result, err = knowledge.ImportKnowledgeTar(source, absDestDir)
+	}
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stderr, "  Extracted %d markdown files\n", result.FileCount)
+	if result.Metadata != nil {
+		fmt.Fprintf(os.Stderr, "  Version: %s\n", result.Metadata.Version)
+		if result.Metadata.Checksum != "" {
+			fmt.Fprintf(os.Stderr, "  Checksum: %s (valid)\n", result.Metadata.Checksum)
+		}
+		fmt.Fprintf(os.Stderr, "  Created: %s\n", result.Metadata.CreatedAt.Format("2006-01-02 15:04:05 UTC"))
+	}
+	if result.DBPath != "" {
+		fmt.Fprintf(os.Stderr, "  Database: %s\n", result.DBPath)
+	}
+	fmt.Fprintf(os.Stderr, "  Destination: %s\n", result.ExtractDir)
+	fmt.Fprintln(os.Stderr, "  Import complete. Indexes loaded (no rebuild needed).")
+
+	return nil
+}
+
+// runServe handles `bmd serve --mcp [--headless] [--knowledge-tar <file>]`.
+func runServe(args []string) error {
+	hasMCP := false
+	headless := false
+	knowledgeTar := ""
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--mcp":
+			hasMCP = true
+		case "--headless":
+			headless = true
+		case "--knowledge-tar":
+			if i+1 < len(args) {
+				knowledgeTar = args[i+1]
+				i++
+			} else {
+				return fmt.Errorf("--knowledge-tar requires a file path")
+			}
+		}
+	}
+
+	if !hasMCP {
+		return fmt.Errorf("usage: bmd serve --mcp [--headless] [--knowledge-tar <file>]")
+	}
+
+	var baseDir, dbPath string
+
+	if knowledgeTar != "" {
+		// Load from knowledge tar: extract to temp dir, use pre-built DB.
+		fmt.Fprintf(os.Stderr, "Loading knowledge from %s...\n", knowledgeTar)
+		result, err := knowledge.ImportKnowledgeTar(knowledgeTar, "")
+		if err != nil {
+			return fmt.Errorf("load knowledge tar: %w", err)
+		}
+		baseDir = result.ExtractDir
+		dbPath = result.DBPath
+		if dbPath == "" {
+			return fmt.Errorf("knowledge tar does not contain a database")
+		}
+		fmt.Fprintf(os.Stderr, "  Loaded %d files, database at %s\n", result.FileCount, dbPath)
+	} else {
+		// Use current directory.
+		var err error
+		baseDir, err = os.Getwd()
+		if err != nil {
+			return fmt.Errorf("cannot get current directory: %w", err)
+		}
+		dbPath = filepath.Join(baseDir, ".bmd", "knowledge.db")
+	}
+
+	if headless {
+		fmt.Fprintf(os.Stderr, "Starting headless MCP server (dir=%s)...\n", baseDir)
+	}
+
+	srv := bmcmp.NewServer(baseDir, dbPath)
+	if err := srv.Start(context.Background()); err != nil {
+		return fmt.Errorf("MCP server error: %w", err)
+	}
+
+	return nil
+}
+
 func usage() {
 	fmt.Fprint(os.Stderr, `Usage: bmd COMMAND [OPTIONS]
 
@@ -267,7 +375,16 @@ Knowledge commands:
   bmd export [OPTIONS]
     --from DIR                Source directory to export (default: .)
     --output FILE             Output tar.gz file path (default: knowledge.tar.gz)
-    Package markdown files + indexes + metadata into a portable tar.gz archive.
+    --version VER             Semantic version tag (e.g. 2.0.0)
+    --git-version             Auto-detect version from git describe --tags
+    --publish S3_URI          Publish to S3 after export (e.g. s3://bucket/path)
+    Package markdown files + indexes + metadata into a versioned tar.gz archive
+    with SHA256 checksums and git provenance metadata.
+
+  bmd import <knowledge.tar.gz|s3://...> [OPTIONS]
+    --dir DIR                 Destination directory (default: .)
+    Extract a knowledge archive, validate checksums, and load pre-built indexes.
+    Supports local files and S3 URIs (requires AWS CLI for S3).
 
   bmd serve --mcp [OPTIONS]
     --headless                Skip TUI, MCP server only
