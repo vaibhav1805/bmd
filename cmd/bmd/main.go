@@ -74,6 +74,13 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "export":
+			cmdErr = knowledge.CmdExport(args[1:])
+			if cmdErr != nil {
+				fmt.Fprintln(os.Stderr, "bmd export:", cmdErr)
+				os.Exit(1)
+			}
+			return
 		case "serve":
 			if len(args) < 2 || args[1] != "--mcp" {
 				fmt.Fprintf(os.Stderr, "Usage: bmd serve --mcp\n")
@@ -257,7 +264,14 @@ Knowledge commands:
     --depth N                 Max traversal depth (default: 3)
     --format FMT              json|tree|dot|list (default: json)
 
-  bmd serve --mcp
+  bmd export [OPTIONS]
+    --from DIR                Source directory to export (default: .)
+    --output FILE             Output tar.gz file path (default: knowledge.tar.gz)
+    Package markdown files + indexes + metadata into a portable tar.gz archive.
+
+  bmd serve --mcp [OPTIONS]
+    --headless                Skip TUI, MCP server only
+    --knowledge-tar FILE      Load pre-built knowledge from tar.gz archive
     Run as a persistent MCP (Model Context Protocol) server on stdin/stdout.
     Exposes all knowledge tools as native MCP endpoints for agent integration.
     Tools: bmd/query, bmd/index, bmd/depends, bmd/components, bmd/graph,
@@ -275,6 +289,8 @@ Examples:
   bmd depends api-gateway          Show service dependencies
   bmd crawl --from-multiple api.md Crawl graph backward from api.md
   bmd crawl --from-multiple api.md,svc.md --format tree  ASCII tree view
+  bmd export --from ./docs --output knowledge.tar.gz    Package for deployment
+  bmd serve --headless --mcp --knowledge-tar k.tar.gz   Agent-only server
 
 Notes:
   - Directory browser search uses BM25 (Phase 11+: PageIndex support planned)
