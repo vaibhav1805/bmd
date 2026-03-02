@@ -16,7 +16,7 @@ import (
 
 // updateGraph handles keyboard input when graph view mode is active.
 // Arrow keys move selection; 'l'/Enter opens selected node's file; 'h'/Esc goes back.
-func (v Viewer) updateGraph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (v *Viewer) updateGraph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "q", "ctrl+c":

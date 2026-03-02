@@ -202,7 +202,7 @@ type GraphViewState struct {
 
 // New creates a new Viewer for the given document and file path.
 // startDir is the root directory that the viewer is allowed to navigate within.
-func New(doc *ast.Document, filePath string, th theme.Theme, width int) Viewer {
+func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer {
 	absPath, err := filepath.Abs(filePath)
 	if err != nil {
 		absPath = filePath
@@ -218,7 +218,7 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) Viewer {
 	lines := stripAllSentinels(rawLines)
 	reg := BuildRegistry(rawLines)
 
-	return Viewer{
+	return &Viewer{
 		Doc:              doc,
 		rendered:         strings.Join(lines, "\n"),
 		rawLines:         rawLines,
@@ -240,11 +240,11 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) Viewer {
 
 // NewDirectoryViewer creates a Viewer configured for directory browsing mode.
 // Call LoadDirectory() on the returned viewer to populate file metadata.
-func NewDirectoryViewer(dirPath string, th theme.Theme, width int) Viewer {
+func NewDirectoryViewer(dirPath string, th theme.Theme, width int) *Viewer {
 	h := nav.New()
 	doc := &ast.Document{}
 
-	return Viewer{
+	return &Viewer{
 		Doc:              doc,
 		Height:           24,
 		Width:            width,
@@ -350,7 +350,7 @@ func (v *Viewer) LoadDirectory(path string) error {
 
 // OpenFileFromDirectory saves the directory selection state then opens the
 // selected file in file view. Sets openedFromDirectory=true so 'h' can return.
-func (v Viewer) OpenFileFromDirectory() (Viewer, tea.Cmd) {
+func (v *Viewer) OpenFileFromDirectory() (*Viewer, tea.Cmd) {
 	if len(v.directoryState.Files) == 0 {
 		return v, nil
 	}
@@ -367,7 +367,7 @@ func (v Viewer) OpenFileFromDirectory() (Viewer, tea.Cmd) {
 
 // BackToDirectory restores the directory view, re-entering directory mode with
 // the cursor position restored to where it was before opening the file.
-func (v Viewer) BackToDirectory() (Viewer, tea.Cmd) {
+func (v *Viewer) BackToDirectory() (*Viewer, tea.Cmd) {
 	if !v.openedFromDirectory {
 		return v, nil
 	}
@@ -386,7 +386,7 @@ func (v Viewer) BackToDirectory() (Viewer, tea.Cmd) {
 // BackToSearchResults restores the cross-document search results view,
 // returning from a file that was opened by pressing 'l'/Enter on a search result.
 // The cursor position in results is preserved.
-func (v Viewer) BackToSearchResults() (Viewer, tea.Cmd) {
+func (v *Viewer) BackToSearchResults() (*Viewer, tea.Cmd) {
 	if !v.openedFromSearch {
 		return v, nil
 	}
@@ -482,7 +482,7 @@ func (v Viewer) Init() tea.Cmd {
 }
 
 // Update handles messages: WindowSizeMsg, KeyMsg for scroll/quit, MouseMsg.
-func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case clearErrorMsg:
 		v.errorMsg = ""
@@ -1017,7 +1017,7 @@ func (v Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateSearch handles keyboard input when the search prompt is open.
 // Printable characters are appended to searchInput; Enter commits the search;
 // Esc or Ctrl+F cancel/close the prompt.
-func (v Viewer) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (v *Viewer) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch key {
 	case "enter":
@@ -1052,7 +1052,7 @@ func (v Viewer) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // updateJump handles keyboard input when the jump-to-line prompt is open.
 // Digit keys accumulate the target line number; Enter executes the jump;
 // Esc, ':', or any non-digit key cancels without jumping.
-func (v Viewer) updateJump(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (v *Viewer) updateJump(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch key {
 	case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
@@ -1100,7 +1100,7 @@ func (v *Viewer) scrollToMatch() {
 }
 
 // updateBrowser handles keyboard input when the file browser panel is open.
-func (v Viewer) updateBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (v *Viewer) updateBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if v.browserSel > 0 {
@@ -1128,7 +1128,7 @@ func (v Viewer) updateBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updateThemeDialog handles keyboard input when the theme selection dialog is open.
 // Arrow keys navigate; Enter selects; Esc cancels.
-func (v Viewer) updateThemeDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (v *Viewer) updateThemeDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		v.themeDialog.SelectPrev()
@@ -1150,7 +1150,7 @@ func (v Viewer) updateThemeDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updateHelp handles keyboard input when the help overlay is open.
 // Pressing esc, q, ?, or h closes the overlay. All other keys are absorbed.
-func (v Viewer) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (v *Viewer) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "?", "h":
 		v.helpOpen = false
@@ -1160,7 +1160,7 @@ func (v Viewer) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updateDirectory handles keyboard input when directory listing mode is active.
 // Arrow keys move the cursor; Enter/'l' opens the selected file; 'q'/Ctrl+C quits.
-func (v Viewer) updateDirectory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (v *Viewer) updateDirectory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	files := v.directoryState.Files
 	n := len(files)
 
@@ -1647,7 +1647,7 @@ func (v Viewer) renderSplitPane(contentHeight int) string {
 // updateCrossSearch handles keyboard input when the cross-document search
 // input prompt is open. Printable characters build the query; Enter executes
 // the search; Esc cancels.
-func (v Viewer) updateCrossSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (v *Viewer) updateCrossSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		query := strings.TrimSpace(v.crossSearchInput)
@@ -1698,7 +1698,7 @@ func (v Viewer) updateCrossSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updateCrossSearchNav handles keyboard navigation when cross-document search
 // results are shown: ↑/↓ to move through results, l/Enter to open, h/Esc to exit.
-func (v Viewer) updateCrossSearchNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (v *Viewer) updateCrossSearchNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(v.crossSearchResults)
 	switch msg.String() {
 	case "up", "k":
@@ -2565,7 +2565,7 @@ func (v Viewer) renderStatusBar() string {
 }
 
 // loadFile reads a markdown file, parses it, re-renders, pushes to history.
-func (v Viewer) loadFile(path string) (Viewer, tea.Cmd) {
+func (v *Viewer) loadFile(path string) (*Viewer, tea.Cmd) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		v.errorMsg = fmt.Sprintf("cannot open: %s", filepath.Base(path))
@@ -2600,7 +2600,7 @@ func (v Viewer) loadFile(path string) (Viewer, tea.Cmd) {
 
 // loadFileNoHistory loads a file without pushing it onto history (used for
 // Back/Forward navigation where the history position is already managed).
-func (v Viewer) loadFileNoHistory(path string) (Viewer, tea.Cmd) {
+func (v *Viewer) loadFileNoHistory(path string) (*Viewer, tea.Cmd) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		v.errorMsg = fmt.Sprintf("cannot open: %s", filepath.Base(path))
@@ -2635,7 +2635,7 @@ func (v Viewer) loadFileNoHistory(path string) (Viewer, tea.Cmd) {
 // followLink resolves a URL from the link registry and navigates to it.
 // For external URLs (http/https), opens them in the default web browser.
 // For local markdown files, loads them into the viewer.
-func (v Viewer) followLink(url string) (Viewer, tea.Cmd) {
+func (v *Viewer) followLink(url string) (*Viewer, tea.Cmd) {
 	resolved, err := nav.ResolveLink(v.FilePath, url, v.startDir)
 	if err != nil {
 		v.errorMsg = err.Error()
