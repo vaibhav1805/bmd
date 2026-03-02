@@ -31,13 +31,14 @@ func (s *Server) Start(ctx context.Context) error {
 		server.WithToolCapabilities(true),
 	)
 
-	// Register all 6 knowledge tools.
+	// Register all 7 knowledge tools.
 	s.registerQueryTool(mcpServer)
 	s.registerIndexTool(mcpServer)
 	s.registerDependsTool(mcpServer)
 	s.registerComponentsTool(mcpServer)
 	s.registerGraphTool(mcpServer)
 	s.registerContextTool(mcpServer)
+	s.registerGraphCrawlTool(mcpServer)
 
 	return server.ServeStdio(mcpServer)
 }
@@ -154,4 +155,30 @@ func (s *Server) registerContextTool(mcpServer *server.MCPServer) {
 	)
 
 	mcpServer.AddTool(tool, s.handleContext)
+}
+
+// registerGraphCrawlTool registers the bmd/graph_crawl tool for multi-start graph traversal.
+func (s *Server) registerGraphCrawlTool(mcpServer *server.MCPServer) {
+	tool := mcpsdk.NewTool(
+		"bmd/graph_crawl",
+		mcpsdk.WithDescription("Traverse the knowledge graph from one or more starting files, expanding all branches. Returns discovered nodes, edges, and optionally detected cycles. Useful for understanding dependency chains and impact analysis."),
+		mcpsdk.WithString("start_files",
+			mcpsdk.Required(),
+			mcpsdk.Description("Comma-separated list of starting file paths (relative to indexed directory, e.g. 'api-gateway.md,auth-service.md')"),
+		),
+		mcpsdk.WithString("direction",
+			mcpsdk.Description("Traversal direction: 'forward' (outgoing edges, default), 'backward' (incoming edges), or 'both'"),
+		),
+		mcpsdk.WithNumber("depth",
+			mcpsdk.Description("Maximum traversal depth in hops (default: 10, -1 for unlimited)"),
+		),
+		mcpsdk.WithBoolean("include_cycles",
+			mcpsdk.Description("Include cycle detection in the response (default: false)"),
+		),
+		mcpsdk.WithString("dir",
+			mcpsdk.Description("Directory that was indexed (default: configured baseDir)"),
+		),
+	)
+
+	mcpServer.AddTool(tool, s.handleGraphCrawl)
 }

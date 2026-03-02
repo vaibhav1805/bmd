@@ -315,6 +315,198 @@ func TestMCPServer_NewServer(t *testing.T) {
 	}
 }
 
+// ─── TestMCP_GraphCrawl_MultiStart ────────────────────────────────────────────
+
+// TestMCP_GraphCrawl_MultiStart verifies that graph_crawl with multiple start
+// files returns a valid ContractResponse with nodes from both start branches.
+func TestMCP_GraphCrawl_MultiStart(t *testing.T) {
+	srv, dir := makeTestServer(t)
+
+	// Build the index first so the graph is available.
+	_, _ = callTool(srv.handleIndex, map[string]interface{}{"dir": dir})
+
+	result, err := callTool(srv.handleGraphCrawl, map[string]interface{}{
+		"start_files": "api-gateway.md,auth-service.md",
+		"direction":   "forward",
+		"depth":       float64(3),
+		"dir":         dir,
+	})
+	if err != nil {
+		t.Fatalf("handleGraphCrawl error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleGraphCrawl returned nil result")
+	}
+
+	text := extractText(result)
+	if text == "" {
+		t.Fatal("handleGraphCrawl returned empty text")
+	}
+
+	// Verify CONTRACT-01 envelope.
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &envelope); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, text)
+	}
+	status, _ := envelope["status"].(string)
+	if status != "ok" {
+		t.Errorf("expected status 'ok', got %q", status)
+	}
+	if _, hasMessage := envelope["message"]; !hasMessage {
+		t.Error("envelope missing 'message' field")
+	}
+	if _, hasData := envelope["data"]; !hasData {
+		t.Error("envelope missing 'data' field")
+	}
+
+	// Verify data contains expected crawl fields.
+	data, _ := envelope["data"].(map[string]interface{})
+	if data == nil {
+		t.Fatal("data field is not an object")
+	}
+	startNodes, _ := data["StartNodes"].([]interface{})
+	if len(startNodes) < 1 {
+		t.Error("expected at least 1 start node in result")
+	}
+	totalNodes, _ := data["TotalNodes"].(float64)
+	if totalNodes < 1 {
+		t.Errorf("expected TotalNodes >= 1, got %.0f", totalNodes)
+	}
+}
+
+// ─── TestMCP_GraphCrawl_Cycles ───────────────────────────────────────────────
+
+// TestMCP_GraphCrawl_Cycles verifies that graph_crawl with include_cycles=true
+// returns cycle information in the response.
+func TestMCP_GraphCrawl_Cycles(t *testing.T) {
+	// Create a test directory with files that form a cycle:
+	// A depends on B, B depends on A.
+	dir := t.TempDir()
+
+	writeFile(t, filepath.Join(dir, "service-a.md"), `# Service A
+
+Handles user requests.
+
+## Dependencies
+
+- [Service B](service-b.md)
+`)
+	writeFile(t, filepath.Join(dir, "service-b.md"), `# Service B
+
+Processes data.
+
+## Dependencies
+
+- [Service A](service-a.md)
+`)
+
+	dbPath := filepath.Join(dir, ".bmd", "knowledge.db")
+	srv := NewServer(dir, dbPath)
+
+	// Build the index.
+	_, _ = callTool(srv.handleIndex, map[string]interface{}{"dir": dir})
+
+	result, err := callTool(srv.handleGraphCrawl, map[string]interface{}{
+		"start_files":    "service-a.md",
+		"direction":      "forward",
+		"depth":          float64(5),
+		"include_cycles": true,
+		"dir":            dir,
+	})
+	if err != nil {
+		t.Fatalf("handleGraphCrawl error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleGraphCrawl returned nil result")
+	}
+
+	text := extractText(result)
+	if text == "" {
+		t.Fatal("handleGraphCrawl returned empty text")
+	}
+
+	// Verify CONTRACT-01 envelope.
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &envelope); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, text)
+	}
+	status, _ := envelope["status"].(string)
+	if status != "ok" {
+		t.Errorf("expected status 'ok', got %q", status)
+	}
+
+	// Verify data has Cycles field.
+	data, _ := envelope["data"].(map[string]interface{})
+	if data == nil {
+		t.Fatal("data field is not an object")
+	}
+	// Cycles should be present (may or may not contain entries depending on
+	// graph structure, but the field must exist since include_cycles was true).
+	if _, hasCycles := data["Cycles"]; !hasCycles {
+		t.Error("expected 'Cycles' field in data when include_cycles=true")
+	}
+}
+
+// ─── TestMCP_GraphCrawl_Error ────────────────────────────────────────────────
+
+// TestMCP_GraphCrawl_Error verifies that graph_crawl returns a proper error
+// response when a start file doesn't exist in the graph.
+func TestMCP_GraphCrawl_Error(t *testing.T) {
+	srv, dir := makeTestServer(t)
+
+	// Build the index first.
+	_, _ = callTool(srv.handleIndex, map[string]interface{}{"dir": dir})
+
+	result, err := callTool(srv.handleGraphCrawl, map[string]interface{}{
+		"start_files": "nonexistent-file.md",
+		"dir":         dir,
+	})
+	if err != nil {
+		t.Fatalf("should not return Go error, got: %v", err)
+	}
+	if result == nil {
+		t.Fatal("result should not be nil")
+	}
+
+	text := extractText(result)
+	if text == "" {
+		t.Fatal("handleGraphCrawl returned empty text")
+	}
+
+	// Verify CONTRACT-01 error envelope.
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &envelope); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, text)
+	}
+	status, _ := envelope["status"].(string)
+	if status != "error" {
+		t.Errorf("expected status 'error', got %q", status)
+	}
+	code, _ := envelope["code"].(string)
+	if code != "GRAPH_NOT_FOUND" {
+		t.Errorf("expected code 'GRAPH_NOT_FOUND', got %q", code)
+	}
+}
+
+// ─── TestMCP_GraphCrawl_MissingParam ─────────────────────────────────────────
+
+// TestMCP_GraphCrawl_MissingParam verifies that a missing start_files parameter
+// returns an MCP tool error (IsError=true).
+func TestMCP_GraphCrawl_MissingParam(t *testing.T) {
+	srv, _ := makeTestServer(t)
+
+	result, err := callTool(srv.handleGraphCrawl, map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("should not return Go error, got: %v", err)
+	}
+	if result == nil {
+		t.Fatal("result should not be nil")
+	}
+	if !result.IsError {
+		t.Error("expected IsError=true for missing required start_files param")
+	}
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 // extractText pulls the text content from an MCP CallToolResult.

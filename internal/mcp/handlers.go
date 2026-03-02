@@ -3,9 +3,12 @@ package mcp
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 
 	mcpsdk "github.com/mark3labs/mcp-go/mcp"
 	"github.com/bmd/bmd/internal/knowledge"
@@ -152,6 +155,121 @@ func (s *Server) handleContext(ctx context.Context, req mcpsdk.CallToolRequest) 
 	}
 
 	return mcpsdk.NewToolResultText(output), nil
+}
+
+// handleGraphCrawl handles the bmd/graph_crawl MCP tool invocation.
+// It loads the knowledge graph, parses crawl options from the MCP request,
+// calls Graph.CrawlMulti(), and returns the result as a ContractResponse.
+func (s *Server) handleGraphCrawl(ctx context.Context, req mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+	startFilesStr := mcpsdk.ParseString(req, "start_files", "")
+	if startFilesStr == "" {
+		return mcpsdk.NewToolResultError("start_files parameter is required"), nil
+	}
+
+	// Parse comma-separated start files.
+	var startFiles []string
+	for _, f := range strings.Split(startFilesStr, ",") {
+		f = strings.TrimSpace(f)
+		if f != "" {
+			startFiles = append(startFiles, f)
+		}
+	}
+	if len(startFiles) == 0 {
+		return mcpsdk.NewToolResultError("start_files parameter must contain at least one file path"), nil
+	}
+
+	direction := mcpsdk.ParseString(req, "direction", "forward")
+	depth := mcpsdk.ParseInt(req, "depth", 10)
+	includeCycles := mcpsdk.ParseBoolean(req, "include_cycles", false)
+	dir := mcpsdk.ParseString(req, "dir", s.baseDir)
+
+	// Validate direction.
+	switch direction {
+	case "forward", "backward", "both":
+		// valid
+	default:
+		resp := knowledge.NewErrorResponse("INVALID_PARAMS", fmt.Sprintf("invalid direction %q: must be 'forward', 'backward', or 'both'", direction))
+		data, _ := json.MarshalIndent(resp, "", "  ")
+		return mcpsdk.NewToolResultText(string(data)), nil
+	}
+
+	// Load the graph from the indexed directory.
+	absDir, err := absPath(dir)
+	if err != nil {
+		resp := knowledge.NewErrorResponse(knowledge.ErrCodeInternalError, err.Error())
+		data, _ := json.MarshalIndent(resp, "", "  ")
+		return mcpsdk.NewToolResultText(string(data)), nil
+	}
+
+	graph, db, err := loadGraph(absDir)
+	if err != nil {
+		resp := knowledge.NewErrorResponse("GRAPH_NOT_FOUND", fmt.Sprintf("failed to load graph: %v", err))
+		data, _ := json.MarshalIndent(resp, "", "  ")
+		return mcpsdk.NewToolResultText(string(data)), nil
+	}
+	defer db.Close() //nolint:errcheck
+
+	// Validate start files exist in the graph.
+	for _, sf := range startFiles {
+		if _, ok := graph.Nodes[sf]; !ok {
+			resp := knowledge.NewErrorResponse("GRAPH_NOT_FOUND", fmt.Sprintf("start file %q not found in graph", sf))
+			data, _ := json.MarshalIndent(resp, "", "  ")
+			return mcpsdk.NewToolResultText(string(data)), nil
+		}
+	}
+
+	// Execute crawl.
+	opts := knowledge.CrawlOptions{
+		FromFiles:     startFiles,
+		Direction:     direction,
+		MaxDepth:      depth,
+		IncludeCycles: includeCycles,
+	}
+
+	crawlResult := graph.CrawlMulti(opts)
+
+	// Format result as ContractResponse.
+	resp := knowledge.NewOKResponse("Graph crawl completed", crawlResult)
+	data, _ := json.MarshalIndent(resp, "", "  ")
+	return mcpsdk.NewToolResultText(string(data)), nil
+}
+
+// absPath resolves a directory path to an absolute path.
+func absPath(dir string) (string, error) {
+	if dir == "" {
+		dir = "."
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve dir %q: %w", dir, err)
+	}
+	return abs, nil
+}
+
+// loadGraph opens the knowledge database for a directory and loads the graph.
+func loadGraph(absDir string) (*knowledge.Graph, *knowledge.Database, error) {
+	dbPath := filepath.Join(absDir, ".bmd", "knowledge.db")
+
+	// Auto-build if needed (captures stderr so the MCP response is clean).
+	_, buildErr := captureStderr(func() error {
+		return knowledge.CmdIndex([]string{"--dir", absDir, "--db", dbPath})
+	})
+	if buildErr != nil {
+		return nil, nil, buildErr
+	}
+
+	db, err := knowledge.OpenDB(dbPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	graph := knowledge.NewGraph()
+	if err := db.LoadGraph(graph); err != nil {
+		_ = db.Close()
+		return nil, nil, err
+	}
+
+	return graph, db, nil
 }
 
 // captureOutput redirects os.Stdout to a buffer, calls fn, then restores stdout.
