@@ -67,6 +67,13 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "crawl":
+			cmdErr = knowledge.CmdCrawl(args[1:])
+			if cmdErr != nil {
+				fmt.Fprintln(os.Stderr, "bmd crawl:", cmdErr)
+				os.Exit(1)
+			}
+			return
 		case "serve":
 			if len(args) < 2 || args[1] != "--mcp" {
 				fmt.Fprintf(os.Stderr, "Usage: bmd serve --mcp\n")
@@ -243,6 +250,12 @@ Knowledge commands:
   bmd graph [SERVICE] [OPTIONS]
     --format dot|json         Output format (default: json)
 
+  bmd crawl --from-multiple FILE[,FILE...] [OPTIONS]
+    --from-multiple FILES     Comma-separated starting files
+    --direction DIR           backward|forward|both (default: backward)
+    --depth N                 Max traversal depth (default: 3)
+    --format FMT              json|tree|dot|list (default: json)
+
   bmd serve --mcp
     Run as a persistent MCP (Model Context Protocol) server on stdin/stdout.
     Exposes all knowledge tools as native MCP endpoints for agent integration.
@@ -258,6 +271,8 @@ Examples:
   bmd query "auth" --strategy pageindex  Semantic search (needs trees)
   bmd context "how auth works"     Assemble RAG context block
   bmd depends api-gateway          Show service dependencies
+  bmd crawl --from-multiple api.md Crawl graph backward from api.md
+  bmd crawl --from-multiple api.md,svc.md --format tree  ASCII tree view
 
 Notes:
   - Directory browser search uses BM25 (Phase 11+: PageIndex support planned)

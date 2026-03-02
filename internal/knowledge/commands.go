@@ -56,6 +56,15 @@ type GraphArgs struct {
 	Format  string
 }
 
+// CrawlArgs holds parsed arguments for CmdCrawl.
+type CrawlArgs struct {
+	FromMultiple []string // starting node IDs (document relative paths)
+	Dir          string
+	Direction    string // "backward" | "forward" | "both"
+	Depth        int
+	Format       string // "json" | "tree" | "dot" | "list"
+}
+
 // ─── argument parsers ─────────────────────────────────────────────────────────
 
 // resolveStrategy returns the strategy in precedence order: flag value → env var → default "bm25".
@@ -228,6 +237,72 @@ func ParseGraphArgs(args []string) (*GraphArgs, error) {
 		if len(positionals) > 1 {
 			a.Dir = positionals[1]
 		}
+	}
+
+	return &a, nil
+}
+
+// ParseCrawlArgs parses raw CLI arguments for the crawl command.
+//
+// Usage: bmd crawl --from-multiple FILE[,FILE...] [--dir DIR] [--direction backward|forward|both] [--depth N] [--format json|tree|dot|list]
+func ParseCrawlArgs(args []string) (*CrawlArgs, error) {
+	fs := flag.NewFlagSet("crawl", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	var a CrawlArgs
+	var fromMultiple string
+	fs.StringVar(&fromMultiple, "from-multiple", "", "Comma-separated list of starting files")
+	fs.StringVar(&a.Dir, "dir", ".", "Directory that was indexed")
+	fs.StringVar(&a.Direction, "direction", "backward", "Traversal direction: backward|forward|both")
+	fs.IntVar(&a.Depth, "depth", 3, "Maximum traversal depth")
+	fs.StringVar(&a.Format, "format", "json", "Output format: json|tree|dot|list")
+
+	if err := fs.Parse(args); err != nil {
+		return nil, fmt.Errorf("crawl: %w", err)
+	}
+
+	// Allow positional arguments as start files if --from-multiple not set.
+	if fromMultiple == "" {
+		pos := fs.Args()
+		if len(pos) > 0 {
+			fromMultiple = strings.Join(pos, ",")
+		}
+	}
+
+	if fromMultiple == "" {
+		return nil, fmt.Errorf("crawl: --from-multiple argument required\nUsage: bmd crawl --from-multiple FILE[,FILE...] [--direction backward|forward|both] [--depth N] [--format json|tree|dot|list]")
+	}
+
+	// Parse comma-separated file list.
+	for _, f := range strings.Split(fromMultiple, ",") {
+		f = strings.TrimSpace(f)
+		if f != "" {
+			a.FromMultiple = append(a.FromMultiple, f)
+		}
+	}
+
+	if len(a.FromMultiple) == 0 {
+		return nil, fmt.Errorf("crawl: at least one file required in --from-multiple")
+	}
+
+	// Validate direction.
+	switch strings.ToLower(a.Direction) {
+	case "backward", "forward", "both":
+		a.Direction = strings.ToLower(a.Direction)
+	default:
+		return nil, fmt.Errorf("crawl: invalid direction %q (must be backward, forward, or both)", a.Direction)
+	}
+
+	// Validate format.
+	switch strings.ToLower(a.Format) {
+	case "json", "tree", "dot", "list":
+		a.Format = strings.ToLower(a.Format)
+	default:
+		return nil, fmt.Errorf("crawl: invalid format %q (must be json, tree, dot, or list)", a.Format)
+	}
+
+	if a.Depth < 0 {
+		return nil, fmt.Errorf("crawl: --depth must be >= 0")
 	}
 
 	return &a, nil
@@ -858,6 +933,81 @@ func CmdGraph(args []string) error {
 
 	payload := graphResponseJSON{Nodes: nodes, Edges: edges}
 	fmt.Println(marshalContract(NewOKResponse("Graph loaded", payload)))
+	return nil
+}
+
+// CmdCrawl implements `bmd crawl`.  It loads the knowledge graph and performs
+// a multi-start BFS traversal, printing results in the requested format.
+func CmdCrawl(args []string) error {
+	a, err := ParseCrawlArgs(args)
+	if err != nil {
+		return err
+	}
+
+	isJSON := strings.ToLower(a.Format) == "json"
+
+	absDir, err := filepath.Abs(a.Dir)
+	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
+		return fmt.Errorf("crawl: resolve dir: %w", err)
+	}
+
+	dbPath := defaultDBPath(absDir)
+	db, err := openOrBuildIndex(absDir, dbPath)
+	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(classifyIndexError(err), err.Error())))
+			return nil
+		}
+		return err
+	}
+	defer db.Close() //nolint:errcheck
+
+	graph := NewGraph()
+	if err := db.LoadGraph(graph); err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
+		return fmt.Errorf("crawl: load graph: %w", err)
+	}
+
+	// Validate that at least one start file exists in the graph.
+	validFiles := 0
+	for _, f := range a.FromMultiple {
+		if _, ok := graph.Nodes[f]; ok {
+			validFiles++
+		}
+	}
+	if validFiles == 0 {
+		msg := fmt.Sprintf("none of the specified files found in graph: %s", strings.Join(a.FromMultiple, ", "))
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeFileNotFound, msg)))
+			return nil
+		}
+		return fmt.Errorf("crawl: %s", msg)
+	}
+
+	// Execute crawl.
+	result := graph.CrawlMulti(CrawlOptions{
+		FromFiles:     a.FromMultiple,
+		Direction:     a.Direction,
+		MaxDepth:      a.Depth,
+		IncludeCycles: true,
+	})
+
+	// Format output.
+	output := FormatCrawl(result, a.Format)
+
+	if isJSON {
+		fmt.Println(marshalContract(NewOKResponse("Crawl completed", output)))
+	} else {
+		fmt.Println(output)
+	}
+
 	return nil
 }
 

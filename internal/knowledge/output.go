@@ -519,6 +519,243 @@ func formatGraphDOT(graph *Graph) string {
 	return sb.String()
 }
 
+// ─── crawl formatters ────────────────────────────────────────────────────────
+
+// crawlNodeJSON is the per-node structure in JSON crawl output.
+type crawlNodeJSON struct {
+	Depth    int      `json:"depth"`
+	EdgesOut []string `json:"edges_out"`
+	Parents  []string `json:"parents,omitempty"`
+}
+
+// crawlCycleJSON is the per-cycle structure in JSON crawl output.
+type crawlCycleJSON struct {
+	Path        []string `json:"path"`
+	Type        string   `json:"type"`
+	Description string   `json:"description"`
+}
+
+// crawlResponseJSON is the data payload for crawl results wrapped in ContractResponse.
+type crawlResponseJSON struct {
+	StartNodes []string                  `json:"start_nodes"`
+	Strategy   string                    `json:"strategy"`
+	Nodes      map[string]crawlNodeJSON  `json:"nodes"`
+	Cycles     []crawlCycleJSON          `json:"cycles,omitempty"`
+	TotalNodes int                       `json:"total_nodes"`
+	TotalEdges int                       `json:"total_edges"`
+}
+
+// FormatCrawl formats a CrawlResult in the requested output format.
+// Supported formats: "json" (default), "tree", "dot", "list".
+//
+// For JSON format, this returns the crawlResponseJSON struct (not a string)
+// so the caller can wrap it in a ContractResponse envelope.  For other formats,
+// it returns a pre-formatted string.
+func FormatCrawl(result *CrawlResult, format string) interface{} {
+	switch strings.ToLower(format) {
+	case "tree":
+		return formatCrawlTree(result)
+	case "dot":
+		return formatCrawlDot(result)
+	case "list":
+		return formatCrawlList(result)
+	default:
+		return formatCrawlJSONPayload(result)
+	}
+}
+
+func formatCrawlJSONPayload(result *CrawlResult) crawlResponseJSON {
+	nodes := make(map[string]crawlNodeJSON, len(result.Nodes))
+	for id, info := range result.Nodes {
+		edgesOut := info.EdgesOut
+		if edgesOut == nil {
+			edgesOut = []string{}
+		}
+		parents := info.Parents
+		if parents == nil {
+			parents = []string{}
+		}
+		nodes[id] = crawlNodeJSON{
+			Depth:    info.Depth,
+			EdgesOut: edgesOut,
+			Parents:  parents,
+		}
+	}
+
+	var cycles []crawlCycleJSON
+	for _, c := range result.Cycles {
+		cycles = append(cycles, crawlCycleJSON{
+			Path:        c.Path,
+			Type:        c.Type,
+			Description: c.Description,
+		})
+	}
+
+	return crawlResponseJSON{
+		StartNodes: result.StartNodes,
+		Strategy:   result.Strategy,
+		Nodes:      nodes,
+		Cycles:     cycles,
+		TotalNodes: result.TotalNodes,
+		TotalEdges: result.TotalEdges,
+	}
+}
+
+func formatCrawlTree(result *CrawlResult) string {
+	if result.TotalNodes == 0 {
+		return "No nodes found."
+	}
+
+	var sb strings.Builder
+
+	// Build a tree from start nodes using BFS order.
+	// Track which nodes have been printed to avoid duplicates.
+	printed := make(map[string]bool)
+
+	for _, startID := range result.StartNodes {
+		printCrawlSubtree(&sb, result, startID, "", true, printed)
+	}
+
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+// printCrawlSubtree recursively renders a node and its children in ASCII tree format.
+func printCrawlSubtree(sb *strings.Builder, result *CrawlResult, nodeID, prefix string, isLast bool, printed map[string]bool) {
+	if printed[nodeID] {
+		// Already printed: show as reference.
+		connector := "|-- "
+		if isLast {
+			connector = "`-- "
+		}
+		if prefix == "" {
+			fmt.Fprintf(sb, "%s (see above)\n", nodeID)
+		} else {
+			fmt.Fprintf(sb, "%s%s%s (see above)\n", prefix, connector, nodeID)
+		}
+		return
+	}
+	printed[nodeID] = true
+
+	info := result.Nodes[nodeID]
+	if info == nil {
+		return
+	}
+
+	// Print this node.
+	if prefix == "" {
+		// Root-level node (start node).
+		fmt.Fprintf(sb, "%s\n", nodeID)
+	} else {
+		connector := "|-- "
+		if isLast {
+			connector = "`-- "
+		}
+		fmt.Fprintf(sb, "%s%s%s\n", prefix, connector, nodeID)
+	}
+
+	// Find children: nodes that list this node as a parent and are at depth+1.
+	var children []string
+	for id, childInfo := range result.Nodes {
+		if id == nodeID {
+			continue
+		}
+		for _, p := range childInfo.Parents {
+			if p == nodeID {
+				children = append(children, id)
+				break
+			}
+		}
+	}
+	sort.Strings(children)
+
+	// Render children.
+	childPrefix := prefix
+	if prefix != "" {
+		if isLast {
+			childPrefix += "    "
+		} else {
+			childPrefix += "|   "
+		}
+	}
+
+	for i, childID := range children {
+		last := i == len(children)-1
+		printCrawlSubtree(sb, result, childID, childPrefix, last, printed)
+	}
+}
+
+func formatCrawlDot(result *CrawlResult) string {
+	var sb strings.Builder
+	sb.WriteString("digraph crawl {\n")
+
+	// Sort node IDs for deterministic output.
+	nodeIDs := make([]string, 0, len(result.Nodes))
+	for id := range result.Nodes {
+		nodeIDs = append(nodeIDs, id)
+	}
+	sort.Strings(nodeIDs)
+
+	// Declare nodes with depth attribute.
+	for _, id := range nodeIDs {
+		info := result.Nodes[id]
+		shape := "box"
+		if info.Depth == 0 {
+			shape = "doubleoctagon"
+		}
+		fmt.Fprintf(&sb, "  %q [label=%q, shape=%s];\n", id, id, shape)
+	}
+
+	// Declare edges.
+	for _, id := range nodeIDs {
+		info := result.Nodes[id]
+		for _, target := range info.EdgesOut {
+			fmt.Fprintf(&sb, "  %q -> %q;\n", id, target)
+		}
+	}
+
+	sb.WriteString("}\n")
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+func formatCrawlList(result *CrawlResult) string {
+	if result.TotalNodes == 0 {
+		return "No nodes found."
+	}
+
+	// Sort by depth, then alphabetically.
+	type listEntry struct {
+		id      string
+		depth   int
+		parents []string
+	}
+
+	entries := make([]listEntry, 0, len(result.Nodes))
+	for id, info := range result.Nodes {
+		entries = append(entries, listEntry{
+			id:      id,
+			depth:   info.Depth,
+			parents: info.Parents,
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].depth != entries[j].depth {
+			return entries[i].depth < entries[j].depth
+		}
+		return entries[i].id < entries[j].id
+	})
+
+	var sb strings.Builder
+	for _, e := range entries {
+		parents := "[]"
+		if len(e.parents) > 0 {
+			parents = "[" + strings.Join(e.parents, ", ") + "]"
+		}
+		fmt.Fprintf(&sb, "%-30s depth=%-3d parents=%s\n", e.id, e.depth, parents)
+	}
+
+	return strings.TrimRight(sb.String(), "\n")
+}
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 // roundFloat rounds f to the given number of decimal places.
