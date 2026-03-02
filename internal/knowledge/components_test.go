@@ -125,7 +125,7 @@ func TestDetectComponents_FilenamePattern(t *testing.T) {
 	}
 
 	// Verify services have expected IDs.
-	byID := make(map[string]Service)
+	byID := make(map[string]Component)
 	for _, s := range services {
 		byID[s.ID] = s
 	}
@@ -151,7 +151,7 @@ func TestDetectComponents_HighInDegree(t *testing.T) {
 	}
 
 	services := sd.DetectComponents(g, nil)
-	byFile := make(map[string]Service)
+	byFile := make(map[string]Component)
 	for _, s := range services {
 		byFile[s.File] = s
 	}
@@ -269,7 +269,7 @@ func TestDetectEndpoints_EmptyDoc(t *testing.T) {
 
 func TestRankComponents_OrderedByConfidence(t *testing.T) {
 	sd := NewComponentDetector()
-	candidates := []Service{
+	candidates := []Component{
 		{ID: "c", Confidence: 0.4},
 		{ID: "a", Confidence: 0.9},
 		{ID: "b", Confidence: 0.7},
@@ -288,7 +288,7 @@ func TestRankComponents_OrderedByConfidence(t *testing.T) {
 func TestRankComponents_StableByID(t *testing.T) {
 	sd := NewComponentDetector()
 	// Same confidence: alphabetical by ID.
-	candidates := []Service{
+	candidates := []Component{
 		{ID: "z-svc", Confidence: 0.9},
 		{ID: "a-svc", Confidence: 0.9},
 		{ID: "m-svc", Confidence: 0.9},
@@ -341,17 +341,17 @@ func TestLoadComponentConfig_ValidYAML(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("LoadComponentConfig: expected non-nil config")
 	}
-	if len(cfg.Services) != 2 {
-		t.Errorf("Services count = %d, want 2", len(cfg.Services))
+	if len(cfg.Components) != 2 {
+		t.Errorf("Services count = %d, want 2", len(cfg.Components))
 	}
-	if cfg.Services[0].ID != "api-gateway" {
-		t.Errorf("Services[0].ID = %q, want %q", cfg.Services[0].ID, "api-gateway")
+	if cfg.Components[0].ID != "api-gateway" {
+		t.Errorf("Services[0].ID = %q, want %q", cfg.Components[0].ID, "api-gateway")
 	}
-	if len(cfg.Services[0].Patterns) != 2 {
-		t.Errorf("Services[0].Patterns = %v, want 2 patterns", cfg.Services[0].Patterns)
+	if len(cfg.Components[0].Patterns) != 2 {
+		t.Errorf("Services[0].Patterns = %v, want 2 patterns", cfg.Components[0].Patterns)
 	}
-	if cfg.Services[0].Type != "microservice" {
-		t.Errorf("Services[0].Type = %q, want %q", cfg.Services[0].Type, "microservice")
+	if cfg.Components[0].Type != "microservice" {
+		t.Errorf("Services[0].Type = %q, want %q", cfg.Components[0].Type, "microservice")
 	}
 }
 
@@ -368,7 +368,7 @@ func TestLoadComponentConfig_CaseInsensitivePatterns(t *testing.T) {
 	}
 
 	// Test that pattern matching is case-insensitive.
-	matched := matchesPatterns("services/auth-service.md", "Auth Service", cfg.Services[0].Patterns)
+	matched := matchesPatterns("services/auth-service.md", "Auth Service", cfg.Components[0].Patterns)
 	if !matched {
 		t.Error("matchesPatterns should match case-insensitively")
 	}
@@ -404,7 +404,7 @@ func TestLoadComponentConfig_ConfiguredServicesHighConfidence(t *testing.T) {
 // DependencyAnalyzer — BuildServiceGraph tests
 // ---------------------------------------------------------------------------
 
-func buildTestServiceGraph(t *testing.T) (*Graph, []Service) {
+func buildTestServiceGraph(t *testing.T) (*Graph, []Component) {
 	t.Helper()
 	g := NewGraph()
 	for _, id := range []string{
@@ -416,7 +416,7 @@ func buildTestServiceGraph(t *testing.T) (*Graph, []Service) {
 		_ = g.AddNode(&Node{ID: id, Title: strings.TrimSuffix(id, ".md"), Type: "document"})
 	}
 
-	services := []Service{
+	services := []Component{
 		{ID: "auth-service", File: "auth-service.md", Confidence: 0.9},
 		{ID: "user-service", File: "user-service.md", Confidence: 0.9},
 		{ID: "payment-service", File: "payment-service.md", Confidence: 0.9},
@@ -495,10 +495,10 @@ func TestGetTransitiveDeps_LinearChain(t *testing.T) {
 func TestGetTransitiveDeps_Branching(t *testing.T) {
 	// A -> {B, C, D}
 	g := NewGraph()
-	svcs := []Service{}
+	svcs := []Component{}
 	for _, id := range []string{"a", "b", "c", "d"} {
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs = append(svcs, Service{ID: id, File: id + ".md", Confidence: 0.9})
+		svcs = append(svcs, Component{ID: id, File: id + ".md", Confidence: 0.9})
 	}
 	for _, tgt := range []string{"b.md", "c.md", "d.md"} {
 		e, _ := NewEdge("a.md", tgt, EdgeCalls, 0.9, "")
@@ -515,10 +515,10 @@ func TestGetTransitiveDeps_Branching(t *testing.T) {
 func TestGetTransitiveDeps_Diamond(t *testing.T) {
 	// A -> {B, C}, B -> D, C -> D
 	g := NewGraph()
-	svcs := []Service{}
+	svcs := []Component{}
 	for _, id := range []string{"a", "b", "c", "d"} {
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs = append(svcs, Service{ID: id, File: id + ".md", Confidence: 0.9})
+		svcs = append(svcs, Component{ID: id, File: id + ".md", Confidence: 0.9})
 	}
 	edges := [][2]string{{"a.md", "b.md"}, {"a.md", "c.md"}, {"b.md", "d.md"}, {"c.md", "d.md"}}
 	for _, pair := range edges {
@@ -564,10 +564,10 @@ func TestFindPath_LinearChain(t *testing.T) {
 func TestFindPath_DiamondTwoPaths(t *testing.T) {
 	// A -> {B, C}, B -> D, C -> D
 	g := NewGraph()
-	svcs := []Service{}
+	svcs := []Component{}
 	for _, id := range []string{"a", "b", "c", "d"} {
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs = append(svcs, Service{ID: id, File: id + ".md", Confidence: 0.9})
+		svcs = append(svcs, Component{ID: id, File: id + ".md", Confidence: 0.9})
 	}
 	edges := [][2]string{{"a.md", "b.md"}, {"a.md", "c.md"}, {"b.md", "d.md"}, {"c.md", "d.md"}}
 	for _, pair := range edges {
@@ -584,10 +584,10 @@ func TestFindPath_DiamondTwoPaths(t *testing.T) {
 
 func TestFindPath_Unreachable(t *testing.T) {
 	g := NewGraph()
-	svcs := []Service{}
+	svcs := []Component{}
 	for _, id := range []string{"a", "b"} {
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs = append(svcs, Service{ID: id, File: id + ".md", Confidence: 0.9})
+		svcs = append(svcs, Component{ID: id, File: id + ".md", Confidence: 0.9})
 	}
 	// No edges between a and b.
 	da := NewDependencyAnalyzer(g, svcs)
@@ -637,10 +637,10 @@ func TestDetectCycles_NoCycles(t *testing.T) {
 func TestDetectCycles_SimpleCycle(t *testing.T) {
 	// A -> B -> A
 	g := NewGraph()
-	svcs := []Service{}
+	svcs := []Component{}
 	for _, id := range []string{"a", "b"} {
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs = append(svcs, Service{ID: id, File: id + ".md", Confidence: 0.9})
+		svcs = append(svcs, Component{ID: id, File: id + ".md", Confidence: 0.9})
 	}
 	e1, _ := NewEdge("a.md", "b.md", EdgeCalls, 0.9, "")
 	e2, _ := NewEdge("b.md", "a.md", EdgeCalls, 0.9, "")
@@ -657,10 +657,10 @@ func TestDetectCycles_SimpleCycle(t *testing.T) {
 func TestDetectCycles_LongerCycle(t *testing.T) {
 	// A -> B -> C -> A
 	g := NewGraph()
-	svcs := []Service{}
+	svcs := []Component{}
 	for _, id := range []string{"a", "b", "c"} {
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs = append(svcs, Service{ID: id, File: id + ".md", Confidence: 0.9})
+		svcs = append(svcs, Component{ID: id, File: id + ".md", Confidence: 0.9})
 	}
 	pairs := [][2]string{{"a.md", "b.md"}, {"b.md", "c.md"}, {"c.md", "a.md"}}
 	for _, p := range pairs {
@@ -688,10 +688,10 @@ func TestDetectCycles_LongerCycle(t *testing.T) {
 func TestDetectCycles_MultipleCycles(t *testing.T) {
 	// A -> B -> A (cycle 1) and C -> D -> C (cycle 2)
 	g := NewGraph()
-	svcs := []Service{}
+	svcs := []Component{}
 	for _, id := range []string{"a", "b", "c", "d"} {
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs = append(svcs, Service{ID: id, File: id + ".md", Confidence: 0.9})
+		svcs = append(svcs, Component{ID: id, File: id + ".md", Confidence: 0.9})
 	}
 	for _, pair := range [][2]string{
 		{"a.md", "b.md"}, {"b.md", "a.md"},
@@ -740,10 +740,10 @@ func TestFindDependencyChain_LinearChain(t *testing.T) {
 func TestFindDependencyChain_ShortestPath(t *testing.T) {
 	// A -> B -> C and A -> C (direct).  Shortest path is A -> C (distance=1).
 	g := NewGraph()
-	svcs := []Service{}
+	svcs := []Component{}
 	for _, id := range []string{"a", "b", "c"} {
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs = append(svcs, Service{ID: id, File: id + ".md", Confidence: 0.9})
+		svcs = append(svcs, Component{ID: id, File: id + ".md", Confidence: 0.9})
 	}
 	for _, pair := range [][2]string{{"a.md", "b.md"}, {"b.md", "c.md"}, {"a.md", "c.md"}} {
 		e, _ := NewEdge(pair[0], pair[1], EdgeCalls, 0.9, "")
@@ -759,10 +759,10 @@ func TestFindDependencyChain_ShortestPath(t *testing.T) {
 
 func TestFindDependencyChain_Unreachable(t *testing.T) {
 	g := NewGraph()
-	svcs := []Service{}
+	svcs := []Component{}
 	for _, id := range []string{"a", "b"} {
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs = append(svcs, Service{ID: id, File: id + ".md", Confidence: 0.9})
+		svcs = append(svcs, Component{ID: id, File: id + ".md", Confidence: 0.9})
 	}
 	da := NewDependencyAnalyzer(g, svcs)
 
@@ -798,18 +798,18 @@ func TestFindDependencyChain_DepthLimit(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DependencyAnalyzer — GetServiceGraph and edge type mapping tests
+// DependencyAnalyzer — GetComponentGraph and edge type mapping tests
 // ---------------------------------------------------------------------------
 
-func TestGetServiceGraph_NotNil(t *testing.T) {
+func TestGetComponentGraph_NotNil(t *testing.T) {
 	g, svcs := buildTestServiceGraph(t)
 	da := NewDependencyAnalyzer(g, svcs)
-	sg := da.GetServiceGraph()
+	sg := da.GetComponentGraph()
 	if sg == nil {
-		t.Error("GetServiceGraph should return non-nil service graph")
+		t.Error("GetComponentGraph should return non-nil service graph")
 	}
-	if len(sg.Services) != len(svcs) {
-		t.Errorf("ServiceGraph.Services count = %d, want %d", len(sg.Services), len(svcs))
+	if len(sg.Components) != len(svcs) {
+		t.Errorf("ServiceGraph.Services count = %d, want %d", len(sg.Components), len(svcs))
 	}
 }
 
@@ -841,11 +841,11 @@ func TestEdgeTypeToDepType_CallsMapsToDirect(t *testing.T) {
 func BenchmarkDetectCycles_100Services(b *testing.B) {
 	const n = 100
 	g := NewGraph()
-	svcs := make([]Service, n)
+	svcs := make([]Component, n)
 	for i := 0; i < n; i++ {
 		id := serviceID(i)
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs[i] = Service{ID: id, File: id + ".md", Confidence: 0.9}
+		svcs[i] = Component{ID: id, File: id + ".md", Confidence: 0.9}
 	}
 	// Build a linear chain: 0->1->2->...->99 (no cycles).
 	for i := 0; i < n-1; i++ {
@@ -863,11 +863,11 @@ func BenchmarkDetectCycles_100Services(b *testing.B) {
 func BenchmarkGetTransitiveDeps_100Services(b *testing.B) {
 	const n = 100
 	g := NewGraph()
-	svcs := make([]Service, n)
+	svcs := make([]Component, n)
 	for i := 0; i < n; i++ {
 		id := serviceID(i)
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs[i] = Service{ID: id, File: id + ".md", Confidence: 0.9}
+		svcs[i] = Component{ID: id, File: id + ".md", Confidence: 0.9}
 	}
 	for i := 0; i < n-1; i++ {
 		e, _ := NewEdge(serviceID(i)+".md", serviceID(i+1)+".md", EdgeCalls, 0.9, "")
@@ -887,13 +887,13 @@ func BenchmarkGetTransitiveDeps_100Services(b *testing.B) {
 
 // makeLinearChain builds a graph with a linear service chain: a->b->c->...
 // node IDs are from ids (e.g. []string{"a","b","c"}).
-func makeLinearChain(t *testing.T, ids []string) (*Graph, []Service) {
+func makeLinearChain(t *testing.T, ids []string) (*Graph, []Component) {
 	t.Helper()
 	g := NewGraph()
-	svcs := make([]Service, len(ids))
+	svcs := make([]Component, len(ids))
 	for i, id := range ids {
 		_ = g.AddNode(&Node{ID: id + ".md", Title: id, Type: "document"})
-		svcs[i] = Service{ID: id, File: id + ".md", Confidence: 0.9}
+		svcs[i] = Component{ID: id, File: id + ".md", Confidence: 0.9}
 	}
 	for i := 0; i < len(ids)-1; i++ {
 		e, _ := NewEdge(ids[i]+".md", ids[i+1]+".md", EdgeCalls, 0.9, "")

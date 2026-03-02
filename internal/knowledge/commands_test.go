@@ -891,20 +891,20 @@ func TestFormatSearchResultsEmpty(t *testing.T) {
 }
 
 func TestFormatServicesJSON(t *testing.T) {
-	services := []Service{
+	services := []Component{
 		{ID: "auth-service", Name: "Auth Service", File: "auth-service.md", Confidence: 0.9},
 	}
 	depCounts := map[string]int{"auth-service": 2}
-	output := FormatServices(services, depCounts, "json")
+	output := FormatComponents(services, depCounts, "json")
 
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(output), &result); err != nil {
 		t.Fatalf("not valid JSON: %v", err)
 	}
 
-	svcs, ok := result["services"].([]interface{})
+	svcs, ok := result["components"].([]interface{})
 	if !ok || len(svcs) != 1 {
-		t.Fatalf("expected 1 service, got: %v", result["services"])
+		t.Fatalf("expected 1 service, got: %v", result["components"])
 	}
 	svc := svcs[0].(map[string]interface{})
 	if svc["id"] != "auth-service" {
@@ -916,10 +916,10 @@ func TestFormatServicesJSON(t *testing.T) {
 }
 
 func TestFormatServicesText(t *testing.T) {
-	services := []Service{
+	services := []Component{
 		{ID: "api-gateway", Name: "API Gateway", File: "api-gateway.md", Confidence: 1.0},
 	}
-	output := FormatServices(services, nil, "text")
+	output := FormatComponents(services, nil, "text")
 	if !strings.Contains(output, "api-gateway") {
 		t.Error("text output should contain service ID")
 	}
@@ -929,15 +929,15 @@ func TestFormatServicesText(t *testing.T) {
 }
 
 func TestFormatServicesEmpty(t *testing.T) {
-	output := FormatServices(nil, nil, "text")
-	if output != "No services detected." {
-		t.Errorf("empty text: got %q, want %q", output, "No services detected.")
+	output := FormatComponents(nil, nil, "text")
+	if output != "No components detected." {
+		t.Errorf("empty text: got %q, want %q", output, "No components detected.")
 	}
 }
 
 func TestFormatDependenciesJSON_Direct(t *testing.T) {
-	refs := []ServiceRef{
-		{ServiceID: "user-service", Type: "direct-call", Confidence: 0.95},
+	refs := []ComponentRef{
+		{ComponentID: "user-service", Type: "direct-call", Confidence: 0.95},
 	}
 	output := FormatDependencies("api-gateway", refs, false, nil, nil, "json")
 
@@ -964,8 +964,8 @@ func TestFormatDependenciesJSON_Transitive(t *testing.T) {
 }
 
 func TestFormatDependenciesDOT(t *testing.T) {
-	refs := []ServiceRef{
-		{ServiceID: "user-service", Type: "direct-call", Confidence: 0.95},
+	refs := []ComponentRef{
+		{ComponentID: "user-service", Type: "direct-call", Confidence: 0.95},
 	}
 	output := FormatDependencies("api-gateway", refs, false, nil, nil, "dot")
 	if !strings.HasPrefix(strings.TrimSpace(output), "digraph") {
@@ -974,8 +974,8 @@ func TestFormatDependenciesDOT(t *testing.T) {
 }
 
 func TestFormatDependenciesText_WithCycles(t *testing.T) {
-	refs := []ServiceRef{
-		{ServiceID: "user-service", Type: "direct-call", Confidence: 0.9},
+	refs := []ComponentRef{
+		{ComponentID: "user-service", Type: "direct-call", Confidence: 0.9},
 	}
 	cycles := [][]string{{"api-gateway", "user-service", "api-gateway"}}
 	output := FormatDependencies("api-gateway", refs, false, nil, cycles, "text")
