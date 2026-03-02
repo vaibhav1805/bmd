@@ -113,6 +113,13 @@ func CmdExport(args []string) error {
 		outputPath += ".tar.gz"
 	}
 
+	// Ensure output directory exists.
+	if dir := filepath.Dir(outputPath); dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("export: create output dir %q: %w", dir, err)
+		}
+	}
+
 	outFile, err := os.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("export: create output %q: %w", outputPath, err)
