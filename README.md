@@ -1,4 +1,4 @@
-# BMD — Beast Markdown Document
+# BMD — Beautiful Markdowns
 
 A powerful, beautiful terminal-based markdown editor with integrated knowledge graph capabilities, full-text search, and **agent-queryable documentation interface**. Perfect for both humans editing markdown and AI agents analyzing documentation at scale.
 
