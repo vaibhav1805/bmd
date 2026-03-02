@@ -14,6 +14,7 @@ jobs:
   build:
     name: Build Release Binaries
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         include:
@@ -33,10 +34,6 @@ jobs:
             goarch: arm64
             goos: linux
             output_name: bmd-linux-arm64
-          - os: windows-latest
-            goarch: amd64
-            goos: windows
-            output_name: bmd-windows-amd64.exe
     steps:
       - uses: actions/checkout@v4
         with:
