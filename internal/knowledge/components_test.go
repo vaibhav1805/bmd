@@ -20,10 +20,10 @@ func TestIsComponent_FilenameHeuristic(t *testing.T) {
 		wantDetect bool
 		wantConf   float64
 	}{
-		{"services/auth-service.md", "Auth Service", true, ConfidenceComponentFilename},
-		{"user-service.md", "User Service", true, ConfidenceComponentFilename},
-		{"payment-service.md", "Payment", true, ConfidenceComponentFilename},
-		{"services/gateway-service.md", "Gateway", true, ConfidenceComponentFilename},
+		{"components/auth-component.md", "Auth Component", true, ConfidenceComponentFilename},
+		{"user-component.md", "User Component", true, ConfidenceComponentFilename},
+		{"payment-component.md", "Payment", true, ConfidenceComponentFilename},
+		{"components/gateway-component.md", "Gateway", true, ConfidenceComponentFilename},
 	}
 
 	for _, tc := range tests {
@@ -51,9 +51,9 @@ func TestIsComponent_HeadingHeuristic(t *testing.T) {
 		title    string
 		wantConf float64
 	}{
-		{"docs/auth.md", "Auth Service", ConfidenceComponentHeading},
-		{"gateway.md", "API Gateway Service", ConfidenceComponentHeading},
-		{"docs/users.md", "User Service", ConfidenceComponentHeading},
+		{"docs/auth.md", "Auth Component", ConfidenceComponentHeading},
+		{"gateway.md", "API Gateway Component", ConfidenceComponentHeading},
+		{"docs/users.md", "User Component", ConfidenceComponentHeading},
 	}
 
 	for _, tc := range tests {
@@ -114,26 +114,26 @@ func makeServiceGraph(t *testing.T, nodes []struct{ id, title string }) *Graph {
 func TestDetectComponents_FilenamePattern(t *testing.T) {
 	sd := NewComponentDetector()
 	g := makeServiceGraph(t, []struct{ id, title string }{
-		{"auth-service.md", "Auth Service"},
-		{"user-service.md", "User Service"},
+		{"auth-component.md", "Auth Component"},
+		{"user-component.md", "User Component"},
 		{"overview.md", "Overview"},
 	})
 
 	services := sd.DetectComponents(g, nil)
 	if len(services) < 2 {
-		t.Errorf("DetectComponents: expected >=2 services, got %d", len(services))
+		t.Errorf("DetectComponents: expected >=2 components, got %d", len(services))
 	}
 
-	// Verify services have expected IDs.
+	// Verify components have expected IDs.
 	byID := make(map[string]Component)
 	for _, s := range services {
 		byID[s.ID] = s
 	}
-	if _, ok := byID["auth-service"]; !ok {
-		t.Error("expected auth-service to be detected")
+	if _, ok := byID["auth-component"]; !ok {
+		t.Error("expected auth-component to be detected")
 	}
-	if _, ok := byID["user-service"]; !ok {
-		t.Error("expected user-service to be detected")
+	if _, ok := byID["user-component"]; !ok {
+		t.Error("expected user-component to be detected")
 	}
 }
 
@@ -163,8 +163,8 @@ func TestDetectComponents_HighInDegree(t *testing.T) {
 func TestDetectComponents_RankedByConfidence(t *testing.T) {
 	sd := NewComponentDetector()
 	g := makeServiceGraph(t, []struct{ id, title string }{
-		{"auth-service.md", "Auth Service"},   // filename heuristic (0.9)
-		{"docs/gateway.md", "API Gateway Service"}, // heading heuristic (0.7)
+		{"auth-component.md", "Auth Component"},       // filename heuristic (0.9)
+		{"docs/gateway.md", "API Gateway Component"},  // heading heuristic (0.7)
 	})
 
 	services := sd.DetectComponents(g, nil)
@@ -325,12 +325,12 @@ func TestLoadComponentConfig_MissingFile(t *testing.T) {
 }
 
 func TestLoadComponentConfig_ValidYAML(t *testing.T) {
-	content := `services:
+	content := `components:
   - id: api-gateway
     patterns: ["api-gateway", "API Gateway"]
     type: microservice
-  - id: user-service
-    patterns: ["user-service", "User Service"]
+  - id: user-component
+    patterns: ["user-component", "User Component"]
     type: microservice
 `
 	p := writeTemp(t, content)
@@ -356,9 +356,9 @@ func TestLoadComponentConfig_ValidYAML(t *testing.T) {
 }
 
 func TestLoadComponentConfig_CaseInsensitivePatterns(t *testing.T) {
-	content := `services:
+	content := `components:
   - id: auth
-    patterns: ["AUTH-SERVICE", "Auth Service"]
+    patterns: ["AUTH-COMPONENT", "Auth Component"]
     type: microservice
 `
 	p := writeTemp(t, content)
@@ -368,14 +368,14 @@ func TestLoadComponentConfig_CaseInsensitivePatterns(t *testing.T) {
 	}
 
 	// Test that pattern matching is case-insensitive.
-	matched := matchesPatterns("services/auth-service.md", "Auth Service", cfg.Components[0].Patterns)
+	matched := matchesPatterns("components/auth-component.md", "Auth Component", cfg.Components[0].Patterns)
 	if !matched {
 		t.Error("matchesPatterns should match case-insensitively")
 	}
 }
 
 func TestLoadComponentConfig_ConfiguredServicesHighConfidence(t *testing.T) {
-	content := `services:
+	content := `components:
   - id: gateway
     patterns: ["gateway"]
     type: microservice
