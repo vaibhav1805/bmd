@@ -244,7 +244,7 @@ Knowledge commands:
     --transitive              Include transitive dependencies
     --format json|text|dot    Output format (default: json)
 
-  bmd services [DIR] [OPTIONS]
+  bmd components [DIR] [OPTIONS]
     --format json|text        Output format (default: json)
 
   bmd graph [SERVICE] [OPTIONS]
@@ -252,6 +252,7 @@ Knowledge commands:
 
   bmd crawl --from-multiple FILE[,FILE...] [OPTIONS]
     --from-multiple FILES     Comma-separated starting files
+    --dir DIR                 Directory that was indexed (default: .)
     --direction DIR           backward|forward|both (default: backward)
     --depth N                 Max traversal depth (default: 3)
     --format FMT              json|tree|dot|list (default: json)
@@ -259,7 +260,8 @@ Knowledge commands:
   bmd serve --mcp
     Run as a persistent MCP (Model Context Protocol) server on stdin/stdout.
     Exposes all knowledge tools as native MCP endpoints for agent integration.
-    Tools: bmd/query, bmd/index, bmd/depends, bmd/services, bmd/graph, bmd/context
+    Tools: bmd/query, bmd/index, bmd/depends, bmd/components, bmd/graph,
+           bmd/context, bmd/graph_crawl
 
 Examples:
   bmd                              Browse current directory

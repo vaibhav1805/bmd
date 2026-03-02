@@ -566,8 +566,9 @@ Creates `.bmd-index.json` and `.bmd-graph.json` with:
 | `query TERM [--dir PATH] --strategy pageindex` | Semantic search with reasoning | `bmd query "how do we handle errors?" --dir ./docs --strategy pageindex` |
 | `context TERM [--dir PATH]` | Assemble RAG context blocks | `bmd context "auth flow" --dir ./docs` |
 | `depends SERVICE [--format json\|text\|dot]` | Find dependencies | `bmd depends api-gateway` |
-| `services [--format json\|text]` | List detected services | `bmd components` |
+| `components [--format json\|text]` | List detected components | `bmd components` |
 | `graph [--format json\|dot]` | Export relationship graph | `bmd graph --format dot` |
+| `crawl --from-multiple FILE[,FILE] [--direction] [--depth] [--format]` | Multi-start graph traversal | `bmd crawl --from-multiple api.md --direction forward` |
 
 ## Semantic Search (PageIndex)
 
@@ -622,6 +623,58 @@ pip install pageindex
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+## Graph Traversal (Crawl)
+
+Traverse the knowledge graph from one or more starting files, expanding all branches using BFS. Useful for understanding dependency chains, impact analysis, and building context around a set of files.
+
+### CLI Usage
+
+```bash
+# Crawl forward from api-gateway.md (what does it depend on?)
+bmd crawl --from-multiple api-gateway.md --direction forward
+
+# Crawl backward from auth-service.md (who depends on it?)
+bmd crawl --from-multiple auth-service.md --direction backward
+
+# Multi-start crawl with depth limit and tree output
+bmd crawl --from-multiple api.md,auth.md --depth 3 --format tree
+
+# DOT output for Graphviz visualization
+bmd crawl --from-multiple api.md --direction both --format dot | dot -Tpng -o graph.png
+```
+
+### Agent Workflow: Search + Crawl
+
+Agents can combine search and crawl for targeted context assembly:
+
+```bash
+# Step 1: Search for relevant files
+bmd query "authentication" --format json --top 3
+
+# Step 2: Extract file paths from results, then crawl their dependencies
+bmd crawl --from-multiple auth-service.md,user-service.md \
+  --direction forward --depth 5 --format json
+```
+
+### Output Formats
+
+| Format | Flag | Description |
+|--------|------|-------------|
+| JSON | `--format json` | ContractResponse envelope with nodes, edges, cycles (default) |
+| Tree | `--format tree` | ASCII tree showing parent-child hierarchy |
+| DOT | `--format dot` | Graphviz-compatible graph for visualization |
+| List | `--format list` | Flat list sorted by depth with parent info |
+
+### Crawl Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--from-multiple` | (required) | Comma-separated starting file paths |
+| `--dir` | `.` | Directory that was indexed |
+| `--direction` | `backward` | `forward` (outgoing), `backward` (incoming), `both` |
+| `--depth` | `3` | Maximum BFS traversal depth |
+| `--format` | `json` | Output format: `json`, `tree`, `dot`, `list` |
+
 ## MCP Server Mode
 
 Run bmd as a persistent documentation service for agent fleets:
@@ -639,9 +692,10 @@ This starts bmd as an MCP (Model Context Protocol) server on stdin/stdout, expos
 | `bmd/query` | Full-text (BM25) or semantic (PageIndex) search | `{ "query": string, "dir": string?, "strategy": "bm25"\|"pageindex"?, "top": number? }` |
 | `bmd/index` | Index a documentation directory | `{ "dir": string, "strategy": "bm25"\|"pageindex"? }` |
 | `bmd/depends` | Query service dependencies | `{ "service": string, "transitive": bool?, "format": "json"\|"text"\|"dot"? }` |
-| `bmd/services` | List detected components | `{ "format": "json"\|"text"?, "dir": string? }` |
+| `bmd/components` | List detected components | `{ "format": "json"\|"text"?, "dir": string? }` |
 | `bmd/graph` | Export the knowledge graph | `{ "format": "json"\|"dot"?, "dir": string? }` |
 | `bmd/context` | Assemble RAG-ready context blocks | `{ "query": string, "dir": string?, "top": number?, "strategy": "bm25"\|"pageindex"? }` |
+| `bmd/graph_crawl` | Multi-start graph traversal with cycle detection | `{ "start_files": string, "direction": "forward"\|"backward"\|"both"?, "depth": number?, "include_cycles": bool?, "dir": string? }` |
 
 ### Integration with Claude Desktop
 
