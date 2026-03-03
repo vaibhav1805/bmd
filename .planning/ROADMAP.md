@@ -24,6 +24,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 14: Export & Import Infrastructure** - Package knowledge artifacts (markdown + indexes + graphs) into portable tar files for container deployment and headless agent workloads (completed 2026-03-02)
 - [x] **Phase 15: Container Deployment** - Deploy BMD as sidecar service for agent fleets with Docker, Compose, and Kubernetes integration (completed 2026-03-02)
 - [x] **Phase 16: Knowledge Versioning & Distribution** - Enable knowledge artifact versioning, checksums, Git integration, and cloud storage distribution (completed 2026-03-02)
+- [x] **Phase 17: Component Registry & Hybrid Graph Discovery** - Augment knowledge graph with text mentions and LLM-powered relationship extraction for more complete dependency detection (completed 2026-03-03)
+- [ ] **Phase 18: Live Graph Updates & Incremental Indexing** - Enable real-time graph updates as files change, with filesystem watches and incremental re-indexing for responsive agent workflows
 
 ## Phase Details
 
@@ -224,7 +226,35 @@ Plans:
   1. bmd serve --mcp exposes all agent tools as native MCP endpoints
   2. Incremental file-level indexing and filesystem watch mode keeps index fresh during long operations
   3. OpenClaw plugin descriptor and Docker image enable one-click fleet deployment
-**Plans**: TBD
+**Plans**: 3 plans (COMPLETE)
+
+### Phase 17: Component Registry & Hybrid Graph Discovery
+**Goal**: Augment the knowledge graph with text-based and LLM-powered relationship detection for comprehensive dependency mapping
+**Depends on**: Phase 16 (versioning infrastructure)
+**Requirements**: REGISTRY-01, HYBRID-01, MENTION-01
+**Success Criteria** (what must be TRUE):
+  1. Component registry stores relationships from multiple signals (links, text mentions, LLM extraction)
+  2. Text mention patterns detect service references like "calls the auth-service" with configurable confidence
+  3. Hybrid graph merges signals using confidence-weighted aggregation
+  4. Commands like `bmd depends --hybrid` show all detected relationships with signal attribution
+**Plans**: 6/6 complete
+
+### Phase 18: Live Graph Updates & Incremental Indexing
+**Goal**: Enable real-time graph and registry updates as files change, creating a responsive documentation intelligence service for live agent workflows
+**Depends on**: Phase 17 (hybrid graph complete)
+**Requirements**: WATCH-01, INCREMENTAL-01, REACTIVITY-01
+**Success Criteria** (what must be TRUE):
+  1. `bmd serve --watch` monitors filesystem changes and updates indexes incrementally (<500ms)
+  2. Only modified files are re-indexed; dependencies already computed are cached
+  3. Agents connected via MCP receive notifications of graph changes in real-time
+  4. Registry incremental updates preserve component history and confidence scores
+**Plans**: 4 plans
+
+Plans:
+- [ ] 18-01-PLAN.md — TDD: FileWatcher struct with polling-based .md change detection (WATCH-01)
+- [ ] 18-02-PLAN.md — IncrementalUpdater: cache-aware re-indexer composing watcher + index + graph + registry (INCREMENTAL-01)
+- [ ] 18-03-PLAN.md — MCP watch tools: bmd/watch_start, bmd/watch_poll, bmd/watch_stop for agent reactivity (REACTIVITY-01)
+- [ ] 18-04-PLAN.md — CLI wiring (bmd watch command + --watch serve flag), docs, full regression pass (WATCH-01, INCREMENTAL-01, REACTIVITY-01)
 
 ### Phase 14: Export & Import Infrastructure
 **Goal**: Create portable knowledge artifacts (markdown + indexes + graphs) in tar format for seamless container deployment and headless agent workloads
@@ -286,8 +316,11 @@ Phases execute in numeric order: 1 → 2 → 3
 | 14. Export & Import Infrastructure | 3/3 | Complete   | 2026-03-02 |
 | 15. Container Deployment | 3/3 | Complete   | 2026-03-02 |
 | 16. Knowledge Versioning & Distribution | 1/1 | Complete   | 2026-03-02 |
+| 17. Component Registry & Hybrid Graph Discovery | 6/6 | Complete   | 2026-03-03 |
+| 18. Live Graph Updates & Incremental Indexing | 0/TBD | Planned    | — |
 
-**Current Status: 16/16 phases complete — ALL PHASES DELIVERED**
+**Current Status: 17/18 phases complete — Milestone 3 in planning**
 **Milestone 1 (Phases 1-13): Complete (5 days) — Full agent documentation platform**
 **Milestone 2 (Phases 14-16): Complete — Portable knowledge artifacts, containers & distribution**
-**Total Commits**: 60+ (all phases complete)
+**Milestone 3 (Phases 17-18): Phase 17 Complete, Phase 18 planned — Live graph intelligence for real-time agent workflows**
+**Total Commits**: 70+ (17 phases complete)
