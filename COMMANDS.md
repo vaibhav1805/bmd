@@ -512,6 +512,51 @@ bmd graph --format dot | neato -Goverlap=scale -Tpng -o architecture.png
 
 ---
 
+## Relationship Discovery
+
+### bmd relationships-review
+
+Review and accept/reject automatically discovered component relationships.
+
+```
+bmd relationships-review [--accept-all] [--dir DIR]
+```
+
+Options:
+- `--accept-all` — Accept all discovered relationships without interactive review
+- `--dir DIR` — Directory containing the indexed documentation (default: current directory)
+
+The `bmd index` command automatically runs relationship discovery and writes candidates to `.bmd-relationships-discovered.yaml`. Use `relationships-review` to promote candidates into the registry.
+
+Example:
+```bash
+# Interactive review
+bmd relationships-review
+
+# Accept all discovered relationships
+bmd relationships-review --accept-all
+```
+
+### bmd components list
+
+List all detected architectural components.
+
+```
+bmd components list [--format json|text] [--dir DIR]
+```
+
+Options:
+- `--format` — Output format: `text` (default) or `json`
+- `--dir DIR` — Directory containing the index
+
+Example:
+```bash
+bmd components list
+bmd components list --format json
+```
+
+---
+
 ## Watch Mode (Phase 18)
 
 ### bmd watch
