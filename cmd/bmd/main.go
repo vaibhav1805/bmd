@@ -53,6 +53,13 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "debug":
+			cmdErr = knowledge.CmdDebug(args[1:])
+			if cmdErr != nil {
+				fmt.Fprintln(os.Stderr, "bmd debug:", cmdErr)
+				os.Exit(1)
+			}
+			return
 		case "relationships":
 			cmdErr = knowledge.CmdRelationships(args[1:])
 			if cmdErr != nil {
@@ -408,7 +415,19 @@ Knowledge commands:
       Search components by name or ID
     inspect COMPONENT_ID [--dir DIR] [--format table|json]
       Detailed view of a single component with all relationships
+    graph [--dir DIR] [--format ascii|json]
+      Show component dependency graph (edges with confidence scores)
     --format json|text        Output format for legacy usage (default: json)
+
+  bmd debug [OPTIONS]
+    --component COMPONENT     Component name to debug (required)
+    --query QUERY             What are you debugging? (optional context)
+    --depth N                 BFS traversal depth (1-5, default: 2)
+    --output json|text        Output format (default: json)
+    --dir DIR                 Directory to scan for components (default: .)
+    Aggregate documentation and relationships for debugging a component.
+    Runs BFS from the target component to discover all related services
+    and outputs a STATUS-01 compliant DebugContext for agent troubleshooting.
 
   bmd relationships [OPTIONS]
     --from <component>        Show downstream dependencies of this component
@@ -496,6 +515,10 @@ Examples:
   bmd components list              List all detected components
   bmd components search auth       Search for "auth" components
   bmd components inspect api-gateway  Detailed component view
+  bmd components graph             Show component dependency graph
+  bmd components graph --format json  Component graph as JSON
+  bmd debug --component payment    Debug payment component context
+  bmd debug --component payment --query "Why are refunds failing?" --depth 2
   bmd relationships --from api-gateway           What does api-gateway depend on?
   bmd relationships --to auth-service            What depends on auth-service?
   bmd relationships --from api-gateway --confidence 0.8  High-confidence deps only
