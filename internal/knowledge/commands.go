@@ -37,11 +37,13 @@ type QueryArgs struct {
 
 // DependsArgs holds parsed arguments for CmdDepends.
 type DependsArgs struct {
-	Service    string
-	Dir        string
-	Transitive bool
-	Format     string
-	Registry   bool // --registry: augment results from .bmd-registry.json
+	Service       string
+	Dir           string
+	Transitive    bool
+	Format        string
+	Registry      bool    // --registry: augment results from .bmd-registry.json
+	MinConfidence float64 // --min-confidence: only show edges >= this confidence
+	NoHybrid      bool    // --no-hybrid: skip registry signal merging
 }
 
 // ComponentsArgs holds parsed arguments for CmdComponents.
@@ -53,18 +55,21 @@ type ComponentsArgs struct {
 
 // GraphArgs holds parsed arguments for CmdGraph.
 type GraphArgs struct {
-	Service string
-	Dir     string
-	Format  string
+	Service  string
+	Dir      string
+	Format   string
+	NoHybrid bool // --no-hybrid: skip registry signal merging
 }
 
 // CrawlArgs holds parsed arguments for CmdCrawl.
 type CrawlArgs struct {
-	FromMultiple []string // starting node IDs (document relative paths)
-	Dir          string
-	Direction    string // "backward" | "forward" | "both"
-	Depth        int
-	Format       string // "json" | "tree" | "dot" | "list"
+	FromMultiple  []string // starting node IDs (document relative paths)
+	Dir           string
+	Direction     string // "backward" | "forward" | "both"
+	Depth         int
+	Format        string  // "json" | "tree" | "dot" | "list"
+	MinConfidence float64 // --min-confidence: filter edges below this threshold
+	NoHybrid      bool    // --no-hybrid: skip registry signal merging
 }
 
 // ─── argument parsers ─────────────────────────────────────────────────────────
@@ -158,7 +163,7 @@ func ParseQueryArgs(args []string) (*QueryArgs, error) {
 
 // ParseDependsArgs parses raw CLI arguments for the depends command.
 //
-// Usage: bmd depends SERVICE [DIR] [--dir DIR] [--transitive] [--format json|text|dot] [--registry]
+// Usage: bmd depends SERVICE [DIR] [--dir DIR] [--transitive] [--format json|text|dot] [--registry] [--min-confidence 0.0] [--no-hybrid]
 func ParseDependsArgs(args []string) (*DependsArgs, error) {
 	positionals, flags := splitPositionalsAndFlags(args)
 
@@ -170,6 +175,8 @@ func ParseDependsArgs(args []string) (*DependsArgs, error) {
 	fs.BoolVar(&a.Transitive, "transitive", false, "Show transitive dependencies")
 	fs.StringVar(&a.Format, "format", "json", "Output format (json|text|dot)")
 	fs.BoolVar(&a.Registry, "registry", false, "Augment results from .bmd-registry.json")
+	fs.Float64Var(&a.MinConfidence, "min-confidence", 0.0, "Only show dependencies with confidence >= this value (0.0–1.0)")
+	fs.BoolVar(&a.NoHybrid, "no-hybrid", false, "Skip registry signal merging (use base graph only)")
 
 	if err := fs.Parse(flags); err != nil {
 		return nil, fmt.Errorf("depends: %w", err)
@@ -181,6 +188,10 @@ func ParseDependsArgs(args []string) (*DependsArgs, error) {
 	a.Service = positionals[0]
 	if len(positionals) > 1 {
 		a.Dir = positionals[1]
+	}
+
+	if a.MinConfidence < 0.0 || a.MinConfidence > 1.0 {
+		return nil, fmt.Errorf("depends: --min-confidence must be in [0.0, 1.0]")
 	}
 
 	return &a, nil
@@ -213,7 +224,7 @@ func ParseComponentsArgs(args []string) (*ComponentsArgs, error) {
 
 // ParseGraphArgs parses raw CLI arguments for the graph command.
 //
-// Usage: bmd graph [SERVICE] [--dir DIR] [--format dot|json] [--service NAME]
+// Usage: bmd graph [SERVICE] [--dir DIR] [--format dot|json] [--service NAME] [--no-hybrid]
 func ParseGraphArgs(args []string) (*GraphArgs, error) {
 	positionals, flags := splitPositionalsAndFlags(args)
 
@@ -224,6 +235,7 @@ func ParseGraphArgs(args []string) (*GraphArgs, error) {
 	fs.StringVar(&a.Dir, "dir", ".", "Directory that was indexed")
 	fs.StringVar(&a.Format, "format", "dot", "Output format (dot|json)")
 	fs.StringVar(&a.Service, "service", "", "Export subgraph for this service only")
+	fs.BoolVar(&a.NoHybrid, "no-hybrid", false, "Skip registry signal merging (use base graph only)")
 
 	if err := fs.Parse(flags); err != nil {
 		return nil, fmt.Errorf("graph: %w", err)
@@ -248,7 +260,7 @@ func ParseGraphArgs(args []string) (*GraphArgs, error) {
 
 // ParseCrawlArgs parses raw CLI arguments for the crawl command.
 //
-// Usage: bmd crawl --from-multiple FILE[,FILE...] [--dir DIR] [--direction backward|forward|both] [--depth N] [--format json|tree|dot|list]
+// Usage: bmd crawl --from-multiple FILE[,FILE...] [--dir DIR] [--direction backward|forward|both] [--depth N] [--format json|tree|dot|list] [--min-confidence 0.0] [--no-hybrid]
 func ParseCrawlArgs(args []string) (*CrawlArgs, error) {
 	fs := flag.NewFlagSet("crawl", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -260,6 +272,8 @@ func ParseCrawlArgs(args []string) (*CrawlArgs, error) {
 	fs.StringVar(&a.Direction, "direction", "backward", "Traversal direction: backward|forward|both")
 	fs.IntVar(&a.Depth, "depth", 3, "Maximum traversal depth")
 	fs.StringVar(&a.Format, "format", "json", "Output format: json|tree|dot|list")
+	fs.Float64Var(&a.MinConfidence, "min-confidence", 0.0, "Only traverse edges with confidence >= this value (0.0–1.0)")
+	fs.BoolVar(&a.NoHybrid, "no-hybrid", false, "Skip registry signal merging (use base graph only)")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("crawl: %w", err)
@@ -878,6 +892,14 @@ func CmdGraph(args []string) error {
 		return fmt.Errorf("graph: load graph: %w", err)
 	}
 
+	// Augment graph with registry signals unless --no-hybrid is set.
+	if !a.NoHybrid {
+		registryPath := filepath.Join(absDir, RegistryFileName)
+		if reg, regErr := LoadRegistry(registryPath); regErr == nil && reg != nil {
+			_ = graph.MergeRegistry(reg)
+		}
+	}
+
 	// Apply subgraph filter when a service is specified.
 	exportGraph := graph
 	if a.Service != "" {
@@ -1271,6 +1293,7 @@ func isBoolFlag(name string) bool {
 		"watch":      true,
 		"transitive": true,
 		"registry":   true,
+		"no-hybrid":  true,
 		"with-llm":   true,
 	}
 	return boolFlags[name]

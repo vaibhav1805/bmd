@@ -511,8 +511,11 @@ func formatGraphDOT(graph *Graph) string {
 
 	for _, id := range edgeIDs {
 		e := graph.Edges[id]
-		fmt.Fprintf(&sb, "  %q -> %q [label=%q, weight=\"%.2f\"];\n",
-			e.Source, e.Target, string(e.Type), e.Confidence)
+		// penwidth: scale confidence [0.0–1.0] to line thickness [0.5–3.0].
+		// Higher confidence produces a thicker edge in Graphviz DOT renderers.
+		penwidth := 0.5 + e.Confidence*2.5
+		fmt.Fprintf(&sb, "  %q -> %q [label=%q, weight=\"%.2f\", penwidth=\"%.2f\"];\n",
+			e.Source, e.Target, string(e.Type), e.Confidence, penwidth)
 	}
 
 	sb.WriteString("}\n")
