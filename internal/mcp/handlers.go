@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	mcpsdk "github.com/mark3labs/mcp-go/mcp"
 	"github.com/bmd/bmd/internal/knowledge"
@@ -230,6 +231,131 @@ func (s *Server) handleGraphCrawl(ctx context.Context, req mcpsdk.CallToolReques
 
 	// Format result as ContractResponse.
 	resp := knowledge.NewOKResponse("Graph crawl completed", crawlResult)
+	data, _ := json.MarshalIndent(resp, "", "  ")
+	return mcpsdk.NewToolResultText(string(data)), nil
+}
+
+// handleWatchStart handles the bmd/watch_start MCP tool invocation.
+// It creates a FileWatcher and IncrementalUpdater for the requested directory,
+// registers a new WatchSession, and returns the session ID.
+func (s *Server) handleWatchStart(ctx context.Context, req mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+	dir := mcpsdk.ParseString(req, "dir", s.baseDir)
+	intervalMs := mcpsdk.ParseInt(req, "interval_ms", 500)
+
+	absDir, err := absPath(dir)
+	if err != nil {
+		resp := knowledge.NewErrorResponse(knowledge.ErrCodeInternalError, fmt.Sprintf("resolve dir: %v", err))
+		data, _ := json.MarshalIndent(resp, "", "  ")
+		return mcpsdk.NewToolResultText(string(data)), nil
+	}
+
+	// Load or build the graph and index for the directory.
+	graph, db, err := loadGraph(absDir)
+	if err != nil {
+		// Continue with an empty graph — the watch will still detect changes.
+		graph = knowledge.NewGraph()
+		db = nil
+	}
+
+	// Load the index from scratch for incremental updates.
+	idx := knowledge.NewIndex()
+	if db != nil {
+		// Scan to populate index for incremental-update hash comparison.
+		if docs, scanErr := knowledge.ScanDirectory(absDir); scanErr == nil {
+			_ = idx.Build(docs)
+		}
+	}
+
+	// Load or initialise the component registry.
+	reg, _ := knowledge.LoadRegistry(filepath.Join(absDir, knowledge.RegistryFileName))
+	if reg == nil {
+		reg = knowledge.NewComponentRegistry()
+	}
+
+	// Create watcher and updater.
+	watcher := knowledge.NewFileWatcher(absDir, time.Duration(intervalMs)*time.Millisecond)
+	updater := knowledge.NewIncrementalUpdater(absDir, watcher, idx, graph, reg, db, nil)
+
+	// Register session (wires onChange callback).
+	session := s.watchMgr.Create(absDir, updater)
+
+	// Start watching.
+	watcher.Start()
+	updater.Start()
+
+	type watchStartResult struct {
+		SessionID  string `json:"session_id"`
+		Dir        string `json:"dir"`
+		IntervalMs int    `json:"interval_ms"`
+		Status     string `json:"status"`
+	}
+	resp := knowledge.NewOKResponse("Watch session started", watchStartResult{
+		SessionID:  session.ID,
+		Dir:        absDir,
+		IntervalMs: intervalMs,
+		Status:     "watching",
+	})
+	data, _ := json.MarshalIndent(resp, "", "  ")
+	return mcpsdk.NewToolResultText(string(data)), nil
+}
+
+// handleWatchPoll handles the bmd/watch_poll MCP tool invocation.
+// It drains the pending notification queue for the session and returns all
+// change events since the last poll.
+func (s *Server) handleWatchPoll(ctx context.Context, req mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+	sessionID := mcpsdk.ParseString(req, "session_id", "")
+	if sessionID == "" {
+		return mcpsdk.NewToolResultError("session_id parameter is required"), nil
+	}
+
+	session, ok := s.watchMgr.Get(sessionID)
+	if !ok {
+		resp := knowledge.NewErrorResponse("SESSION_NOT_FOUND", fmt.Sprintf("watch session %q not found", sessionID))
+		data, _ := json.MarshalIndent(resp, "", "  ")
+		return mcpsdk.NewToolResultText(string(data)), nil
+	}
+
+	notifications := session.DrainPending()
+
+	type watchPollResult struct {
+		SessionID     string               `json:"session_id"`
+		Notifications []WatchNotification  `json:"notifications"`
+		Count         int                  `json:"count"`
+	}
+	resp := knowledge.NewOKResponse("Poll complete", watchPollResult{
+		SessionID:     sessionID,
+		Notifications: notifications,
+		Count:         len(notifications),
+	})
+	data, _ := json.MarshalIndent(resp, "", "  ")
+	return mcpsdk.NewToolResultText(string(data)), nil
+}
+
+// handleWatchStop handles the bmd/watch_stop MCP tool invocation.
+// It terminates the watch session, stopping the watcher and releasing resources.
+func (s *Server) handleWatchStop(ctx context.Context, req mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+	sessionID := mcpsdk.ParseString(req, "session_id", "")
+	if sessionID == "" {
+		return mcpsdk.NewToolResultError("session_id parameter is required"), nil
+	}
+
+	_, ok := s.watchMgr.Get(sessionID)
+	if !ok {
+		resp := knowledge.NewErrorResponse("SESSION_NOT_FOUND", fmt.Sprintf("watch session %q not found", sessionID))
+		data, _ := json.MarshalIndent(resp, "", "  ")
+		return mcpsdk.NewToolResultText(string(data)), nil
+	}
+
+	s.watchMgr.Delete(sessionID)
+
+	type watchStopResult struct {
+		SessionID string `json:"session_id"`
+		Status    string `json:"status"`
+	}
+	resp := knowledge.NewOKResponse("Watch session stopped", watchStopResult{
+		SessionID: sessionID,
+		Status:    "stopped",
+	})
 	data, _ := json.MarshalIndent(resp, "", "  ")
 	return mcpsdk.NewToolResultText(string(data)), nil
 }

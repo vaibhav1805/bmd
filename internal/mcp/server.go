@@ -15,11 +15,17 @@ type Server struct {
 	baseDir string
 	// dbPath is the SQLite database path for the knowledge index.
 	dbPath string
+	// watchMgr manages active filesystem watch sessions for MCP clients.
+	watchMgr *WatchSessionManager
 }
 
 // NewServer creates a new MCP server configured for the given documentation directory.
 func NewServer(baseDir, dbPath string) *Server {
-	return &Server{baseDir: baseDir, dbPath: dbPath}
+	return &Server{
+		baseDir:  baseDir,
+		dbPath:   dbPath,
+		watchMgr: NewWatchSessionManager(),
+	}
 }
 
 // Start initializes and runs the MCP server on stdin/stdout.
@@ -31,7 +37,7 @@ func (s *Server) Start(ctx context.Context) error {
 		server.WithToolCapabilities(true),
 	)
 
-	// Register all 7 knowledge tools.
+	// Register all 10 knowledge tools.
 	s.registerQueryTool(mcpServer)
 	s.registerIndexTool(mcpServer)
 	s.registerDependsTool(mcpServer)
@@ -39,6 +45,9 @@ func (s *Server) Start(ctx context.Context) error {
 	s.registerGraphTool(mcpServer)
 	s.registerContextTool(mcpServer)
 	s.registerGraphCrawlTool(mcpServer)
+	s.registerWatchStartTool(mcpServer)
+	s.registerWatchPollTool(mcpServer)
+	s.registerWatchStopTool(mcpServer)
 
 	return server.ServeStdio(mcpServer)
 }
@@ -155,6 +164,47 @@ func (s *Server) registerContextTool(mcpServer *server.MCPServer) {
 	)
 
 	mcpServer.AddTool(tool, s.handleContext)
+}
+
+// registerWatchStartTool registers the bmd/watch_start tool for starting filesystem watches.
+func (s *Server) registerWatchStartTool(mcpServer *server.MCPServer) {
+	tool := mcpsdk.NewTool(
+		"bmd/watch_start",
+		mcpsdk.WithDescription("Start watching a directory for documentation changes. Returns a session_id for use with bmd/watch_poll and bmd/watch_stop."),
+		mcpsdk.WithString("dir",
+			mcpsdk.Description("Directory to watch (default: configured baseDir)"),
+		),
+		mcpsdk.WithNumber("interval_ms",
+			mcpsdk.Description("Poll interval in milliseconds (default: 500)"),
+		),
+	)
+	mcpServer.AddTool(tool, s.handleWatchStart)
+}
+
+// registerWatchPollTool registers the bmd/watch_poll tool for polling change notifications.
+func (s *Server) registerWatchPollTool(mcpServer *server.MCPServer) {
+	tool := mcpsdk.NewTool(
+		"bmd/watch_poll",
+		mcpsdk.WithDescription("Poll for pending graph change notifications from an active watch session. Returns all changes since last poll."),
+		mcpsdk.WithString("session_id",
+			mcpsdk.Required(),
+			mcpsdk.Description("The watch session ID returned by bmd/watch_start"),
+		),
+	)
+	mcpServer.AddTool(tool, s.handleWatchPoll)
+}
+
+// registerWatchStopTool registers the bmd/watch_stop tool for stopping filesystem watches.
+func (s *Server) registerWatchStopTool(mcpServer *server.MCPServer) {
+	tool := mcpsdk.NewTool(
+		"bmd/watch_stop",
+		mcpsdk.WithDescription("Stop an active watch session and release filesystem resources."),
+		mcpsdk.WithString("session_id",
+			mcpsdk.Required(),
+			mcpsdk.Description("The watch session ID returned by bmd/watch_start"),
+		),
+	)
+	mcpServer.AddTool(tool, s.handleWatchStop)
 }
 
 // registerGraphCrawlTool registers the bmd/graph_crawl tool for multi-start graph traversal.

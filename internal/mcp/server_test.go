@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	mcpsdk "github.com/mark3labs/mcp-go/mcp"
 )
@@ -504,6 +505,203 @@ func TestMCP_GraphCrawl_MissingParam(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("expected IsError=true for missing required start_files param")
+	}
+}
+
+// ─── TestMCPServer_WatchStart ─────────────────────────────────────────────────
+
+// TestMCPServer_WatchStart verifies that watch_start returns a session_id and
+// that the session can be stopped cleanly.
+func TestMCPServer_WatchStart(t *testing.T) {
+	srv, dir := makeTestServer(t)
+
+	// Start a watch session.
+	result, err := callTool(srv.handleWatchStart, map[string]interface{}{
+		"dir":         dir,
+		"interval_ms": float64(50),
+	})
+	if err != nil {
+		t.Fatalf("handleWatchStart error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleWatchStart returned nil result")
+	}
+
+	text := extractText(result)
+	if text == "" {
+		t.Fatal("handleWatchStart returned empty text")
+	}
+
+	// Verify CONTRACT-01 envelope.
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &envelope); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, text)
+	}
+	status, _ := envelope["status"].(string)
+	if status != "ok" {
+		t.Errorf("expected status 'ok', got %q", status)
+	}
+
+	// Verify data contains session_id.
+	data, _ := envelope["data"].(map[string]interface{})
+	if data == nil {
+		t.Fatal("data field is not an object")
+	}
+	sessionID, _ := data["session_id"].(string)
+	if sessionID == "" {
+		t.Error("expected non-empty session_id in response data")
+	}
+
+	// Clean up: stop the session.
+	stopResult, err := callTool(srv.handleWatchStop, map[string]interface{}{
+		"session_id": sessionID,
+	})
+	if err != nil {
+		t.Fatalf("handleWatchStop cleanup error: %v", err)
+	}
+	if stopResult == nil {
+		t.Fatal("handleWatchStop returned nil result")
+	}
+}
+
+// ─── TestMCPServer_WatchPoll ──────────────────────────────────────────────────
+
+// TestMCPServer_WatchPoll verifies that watch_poll returns a valid response
+// structure (possibly with 0 notifications due to timing, but no error).
+func TestMCPServer_WatchPoll(t *testing.T) {
+	srv, dir := makeTestServer(t)
+
+	// Start a watch session with a short poll interval.
+	startResult, err := callTool(srv.handleWatchStart, map[string]interface{}{
+		"dir":         dir,
+		"interval_ms": float64(50),
+	})
+	if err != nil {
+		t.Fatalf("handleWatchStart error: %v", err)
+	}
+	var startEnvelope map[string]interface{}
+	if err := json.Unmarshal([]byte(extractText(startResult)), &startEnvelope); err != nil {
+		t.Fatalf("start response JSON: %v", err)
+	}
+	startData, _ := startEnvelope["data"].(map[string]interface{})
+	sessionID, _ := startData["session_id"].(string)
+	if sessionID == "" {
+		t.Fatal("no session_id from watch_start")
+	}
+	defer func() {
+		_, _ = callTool(srv.handleWatchStop, map[string]interface{}{"session_id": sessionID})
+	}()
+
+	// Write a new .md file to potentially trigger an event.
+	writeFile(t, filepath.Join(dir, "new-svc.md"), "# New Service\ncontent here")
+
+	// Wait for detection.
+	time.Sleep(300 * time.Millisecond)
+
+	// Poll for notifications.
+	pollResult, err := callTool(srv.handleWatchPoll, map[string]interface{}{
+		"session_id": sessionID,
+	})
+	if err != nil {
+		t.Fatalf("handleWatchPoll error: %v", err)
+	}
+	if pollResult == nil {
+		t.Fatal("handleWatchPoll returned nil result")
+	}
+
+	text := extractText(pollResult)
+	if text == "" {
+		t.Fatal("handleWatchPoll returned empty text")
+	}
+
+	// Verify CONTRACT-01 envelope.
+	var pollEnvelope map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &pollEnvelope); err != nil {
+		t.Fatalf("poll response JSON: %v\noutput: %s", err, text)
+	}
+	status, _ := pollEnvelope["status"].(string)
+	if status != "ok" {
+		t.Errorf("expected status 'ok', got %q", status)
+	}
+
+	// data must have count and notifications fields.
+	pollData, _ := pollEnvelope["data"].(map[string]interface{})
+	if pollData == nil {
+		t.Fatal("data field is not an object")
+	}
+	if _, hasNotifications := pollData["notifications"]; !hasNotifications {
+		t.Error("poll data missing 'notifications' field")
+	}
+	if _, hasCount := pollData["count"]; !hasCount {
+		t.Error("poll data missing 'count' field")
+	}
+}
+
+// ─── TestMCPServer_WatchStop ──────────────────────────────────────────────────
+
+// TestMCPServer_WatchStop verifies that watch_stop terminates the session and
+// that a second stop call returns a SESSION_NOT_FOUND error.
+func TestMCPServer_WatchStop(t *testing.T) {
+	srv, dir := makeTestServer(t)
+
+	// Start a watch session.
+	startResult, err := callTool(srv.handleWatchStart, map[string]interface{}{
+		"dir":         dir,
+		"interval_ms": float64(50),
+	})
+	if err != nil {
+		t.Fatalf("handleWatchStart error: %v", err)
+	}
+	var startEnvelope map[string]interface{}
+	if err := json.Unmarshal([]byte(extractText(startResult)), &startEnvelope); err != nil {
+		t.Fatalf("start response JSON: %v", err)
+	}
+	startData, _ := startEnvelope["data"].(map[string]interface{})
+	sessionID, _ := startData["session_id"].(string)
+	if sessionID == "" {
+		t.Fatal("no session_id from watch_start")
+	}
+
+	// First stop — should succeed.
+	stopResult, err := callTool(srv.handleWatchStop, map[string]interface{}{
+		"session_id": sessionID,
+	})
+	if err != nil {
+		t.Fatalf("handleWatchStop error: %v", err)
+	}
+	stopText := extractText(stopResult)
+	var stopEnvelope map[string]interface{}
+	if err := json.Unmarshal([]byte(stopText), &stopEnvelope); err != nil {
+		t.Fatalf("stop response JSON: %v\noutput: %s", err, stopText)
+	}
+	stopStatus, _ := stopEnvelope["status"].(string)
+	if stopStatus != "ok" {
+		t.Errorf("expected status 'ok' on first stop, got %q", stopStatus)
+	}
+	stopData, _ := stopEnvelope["data"].(map[string]interface{})
+	if responseStatus, _ := stopData["status"].(string); responseStatus != "stopped" {
+		t.Errorf("expected data.status 'stopped', got %q", responseStatus)
+	}
+
+	// Second stop — should return SESSION_NOT_FOUND error.
+	stopResult2, err := callTool(srv.handleWatchStop, map[string]interface{}{
+		"session_id": sessionID,
+	})
+	if err != nil {
+		t.Fatalf("second handleWatchStop error: %v", err)
+	}
+	stopText2 := extractText(stopResult2)
+	var stopEnvelope2 map[string]interface{}
+	if err := json.Unmarshal([]byte(stopText2), &stopEnvelope2); err != nil {
+		t.Fatalf("second stop response JSON: %v\noutput: %s", err, stopText2)
+	}
+	stopStatus2, _ := stopEnvelope2["status"].(string)
+	if stopStatus2 != "error" {
+		t.Errorf("expected status 'error' on second stop, got %q", stopStatus2)
+	}
+	stopCode2, _ := stopEnvelope2["code"].(string)
+	if stopCode2 != "SESSION_NOT_FOUND" {
+		t.Errorf("expected code 'SESSION_NOT_FOUND', got %q", stopCode2)
 	}
 }
 
