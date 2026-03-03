@@ -88,6 +88,13 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "watch":
+			cmdErr = knowledge.CmdWatch(args[1:])
+			if cmdErr != nil {
+				fmt.Fprintln(os.Stderr, "bmd watch:", cmdErr)
+				os.Exit(1)
+			}
+			return
 		case "export":
 			cmdErr = knowledge.CmdExport(args[1:])
 			if cmdErr != nil {
@@ -276,10 +283,11 @@ func runImport(args []string) error {
 	return nil
 }
 
-// runServe handles `bmd serve --mcp [--headless] [--knowledge-tar <file>]`.
+// runServe handles `bmd serve --mcp [--headless] [--watch] [--knowledge-tar <file>]`.
 func runServe(args []string) error {
 	hasMCP := false
 	headless := false
+	watchEnabled := false
 	knowledgeTar := ""
 
 	for i := 0; i < len(args); i++ {
@@ -288,6 +296,8 @@ func runServe(args []string) error {
 			hasMCP = true
 		case "--headless":
 			headless = true
+		case "--watch":
+			watchEnabled = true
 		case "--knowledge-tar":
 			if i+1 < len(args) {
 				knowledgeTar = args[i+1]
@@ -329,6 +339,10 @@ func runServe(args []string) error {
 
 	if headless {
 		fmt.Fprintf(os.Stderr, "Starting headless MCP server (dir=%s)...\n", baseDir)
+	}
+
+	if watchEnabled {
+		fmt.Fprintf(os.Stderr, "Watch mode enabled: graph updates will be incremental (agents use bmd/watch_start tool).\n")
 	}
 
 	srv := bmcmp.NewServer(baseDir, dbPath)
@@ -416,13 +430,20 @@ Knowledge commands:
     Extract a knowledge archive, validate checksums, and load pre-built indexes.
     Supports local files and S3 URIs (requires AWS CLI for S3).
 
+  bmd watch [OPTIONS]
+    --dir DIR                 Directory to watch (default: .)
+    --interval-ms N           Poll interval in ms (default: 500)
+    Monitor .md changes and update indexes incrementally in real-time.
+    Prints change events to stderr. Press Ctrl+C to stop.
+
   bmd serve --mcp [OPTIONS]
     --headless                Skip TUI, MCP server only
+    --watch                   Log when watch sessions are created (informational)
     --knowledge-tar FILE      Load pre-built knowledge from tar.gz archive
     Run as a persistent MCP (Model Context Protocol) server on stdin/stdout.
     Exposes all knowledge tools as native MCP endpoints for agent integration.
     Tools: bmd/query, bmd/index, bmd/depends, bmd/components, bmd/graph,
-           bmd/context, bmd/graph_crawl
+           bmd/context, bmd/graph_crawl, bmd/watch_start, bmd/watch_poll, bmd/watch_stop
 
 Examples:
   bmd                              Browse current directory
