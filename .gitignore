@@ -25,6 +25,8 @@ bmd-test
 # Index and graph export files
 *.bmd-tree.json
 *.bmd-index.json
+.bmd-registry.json
+.bmd-llm-extractions.json
 
 # BMD artifacts directory (PageIndex trees, temp files)
 .bmd/

@@ -53,6 +53,13 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "relationships":
+			cmdErr = knowledge.CmdRelationships(args[1:])
+			if cmdErr != nil {
+				fmt.Fprintln(os.Stderr, "bmd relationships:", cmdErr)
+				os.Exit(1)
+			}
+			return
 		case "graph":
 			cmdErr = knowledge.CmdGraph(args[1:])
 			if cmdErr != nil {

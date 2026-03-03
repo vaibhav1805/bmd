@@ -37,13 +37,15 @@ type QueryArgs struct {
 
 // DependsArgs holds parsed arguments for CmdDepends.
 type DependsArgs struct {
-	Service       string
-	Dir           string
-	Transitive    bool
-	Format        string
-	Registry      bool    // --registry: augment results from .bmd-registry.json
-	MinConfidence float64 // --min-confidence: only show edges >= this confidence
-	NoHybrid      bool    // --no-hybrid: skip registry signal merging
+	Service         string
+	Dir             string
+	Transitive      bool
+	Format          string
+	Registry        bool    // --registry: augment results from .bmd-registry.json
+	MinConfidence   float64 // --min-confidence: only show edges >= this confidence
+	ShowConfidence  bool    // --show-confidence: display confidence scores in output
+	IncludeSignals  bool    // --include-signals: show signal type breakdown
+	NoHybrid        bool    // --no-hybrid: skip registry signal merging
 }
 
 // ComponentsArgs holds parsed arguments for CmdComponents.
@@ -176,6 +178,8 @@ func ParseDependsArgs(args []string) (*DependsArgs, error) {
 	fs.StringVar(&a.Format, "format", "json", "Output format (json|text|dot)")
 	fs.BoolVar(&a.Registry, "registry", false, "Augment results from .bmd-registry.json")
 	fs.Float64Var(&a.MinConfidence, "min-confidence", 0.0, "Only show dependencies with confidence >= this value (0.0–1.0)")
+	fs.BoolVar(&a.ShowConfidence, "show-confidence", false, "Display confidence scores in output")
+	fs.BoolVar(&a.IncludeSignals, "include-signals", false, "Show signal type breakdown for each relationship")
 	fs.BoolVar(&a.NoHybrid, "no-hybrid", false, "Skip registry signal merging (use base graph only)")
 
 	if err := fs.Parse(flags); err != nil {
@@ -731,6 +735,17 @@ func CmdDepends(args []string) error {
 
 	refs := sg.Dependencies[a.Service]
 
+	// Apply confidence filtering if requested.
+	if a.MinConfidence > 0 {
+		var filtered []ComponentRef
+		for _, r := range refs {
+			if r.Confidence >= a.MinConfidence {
+				filtered = append(filtered, r)
+			}
+		}
+		refs = filtered
+	}
+
 	// Detect cycles.
 	cycles := da.DetectCycles()
 
@@ -746,7 +761,7 @@ func CmdDepends(args []string) error {
 	}
 
 	if !isJSON {
-		// Text and DOT paths are unchanged.
+		// Text and DOT paths.
 		output := FormatDependencies(a.Service, refs, a.Transitive, transitivePaths, cycles, a.Format)
 		fmt.Println(output)
 		return nil
@@ -791,9 +806,10 @@ func CmdDepends(args []string) error {
 	return nil
 }
 
-// CmdComponents implements `bmd services`.  It loads the knowledge graph and
-// prints all detected services.
-func CmdComponents(args []string) error {
+// cmdComponentsLegacy implements the legacy `bmd components` behavior (no subcommand).
+// It loads the knowledge graph and prints all detected services/components.
+// Called by CmdComponents in registry_cmd.go when no subcommand is given.
+func cmdComponentsLegacy(args []string) error {
 	a, err := ParseComponentsArgs(args)
 	if err != nil {
 		return err
@@ -1290,11 +1306,13 @@ func pruneDanglingEdges(graph *Graph) {
 // isBoolFlag returns true for known boolean flag names used in our commands.
 func isBoolFlag(name string) bool {
 	boolFlags := map[string]bool{
-		"watch":      true,
-		"transitive": true,
-		"registry":   true,
-		"no-hybrid":  true,
-		"with-llm":   true,
+		"watch":           true,
+		"transitive":      true,
+		"registry":        true,
+		"no-hybrid":       true,
+		"with-llm":        true,
+		"include-signals": true,
+		"show-confidence": true,
 	}
 	return boolFlags[name]
 }
