@@ -37,7 +37,7 @@ func (s *Server) Start(ctx context.Context) error {
 		server.WithToolCapabilities(true),
 	)
 
-	// Register all 11 knowledge tools.
+	// Register all 14 knowledge tools.
 	s.registerQueryTool(mcpServer)
 	s.registerIndexTool(mcpServer)
 	s.registerDependsTool(mcpServer)
@@ -49,6 +49,10 @@ func (s *Server) Start(ctx context.Context) error {
 	s.registerWatchStartTool(mcpServer)
 	s.registerWatchPollTool(mcpServer)
 	s.registerWatchStopTool(mcpServer)
+	// Component-scoped debugging tools (Phase 22).
+	s.registerComponentListTool(mcpServer)
+	s.registerComponentGraphTool(mcpServer)
+	s.registerDebugComponentContextTool(mcpServer)
 
 	return server.ServeStdio(mcpServer)
 }
