@@ -25,7 +25,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 15: Container Deployment** - Deploy BMD as sidecar service for agent fleets with Docker, Compose, and Kubernetes integration (completed 2026-03-02)
 - [x] **Phase 16: Knowledge Versioning & Distribution** - Enable knowledge artifact versioning, checksums, Git integration, and cloud storage distribution (completed 2026-03-02)
 - [x] **Phase 17: Component Registry & Hybrid Graph Discovery** - Augment knowledge graph with text mentions and LLM-powered relationship extraction for more complete dependency detection (completed 2026-03-03)
-- [ ] **Phase 18: Live Graph Updates & Incremental Indexing** - Enable real-time graph updates as files change, with filesystem watches and incremental re-indexing for responsive agent workflows
+- [x] **Phase 18: Live Graph Updates & Incremental Indexing** - Enable real-time graph updates as files change, with filesystem watches and incremental re-indexing for responsive agent workflows (completed 2026-03-03)
 
 ## Phase Details
 
@@ -317,7 +317,7 @@ Phases execute in numeric order: 1 → 2 → 3
 | 15. Container Deployment | 3/3 | Complete   | 2026-03-02 |
 | 16. Knowledge Versioning & Distribution | 1/1 | Complete   | 2026-03-02 |
 | 17. Component Registry & Hybrid Graph Discovery | 6/6 | Complete   | 2026-03-03 |
-| 18. Live Graph Updates & Incremental Indexing | 2/4 | In Progress|  |
+| 18. Live Graph Updates & Incremental Indexing | 4/4 | Complete    | 2026-03-03 |
 
 **Current Status: 17/18 phases complete — Milestone 3 in planning**
 **Milestone 1 (Phases 1-13): Complete (5 days) — Full agent documentation platform**

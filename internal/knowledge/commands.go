@@ -400,6 +400,48 @@ func CmdIndex(args []string) error {
 		return fmt.Errorf("index: save graph: %w", err)
 	}
 
+	// Generate discovered relationship manifest.
+	edgeList := make([]*Edge, 0, len(graph.Edges))
+	for _, e := range graph.Edges {
+		edgeList = append(edgeList, e)
+	}
+
+	// Build a registry for richer signal data (non-fatal if it fails).
+	var registry *ComponentRegistry
+	registryPath := filepath.Join(absDir, RegistryFileName)
+	registry, _ = LoadRegistry(registryPath)
+
+	manifest := GenerateRelationshipManifest(edgeList, registry)
+	discoveredPath := filepath.Join(absDir, DiscoveredManifestFile)
+	if err := SaveRelationshipManifest(manifest, discoveredPath); err != nil {
+		fmt.Fprintf(os.Stderr, "  warning: save discovered manifest: %v\n", err)
+	} else {
+		fmt.Fprintf(os.Stderr, "  %d relationships written to %s\n", len(manifest.Relationships), DiscoveredManifestFile)
+	}
+
+	// Check for accepted relationships and merge into graph.
+	acceptedPath := filepath.Join(absDir, AcceptedManifestFile)
+	acceptedEdges, loadErr := LoadAcceptedRelationships(acceptedPath)
+	if loadErr != nil {
+		fmt.Fprintf(os.Stderr, "  warning: load accepted manifest: %v\n", loadErr)
+	} else if len(acceptedEdges) > 0 {
+		added := 0
+		for _, e := range acceptedEdges {
+			if err := graph.AddEdge(e); err == nil {
+				added++
+			}
+		}
+		if added > 0 {
+			fmt.Fprintf(os.Stderr, "  %d accepted relationships merged into graph\n", added)
+			// Re-save graph with accepted edges.
+			if err := db.SaveGraph(graph); err != nil {
+				fmt.Fprintf(os.Stderr, "  warning: re-save graph: %v\n", err)
+			}
+		}
+	} else if acceptedEdges == nil {
+		fmt.Fprintf(os.Stderr, "  Run 'bmd relationships-review' to review discovered relationships\n")
+	}
+
 	// Report database size.
 	stat, _ := os.Stat(dbPath)
 	var sizeStr string
@@ -1313,6 +1355,9 @@ func isBoolFlag(name string) bool {
 		"with-llm":        true,
 		"include-signals": true,
 		"show-confidence": true,
+		"accept-all":      true,
+		"reject-all":      true,
+		"edit":            true,
 	}
 	return boolFlags[name]
 }

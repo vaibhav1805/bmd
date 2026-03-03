@@ -88,6 +88,13 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "relationships-review":
+			cmdErr = knowledge.CmdRelationshipsReview(args[1:])
+			if cmdErr != nil {
+				fmt.Fprintln(os.Stderr, "bmd relationships-review:", cmdErr)
+				os.Exit(1)
+			}
+			return
 		case "watch":
 			cmdErr = knowledge.CmdWatch(args[1:])
 			if cmdErr != nil {
@@ -405,6 +412,16 @@ Knowledge commands:
     --confidence <0-1>        Filter by minimum confidence threshold
     --include-signals         Show signal breakdown (link/mention/llm)
     --format table|json|dot   Output format (default: table)
+
+  bmd relationships-review [OPTIONS]
+    --dir DIR                 Directory containing manifest files (default: .)
+    --accept-all              Auto-accept all discovered relationships
+    --reject-all              Reject all discovered relationships
+    --edit                    Open manifest in $EDITOR for manual review
+    --export-to PATH          Save accepted relationships to specific path
+    Review discovered relationships and persist review decisions.
+    Discovered relationships are written by 'bmd index' to .bmd-relationships-discovered.yaml.
+    User decisions are saved to .bmd-relationships.yaml, which is merged into the graph on index.
 
   bmd graph [SERVICE] [OPTIONS]
     --format dot|json         Output format (default: json)

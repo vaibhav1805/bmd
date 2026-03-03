@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -39,6 +41,15 @@ type RelationshipsArgs struct {
 	MinConfidence  float64 // --confidence: minimum confidence threshold
 	IncludeSignals bool    // --include-signals: show signal breakdown
 	Format         string  // "table" | "json" | "dot"
+}
+
+// ReviewArgs holds parsed arguments for CmdRelationshipsReview.
+type ReviewArgs struct {
+	Dir       string
+	AcceptAll bool   // --accept-all: auto-accept all suggestions
+	RejectAll bool   // --reject-all: reject all suggestions
+	Edit      bool   // --edit: open in $EDITOR
+	ExportTo  string // --export-to: save to specific location
 }
 
 // ─── argument parsers ─────────────────────────────────────────────────────────
@@ -146,6 +157,36 @@ func ParseRelationshipsArgs(args []string) (*RelationshipsArgs, error) {
 
 	if a.MinConfidence < 0.0 || a.MinConfidence > 1.0 {
 		return nil, fmt.Errorf("relationships: --confidence must be in [0.0, 1.0]")
+	}
+
+	return &a, nil
+}
+
+// ParseReviewArgs parses args for CmdRelationshipsReview.
+//
+// Usage: bmd relationships-review [--dir DIR] [--accept-all] [--reject-all] [--edit] [--export-to PATH]
+func ParseReviewArgs(args []string) (*ReviewArgs, error) {
+	positionals, flags := splitPositionalsAndFlags(args)
+
+	fs := flag.NewFlagSet("relationships-review", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	var a ReviewArgs
+	fs.StringVar(&a.Dir, "dir", ".", "Directory containing manifest files")
+	fs.BoolVar(&a.AcceptAll, "accept-all", false, "Auto-accept all discovered relationships")
+	fs.BoolVar(&a.RejectAll, "reject-all", false, "Reject all discovered relationships")
+	fs.BoolVar(&a.Edit, "edit", false, "Open manifest in $EDITOR for review")
+	fs.StringVar(&a.ExportTo, "export-to", "", "Save accepted relationships to a specific path")
+
+	if err := fs.Parse(flags); err != nil {
+		return nil, fmt.Errorf("relationships-review: %w", err)
+	}
+	if len(positionals) > 0 {
+		a.Dir = positionals[0]
+	}
+
+	if a.AcceptAll && a.RejectAll {
+		return nil, fmt.Errorf("relationships-review: --accept-all and --reject-all are mutually exclusive")
 	}
 
 	return &a, nil
@@ -562,6 +603,103 @@ func CmdRelationships(args []string) error {
 		return nil
 	}
 	fmt.Println(marshalContract(NewOKResponse("Relationships found", payload)))
+	return nil
+}
+
+// CmdRelationshipsReview implements `bmd relationships-review`.
+//
+// Loads discovered relationships, applies user review decisions, and saves
+// the accepted manifest.
+func CmdRelationshipsReview(args []string) error {
+	a, err := ParseReviewArgs(args)
+	if err != nil {
+		return err
+	}
+
+	absDir, err := filepath.Abs(a.Dir)
+	if err != nil {
+		return fmt.Errorf("relationships-review: resolve dir: %w", err)
+	}
+
+	discoveredPath := filepath.Join(absDir, DiscoveredManifestFile)
+	acceptedPath := filepath.Join(absDir, AcceptedManifestFile)
+
+	// Load discovered manifest.
+	discovered, err := LoadRelationshipManifest(discoveredPath)
+	if err != nil {
+		return fmt.Errorf("relationships-review: %w", err)
+	}
+	if discovered == nil {
+		fmt.Fprintf(os.Stderr, "No discovered relationships found at %s\n", discoveredPath)
+		fmt.Fprintf(os.Stderr, "Run 'bmd index' first to discover relationships.\n")
+		return nil
+	}
+
+	// Load existing user edits if present.
+	accepted, err := LoadRelationshipManifest(acceptedPath)
+	if err != nil {
+		return fmt.Errorf("relationships-review: %w", err)
+	}
+
+	// Merge previous review decisions into the discovered manifest.
+	discovered.MergeUserEdits(accepted)
+
+	// Apply bulk actions.
+	switch {
+	case a.AcceptAll:
+		discovered.AcceptAll()
+		fmt.Fprintf(os.Stderr, "Accepted all %d relationships.\n", len(discovered.Relationships))
+	case a.RejectAll:
+		discovered.RejectAll()
+		fmt.Fprintf(os.Stderr, "Rejected all %d relationships.\n", len(discovered.Relationships))
+	case a.Edit:
+		// Save to a temp file, open in editor, then load back.
+		tmpFile := acceptedPath + ".edit.yaml"
+		if err := SaveRelationshipManifest(discovered, tmpFile); err != nil {
+			return fmt.Errorf("relationships-review: save temp: %w", err)
+		}
+		defer os.Remove(tmpFile) //nolint:errcheck
+
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = "vi"
+		}
+		cmd := exec.Command(editor, tmpFile)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("relationships-review: editor failed: %w", err)
+		}
+
+		edited, err := LoadRelationshipManifest(tmpFile)
+		if err != nil {
+			return fmt.Errorf("relationships-review: reload after edit: %w", err)
+		}
+		if edited != nil {
+			discovered = edited
+		}
+	}
+
+	// Print summary.
+	summary := discovered.Summarize()
+	fmt.Fprintf(os.Stderr, "%d relationships discovered, %d reviewed, %d accepted, %d rejected, %d pending\n",
+		summary.Total, summary.Reviewed, summary.Accepted, summary.Rejected, summary.Pending)
+
+	// Save the accepted manifest.
+	savePath := acceptedPath
+	if a.ExportTo != "" {
+		savePath, err = filepath.Abs(a.ExportTo)
+		if err != nil {
+			return fmt.Errorf("relationships-review: resolve export path: %w", err)
+		}
+	}
+
+	if err := SaveRelationshipManifest(discovered, savePath); err != nil {
+		return fmt.Errorf("relationships-review: save: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Saved to %s\n", savePath)
+
 	return nil
 }
 
