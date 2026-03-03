@@ -40,3 +40,4 @@ node_modules/
 # Database
 *.db
 knowledge.db
+.planning/

@@ -384,10 +384,9 @@ def get_context(query, top=5):
     return json.loads(result.stdout)
 
 def get_dependencies(service: str, docs_dir: str, min_confidence: float = 0.7):
-    """Get service dependencies from the component registry."""
+    """Get service dependencies."""
     result = subprocess.run(
-        ["bmd", "registry", "--from", service,
-         "--min-confidence", str(min_confidence),
+        ["bmd", "depends", service,
          "--dir", docs_dir, "--format", "json"],
         capture_output=True, text=True
     )
