@@ -350,7 +350,7 @@ func CmdIndex(args []string) error {
 	start := time.Now()
 
 	// Scan markdown files.
-	docs, err := ScanDirectory(absDir)
+	docs, err := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		return fmt.Errorf("index: scan: %w", err)
 	}
@@ -574,7 +574,7 @@ func CmdQuery(args []string) error {
 	}
 
 	// Re-scan to populate content for snippets (db stores only metadata).
-	docs, scanErr := ScanDirectory(absDir)
+	docs, scanErr := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
 	if scanErr == nil {
 		// Re-build in-memory so snippets are available.
 		_ = idx.Build(docs)
@@ -1264,7 +1264,7 @@ func loadGraphAndServices(absDir string) (*Database, *Graph, []Component, error)
 	}
 
 	// Scan documents for service detection (endpoint extraction needs content).
-	docs, scanErr := ScanDirectory(absDir)
+	docs, scanErr := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
 	if scanErr != nil {
 		// Non-fatal: service detection works with empty docs.
 		docs = nil
@@ -1319,7 +1319,7 @@ func watchAndRebuild(a *IndexArgs, absDir string, initialDocs []Document) error 
 	for {
 		time.Sleep(pollDur)
 
-		docs, err := ScanDirectory(absDir)
+		docs, err := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "watch: scan error: %v\n", err)
 			continue

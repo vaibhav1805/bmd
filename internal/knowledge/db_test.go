@@ -898,7 +898,7 @@ func TestIntegration_PersistenceWorkflow(t *testing.T) {
 	}
 
 	// Build index and graph from the temp corpus.
-	docs, err := ScanDirectory(dir)
+	docs, err := ScanDirectory(dir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory: %v", err)
 	}

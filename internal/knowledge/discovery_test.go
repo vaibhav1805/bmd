@@ -176,7 +176,7 @@ func TestDiscoverRelationships_IntegrationWithTestData(t *testing.T) {
 		t.Skip("test-data/graph-test-docs not found, skipping integration test")
 	}
 
-	docs, err := ScanDirectory(testDataDir)
+	docs, err := ScanDirectory(testDataDir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory failed: %v", err)
 	}

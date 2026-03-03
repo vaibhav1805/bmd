@@ -330,7 +330,7 @@ func (s *Server) handleWatchStart(ctx context.Context, req mcpsdk.CallToolReques
 	idx := knowledge.NewIndex()
 	if db != nil {
 		// Scan to populate index for incremental-update hash comparison.
-		if docs, scanErr := knowledge.ScanDirectory(absDir); scanErr == nil {
+		if docs, scanErr := knowledge.ScanDirectory(absDir, knowledge.ScanConfig{UseDefaultIgnores: true}); scanErr == nil {
 			_ = idx.Build(docs)
 		}
 	}

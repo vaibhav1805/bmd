@@ -115,7 +115,7 @@ func CmdExport(args []string) error {
 	}
 
 	// Step 2: Scan markdown files.
-	docs, err := ScanDirectory(absFrom)
+	docs, err := ScanDirectory(absFrom, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		return fmt.Errorf("export: scan: %w", err)
 	}

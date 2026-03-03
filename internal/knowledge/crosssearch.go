@@ -206,7 +206,7 @@ func SearchAllDocuments(rootPath, query string, topK int) ([]SearchResult, error
 	}
 
 	// Re-scan to populate content for snippet extraction.
-	docs, scanErr := ScanDirectory(rootPath)
+	docs, scanErr := ScanDirectory(rootPath, ScanConfig{UseDefaultIgnores: true})
 	if scanErr == nil && len(docs) > 0 {
 		_ = idx.Build(docs)
 	}

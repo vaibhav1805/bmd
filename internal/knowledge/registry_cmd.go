@@ -226,7 +226,7 @@ func loadOrBuildRegistry(absDir string) (*ComponentRegistry, error) {
 	}
 	defer db.Close() //nolint:errcheck
 
-	docs, _ := ScanDirectory(absDir)
+	docs, _ := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
 	reg = NewComponentRegistry()
 	reg.InitFromGraph(graph, docs)
 	return reg, nil

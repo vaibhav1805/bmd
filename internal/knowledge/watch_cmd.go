@@ -47,7 +47,7 @@ func CmdWatch(args []string) error {
 	fmt.Fprintln(os.Stderr, "Press Ctrl+C to stop.")
 
 	// Load or build index and graph.
-	docs, scanErr := ScanDirectory(absDir)
+	docs, scanErr := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
 	if scanErr != nil {
 		return fmt.Errorf("watch: scan: %w", scanErr)
 	}

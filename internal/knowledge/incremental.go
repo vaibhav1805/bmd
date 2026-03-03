@@ -225,7 +225,7 @@ func (u *IncrementalUpdater) handleCreatedOrModified(evt WatchEvent) {
 // rebuildRegistry re-derives the ComponentRegistry from the current graph and
 // the full directory scan, then persists the updated registry to disk.
 func rebuildRegistry(u *IncrementalUpdater) {
-	docs, err := ScanDirectory(u.dir)
+	docs, err := ScanDirectory(u.dir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		return
 	}

@@ -489,7 +489,7 @@ func TestNERRelationships_WithTestData(t *testing.T) {
 		t.Skip("test-data directory not found")
 	}
 
-	docs, err := ScanDirectory(testDir)
+	docs, err := ScanDirectory(testDir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory failed: %v", err)
 	}

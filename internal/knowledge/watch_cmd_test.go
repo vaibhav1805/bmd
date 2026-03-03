@@ -79,7 +79,7 @@ func TestCmdWatch_ValidDirScansWithoutError(t *testing.T) {
 	}
 
 	// Exercise the same setup logic used by CmdWatch.
-	docs, err := ScanDirectory(dir)
+	docs, err := ScanDirectory(dir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory: %v", err)
 	}

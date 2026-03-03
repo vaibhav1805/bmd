@@ -32,9 +32,9 @@ func testDataDir(t *testing.T) string {
 func loadTestDocs(t *testing.T) (string, []Document) {
 	t.Helper()
 	dir := testDataDir(t)
-	docs, err := ScanDirectory(dir)
+	docs, err := ScanDirectory(dir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
-		t.Fatalf("ScanDirectory(%s): %v", dir, err)
+		t.Fatalf("ScanDirectory(%s, ScanConfig{UseDefaultIgnores: true}): %v", dir, err)
 	}
 	return dir, docs
 }
@@ -732,7 +732,7 @@ func BenchmarkScanDirectory_TestData(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = ScanDirectory(dir)
+		_, _ = ScanDirectory(dir, ScanConfig{UseDefaultIgnores: true})
 	}
 }
 
@@ -744,7 +744,7 @@ func BenchmarkGraphBuild_TestData(b *testing.B) {
 		b.Skipf("test-data not found: %v", err)
 	}
 
-	docs, err := ScanDirectory(dir)
+	docs, err := ScanDirectory(dir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		b.Fatalf("ScanDirectory: %v", err)
 	}
@@ -764,7 +764,7 @@ func BenchmarkRegistryInit_TestData(b *testing.B) {
 		b.Skipf("test-data not found: %v", err)
 	}
 
-	docs, err := ScanDirectory(dir)
+	docs, err := ScanDirectory(dir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		b.Fatalf("ScanDirectory: %v", err)
 	}
@@ -786,7 +786,7 @@ func BenchmarkMentionExtraction_TestData(b *testing.B) {
 		b.Skipf("test-data not found: %v", err)
 	}
 
-	docs, err := ScanDirectory(dir)
+	docs, err := ScanDirectory(dir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		b.Fatalf("ScanDirectory: %v", err)
 	}
@@ -809,7 +809,7 @@ func BenchmarkHybridBuilder_TestData(b *testing.B) {
 		b.Skipf("test-data not found: %v", err)
 	}
 
-	docs, err := ScanDirectory(dir)
+	docs, err := ScanDirectory(dir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		b.Fatalf("ScanDirectory: %v", err)
 	}

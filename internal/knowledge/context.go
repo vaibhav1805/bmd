@@ -204,7 +204,7 @@ func CmdContext(args []string) error {
 		}
 
 		// Re-scan to populate ContentPreview (DB stores only metadata).
-		if docs, scanErr := ScanDirectory(absDir); scanErr == nil {
+		if docs, scanErr := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true}); scanErr == nil {
 			_ = idx.Build(docs)
 		}
 

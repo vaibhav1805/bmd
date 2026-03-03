@@ -28,7 +28,7 @@ func buildTestDir(t *testing.T, files map[string]string) string {
 // ComponentRegistry from the discovered documents.
 func buildIndexAndGraph(t *testing.T, dir string) (*Index, *Graph, *ComponentRegistry) {
 	t.Helper()
-	docs, err := ScanDirectory(dir)
+	docs, err := ScanDirectory(dir, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory: %v", err)
 	}

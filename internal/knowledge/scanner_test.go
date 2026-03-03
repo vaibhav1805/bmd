@@ -31,7 +31,7 @@ func TestScanDirectory_BasicMarkdownFiles(t *testing.T) {
 		"not-md.txt":    "not markdown",
 	})
 
-	docs, err := ScanDirectory(root)
+	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestScanDirectory_SkipsHiddenDirectories(t *testing.T) {
 		".dotfile.md":      "# Dot file", // hidden file — should still be scanned
 	})
 
-	docs, err := ScanDirectory(root)
+	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestScanDirectory_SkipsKnownVendorDirs(t *testing.T) {
 		"node_modules/pkg.md":   "# Pkg",
 	})
 
-	docs, err := ScanDirectory(root)
+	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestScanDirectory_SkipsKnownVendorDirs(t *testing.T) {
 
 func TestScanDirectory_EmptyDirectory(t *testing.T) {
 	root := t.TempDir()
-	docs, err := ScanDirectory(root)
+	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory on empty dir: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestScanDirectory_DeepNesting(t *testing.T) {
 	root := createTestTree(t, map[string]string{
 		"l1/l2/l3/l4/l5/l6/deep.md": "# Deep",
 	})
-	docs, err := ScanDirectory(root)
+	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestScanDirectory_DeepNesting(t *testing.T) {
 }
 
 func TestScanDirectory_NonExistentRoot(t *testing.T) {
-	_, err := ScanDirectory("/nonexistent/path/that/does/not/exist")
+	_, err := ScanDirectory("/nonexistent/path/that/does/not/exist", ScanConfig{UseDefaultIgnores: true})
 	if err == nil {
 		t.Fatal("expected error for nonexistent root")
 	}
@@ -141,7 +141,7 @@ func TestScanDirectory_RootIsFile(t *testing.T) {
 	if err := os.WriteFile(f, []byte("content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := ScanDirectory(f)
+	_, err := ScanDirectory(f, ScanConfig{UseDefaultIgnores: true})
 	if err == nil {
 		t.Fatal("expected error when root is a file")
 	}
@@ -156,7 +156,7 @@ func TestScanDirectory_SortedByRelPath(t *testing.T) {
 		"a/z.md": "# AZ",
 	})
 
-	docs, err := ScanDirectory(root)
+	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestScanDirectory_PerformanceBaseline(t *testing.T) {
 		}
 	}
 
-	docs, err := ScanDirectory(root)
+	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory: %v", err)
 	}

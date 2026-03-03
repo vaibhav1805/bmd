@@ -194,7 +194,7 @@ func TestIndex_IsStale_NoChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	docs, err := ScanDirectory(root)
+	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -27,9 +27,9 @@ func TestIntegration_RealCorpus(t *testing.T) {
 
 	// --- Scan ---
 	scanStart := time.Now()
-	docs, err := ScanDirectory(root)
+	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
-		t.Fatalf("ScanDirectory(%q): %v", root, err)
+		t.Fatalf("ScanDirectory(%q, ScanConfig{UseDefaultIgnores: true}): %v", root, err)
 	}
 	scanDur := time.Since(scanStart)
 	t.Logf("Scanned %d markdown files in %v", len(docs), scanDur)

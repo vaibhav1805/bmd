@@ -30,7 +30,7 @@ func TestGraphIntegration_RealCorpus(t *testing.T) {
 
 	t.Logf("Scanning root: %s", root)
 
-	docs, err := ScanDirectory(root)
+	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
 	if err != nil {
 		t.Fatalf("ScanDirectory: %v", err)
 	}
