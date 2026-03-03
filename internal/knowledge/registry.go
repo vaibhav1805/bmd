@@ -290,6 +290,31 @@ func (r *ComponentRegistry) RelationshipCount() int { return len(r.Relationships
 //  3. Extract text mention relationships from document content (SignalMention).
 //  4. Extract LLM-inferred relationships from PageIndex (SignalLLM) — optional.
 //  5. Aggregate all signals.
+// InitFromGraphWithDir is like InitFromGraph but also loads components.yaml from
+// the specified directory (if it exists) to override auto-detected components.
+// When dir is empty, behaves like InitFromGraph (auto-detection only).
+func (r *ComponentRegistry) InitFromGraphWithDir(g *Graph, docs []Document, dir string) {
+	r.InitFromGraphWithDirAndLLM(g, docs, dir, QueryLLMConfig{})
+}
+
+// InitFromGraphWithDirAndLLM combines component detection with optional components.yaml config
+// and LLM extraction. When dir is empty, skips components.yaml loading.
+func (r *ComponentRegistry) InitFromGraphWithDirAndLLM(g *Graph, docs []Document, dir string, llmCfg QueryLLMConfig) {
+	// Load optional components.yaml config from directory
+	var cfg *ComponentConfig
+	if dir != "" {
+		cfgPath := filepath.Join(dir, "components.yaml")
+		var cfgErr error
+		cfg, cfgErr = LoadComponentConfig(cfgPath)
+		if cfgErr != nil {
+			// Non-fatal: proceed with auto-detection
+			cfg = nil
+		}
+	}
+
+	r.InitFromGraphWithLLMAndConfig(g, docs, llmCfg, cfg)
+}
+
 func (r *ComponentRegistry) InitFromGraph(g *Graph, docs []Document) {
 	r.InitFromGraphWithLLM(g, docs, QueryLLMConfig{})
 }
@@ -300,14 +325,43 @@ func (r *ComponentRegistry) InitFromGraph(g *Graph, docs []Document) {
 // When llmCfg.Enabled is false (the zero value), this is identical to
 // InitFromGraph with no LLM overhead.
 func (r *ComponentRegistry) InitFromGraphWithLLM(g *Graph, docs []Document, llmCfg QueryLLMConfig) {
+	r.InitFromGraphWithLLMAndConfig(g, docs, llmCfg, nil)
+}
+
+// InitFromGraphWithLLMAndConfig populates the registry with optional components.yaml config.
+// When cfg is nil, uses auto-detection heuristics.
+func (r *ComponentRegistry) InitFromGraphWithLLMAndConfig(g *Graph, docs []Document, llmCfg QueryLLMConfig, cfg *ComponentConfig) {
 	// Build doc lookup for type inference.
 	docByID := make(map[string]*Document, len(docs))
 	for i := range docs {
 		docByID[docs[i].ID] = &docs[i]
 	}
 
-	// Step 1: Register each graph node as a component.
+	// Step 0: Detect components (respecting optional components.yaml config)
+	var detectedComponentMap map[string]bool // nodeID -> is component
+	if len(docs) > 0 {
+		// Create detector with optional config
+		detector := NewComponentDetector()
+		if cfg != nil {
+			detector = NewComponentDetectorWithConfig(cfg)
+		}
+		components := detector.DetectComponents(g, docs)
+
+		// Build set of detected component node IDs
+		detectedComponentMap = make(map[string]bool, len(components))
+		for _, comp := range components {
+			detectedComponentMap[comp.File] = true
+		}
+	}
+
+	// Step 1: Register detected components only (if components.yaml present, only those; otherwise auto-detected)
 	for id, node := range g.Nodes {
+		// When components.yaml is present (cfg != nil), only register detected components
+		// When absent (cfg == nil), for backward compat, register all nodes
+		if cfg != nil && !detectedComponentMap[id] {
+			continue // Skip non-detected components when config is present
+		}
+
 		compType := inferComponentType(node.ID)
 		comp := &RegistryComponent{
 			ID:         nodeToRegistryID(node.ID),
@@ -335,8 +389,12 @@ func (r *ComponentRegistry) InitFromGraphWithLLM(g *Graph, docs []Document, llmC
 	}
 
 	// Step 3: Extract text mentions using the component detector results.
-	if len(docs) > 0 {
+	if len(docs) > 0 && len(detectedComponentMap) > 0 {
+		// Create detector with optional config
 		detector := NewComponentDetector()
+		if cfg != nil {
+			detector = NewComponentDetectorWithConfig(cfg)
+		}
 		components := detector.DetectComponents(g, docs)
 		if len(components) > 0 {
 			mentions := ExtractMentionsFromDocuments(docs, components)

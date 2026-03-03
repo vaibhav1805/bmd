@@ -382,8 +382,12 @@ func CmdIndex(args []string) error {
 	fmt.Fprintf(os.Stderr, "  %d nodes in knowledge graph\n", graph.NodeCount())
 	fmt.Fprintf(os.Stderr, "  %d edges (relationships)\n", graph.EdgeCount())
 
-	// Detect services.
+	// Detect services (with optional components.yaml config).
 	sd := NewComponentDetector()
+	cfgPath := filepath.Join(absDir, "components.yaml")
+	if cfg, cfgErr := LoadComponentConfig(cfgPath); cfgErr == nil && cfg != nil {
+		sd = NewComponentDetectorWithConfig(cfg)
+	}
 	services := sd.DetectComponents(graph, docs)
 	fmt.Fprintf(os.Stderr, "  %d microservices detected\n", len(services))
 
@@ -432,8 +436,9 @@ func CmdIndex(args []string) error {
 	}
 
 	// Create and save registry for subsequent commands to reuse index without rebuilding.
+	// Pass absDir so registry can load components.yaml if present
 	reg := NewComponentRegistry()
-	reg.InitFromGraph(graph, docs)
+	reg.InitFromGraphWithDir(graph, docs, absDir)
 	if err := SaveRegistry(reg, registryPath); err != nil {
 		fmt.Fprintf(os.Stderr, "  warning: save registry: %v\n", err)
 	} else {

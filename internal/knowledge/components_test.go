@@ -400,6 +400,58 @@ func TestLoadComponentConfig_ConfiguredServicesHighConfidence(t *testing.T) {
 	}
 }
 
+// TestComponentConfig_TakesPrecedenceDisablesAuto verifies that when components.yaml
+// is present, it defines ONLY those components and auto-detection is disabled.
+func TestComponentConfig_TakesPrecedenceDisablesAuto(t *testing.T) {
+	// Create a config with only "gateway"
+	content := `components:
+  - id: gateway
+    patterns: ["gateway"]
+    type: microservice
+`
+	p := writeTemp(t, content)
+	cfg, err := LoadComponentConfig(p)
+	if err != nil || cfg == nil {
+		t.Fatalf("LoadComponentConfig: %v", err)
+	}
+
+	sd := NewComponentDetectorWithConfig(cfg)
+
+	// Build a graph with:
+	// - api-gateway.md (matches config)
+	// - cache-service.md (auto-detectable by filename "service", but NOT in config)
+	// - high-traffic.md (auto-detectable by high in-degree, but NOT in config)
+	g := NewGraph()
+	_ = g.AddNode(&Node{ID: "api-gateway.md", Title: "API Gateway", Type: "document"})
+	_ = g.AddNode(&Node{ID: "cache-service.md", Title: "Cache Service", Type: "document"})
+	_ = g.AddNode(&Node{ID: "high-traffic.md", Title: "Hub", Type: "document"})
+
+	// Create edges to make high-traffic.md have high in-degree (>= 3)
+	for _, src := range []string{"api-gateway.md", "cache-service.md", "cache-service.md"} {
+		e, _ := NewEdge(src, "high-traffic.md", EdgeCalls, 0.9, "calls hub")
+		_ = g.AddEdge(e)
+	}
+
+	services := sd.DetectComponents(g, nil)
+
+	// With components.yaml present, ONLY "gateway" should be detected
+	// Auto-detected "cache-service" and "high-traffic" should NOT appear
+	if len(services) != 1 {
+		t.Fatalf("expected 1 component (gateway only), got %d components", len(services))
+	}
+
+	if services[0].ID != "gateway" {
+		t.Errorf("component ID=%q, want gateway", services[0].ID)
+	}
+
+	// Verify no auto-detected components snuck in
+	for _, svc := range services {
+		if svc.ID == "cache-service" || svc.ID == "high-traffic" {
+			t.Errorf("auto-detected component %q should not appear when config is present", svc.ID)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // DependencyAnalyzer — BuildServiceGraph tests
 // ---------------------------------------------------------------------------

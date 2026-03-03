@@ -89,22 +89,27 @@ const ConfidenceConfigured float64 = 1.0
 const inDegreeThreshold = 3
 
 // ComponentDetector identifies components from a knowledge graph using
-// multiple heuristics.  An optional ComponentConfig can be loaded from a
-// components.yaml file to supplement or override auto-detection.
+// either auto-detection heuristics or explicit configuration.
+//
+// Behavior:
+//   - When ComponentConfig is present: use ONLY configured components (auto-detection disabled)
+//   - When ComponentConfig is absent: use heuristics (filename, heading, in-degree)
 type ComponentDetector struct {
 	// config holds the optional user-supplied component configuration.
-	// nil means no config file was loaded.
+	// If present, it disables auto-detection entirely.
+	// nil means no config file was loaded (auto-detection enabled).
 	config *ComponentConfig
 }
 
-// NewComponentDetector creates a ComponentDetector with no configuration.
-// Call LoadComponentConfig separately if you want to use a components.yaml file.
+// NewComponentDetector creates a ComponentDetector with auto-detection enabled.
+// Call LoadComponentConfig separately if you want to load a components.yaml file.
 func NewComponentDetector() *ComponentDetector {
 	return &ComponentDetector{}
 }
 
 // NewComponentDetectorWithConfig creates a ComponentDetector using the supplied
-// configuration.  Configured components override auto-detection results.
+// configuration. When config is present, auto-detection is disabled and ONLY
+// configured components are returned.
 func NewComponentDetectorWithConfig(cfg *ComponentConfig) *ComponentDetector {
 	return &ComponentDetector{config: cfg}
 }
@@ -112,11 +117,15 @@ func NewComponentDetectorWithConfig(cfg *ComponentConfig) *ComponentDetector {
 // DetectComponents identifies all components in graph and returns them ranked
 // by confidence score (highest first).
 //
-// The detection pipeline:
-//  1. Apply per-node heuristics (filename, heading, in-degree) to collect
-//     component candidates.
-//  2. Merge with configured components (if a ComponentConfig is present).
-//  3. Rank by confidence score.
+// Detection behavior:
+//  - When components.yaml is present: use ONLY configured components (auto-detection disabled)
+//  - When components.yaml is absent: apply per-node heuristics (filename, heading, in-degree)
+//
+// Pipeline:
+//  1. If config present: match configured components to graph nodes
+//  2. If config absent: apply heuristics (filename, heading, in-degree)
+//  3. Extract endpoints for all matched components
+//  4. Rank by confidence score
 func (cd *ComponentDetector) DetectComponents(graph *Graph, docs []Document) []Component {
 	// Build a lookup from node ID to Document for endpoint extraction.
 	docByID := make(map[string]*Document, len(docs))
@@ -124,6 +133,53 @@ func (cd *ComponentDetector) DetectComponents(graph *Graph, docs []Document) []C
 		docByID[docs[i].ID] = &docs[i]
 	}
 
+	// If components.yaml is present, use ONLY configured components
+	if cd.config != nil {
+		return cd.detectConfiguredComponents(graph, docByID)
+	}
+
+	// Otherwise, use auto-detection heuristics
+	return cd.detectAutoComponents(graph, docByID)
+}
+
+// detectConfiguredComponents matches configured component patterns to graph nodes.
+// Returns ONLY the configured components (auto-detection disabled).
+func (cd *ComponentDetector) detectConfiguredComponents(graph *Graph, docByID map[string]*Document) []Component {
+	candidateMap := make(map[string]Component)
+
+	// For each configured component, find matching nodes
+	for _, entry := range cd.config.Components {
+		for id, node := range graph.Nodes {
+			if matchesPatterns(node.ID, node.Title, entry.Patterns) {
+				comp := Component{
+					ID:         entry.ID,
+					Name:       node.Title,
+					File:       id,
+					Confidence: ConfidenceConfigured,
+				}
+
+				// Extract endpoints if we have the document.
+				if doc, ok := docByID[id]; ok {
+					comp.Endpoints = cd.DetectEndpoints(doc)
+				}
+
+				candidateMap[id] = comp
+				break // Move to next configured entry
+			}
+		}
+	}
+
+	// Collect and rank candidates.
+	components := make([]Component, 0, len(candidateMap))
+	for _, comp := range candidateMap {
+		components = append(components, comp)
+	}
+	return cd.RankComponents(components)
+}
+
+// detectAutoComponents applies heuristics to discover components.
+// Used when components.yaml is absent (auto-detection enabled).
+func (cd *ComponentDetector) detectAutoComponents(graph *Graph, docByID map[string]*Document) []Component {
 	// Track in-degree for high-traffic heuristic.
 	inDegree := make(map[string]int, graph.NodeCount())
 	for _, edges := range graph.BySource {
@@ -160,26 +216,6 @@ func (cd *ComponentDetector) DetectComponents(graph *Graph, docs []Document) []C
 
 		comp.Confidence = confidence
 		candidateMap[id] = comp
-	}
-
-	// Merge with configured components (override auto-detected entries).
-	if cd.config != nil {
-		for id, node := range graph.Nodes {
-			for _, entry := range cd.config.Components {
-				if matchesPatterns(node.ID, node.Title, entry.Patterns) {
-					existing := candidateMap[id]
-					existing.ID = entry.ID
-					existing.Name = node.Title
-					existing.File = id
-					existing.Confidence = ConfidenceConfigured
-					if doc, ok := docByID[id]; ok {
-						existing.Endpoints = cd.DetectEndpoints(doc)
-					}
-					candidateMap[id] = existing
-					break
-				}
-			}
-		}
 	}
 
 	// Collect and rank candidates.
