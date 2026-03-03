@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 
 ## Current Position
 
-Phase: 17 of 18 (Component Registry) — COMPLETE ✓
-Plan: 6 of 6 complete (all plans executed and verified)
-Status: VERIFIED — Hybrid graph discovery system with confidence-weighted signals (links + mentions + LLM)
-Last activity: 2026-03-03 07:59Z — Phase 17 verification passed (10/10 must-haves), registry command wired
+Phase: 18 of 18 (Live Graph Updates) — IN PROGRESS
+Plan: 1 of 3 complete
+Status: IN PROGRESS — FileWatcher polling-based .md change detection shipped (WATCH-01 complete)
+Last activity: 2026-03-03 09:55Z — Phase 18 Plan 01 complete, FileWatcher implemented and tested
 
 Previous completion:
   - Phase 17 (Component Registry): All 6 plans complete ✓
@@ -26,7 +26,7 @@ Previous completion:
   - Phase 8 (Directory Browser): All 6 plans complete ✓
   - Phases 1-7: All complete (48+ plans, production-ready) ✓
 
-Progress: [████████████████████████] 17 OF 18 PHASES COMPLETE — Component Registry hybrid graph discovery shipped
+Progress: [████████████████████████] 17 OF 18 PHASES COMPLETE — Phase 18 in progress (1/3 plans done)
 
 ## Performance Metrics
 
@@ -83,6 +83,7 @@ Progress: [███████████████████████
 | Phase 17 P04 | 66 | 3 tasks | 4 files |
 | Phase 17 P05 | 58 | 3 tasks | 6 files |
 | Phase 17 P06 | 60 | 4 tasks | 6 files |
+| Phase 18-live-graph-updates P01 | 2 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -249,6 +250,11 @@ Recent decisions affecting current work:
 - [Phase 17]: Integration tests use stdout capture for Cmd* functions (write to stdout)
 - [Phase 17]: Pre-existing tui/nav/renderer test failures are out of scope (confirmed pre-date Phase 17)
 - [Phase 17]: Registry documentation: REGISTRY.md as standalone reference, AGENT.md for integration examples
+- [Phase 18-01]: Polling over fsnotify for FileWatcher — no external dependency added, 500ms interval meets latency requirement
+- [Phase 18-01]: sync.Once for FileWatcher.Stop() idempotency — zero-cost abstraction, prevents double-close panic
+- [Phase 18-01]: Silent initial snapshot on Start() — pre-existing files don't fire spurious Created events
+- [Phase 18-01]: Non-blocking send on Events channel — drop event on full buffer rather than stall polling goroutine
+- [Phase 18-01]: hiddenDirs reuse in watcher.go — same package reference to scanner.go's map for consistent skip behaviour
 
 ### Pending Todos
 
@@ -260,9 +266,9 @@ None.
 
 ## Session Continuity
 
-Current session: 2026-03-02 (06:45Z) — Phase 14-15 Export, Import & Container Deployment
-Status: Phases 1-16 COMPLETE
-Completed: Phase 14 export/import/headless + Phase 15 Docker/Compose/K8s deployment (7 commits, 28+ tests)
+Current session: 2026-03-03 (09:53Z) — Phase 18 Live Graph Updates
+Status: Phase 18 in progress — Plan 01 (FileWatcher) complete
+Stopped at: Completed 18-01-PLAN.md — FileWatcher with polling-based .md change detection, 7 tests passing, WATCH-01 satisfied
 
 Previous session: 2026-03-01 (22:09Z) — Sixel Graphics Enhancement (YOLO Mode)
 Completed: Full Sixel graphics protocol implementation with ImageMagick integration

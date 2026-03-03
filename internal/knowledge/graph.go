@@ -181,6 +181,30 @@ func (g *Graph) NodeCount() int { return len(g.Nodes) }
 // EdgeCount returns the number of edges currently in the graph.
 func (g *Graph) EdgeCount() int { return len(g.Edges) }
 
+// RemoveNode deletes the node with the given id from the graph and removes all
+// edges where the node is either the source or the target. Both the Edges map
+// and the BySource/ByTarget adjacency indices are updated atomically.
+//
+// It is a no-op if no node with that ID exists.
+func (g *Graph) RemoveNode(id string) {
+	if _, ok := g.Nodes[id]; !ok {
+		return
+	}
+	delete(g.Nodes, id)
+
+	// Collect edge IDs to remove to avoid mutating the map during iteration.
+	var toRemove []string
+	for edgeID, e := range g.Edges {
+		if e.Source == id || e.Target == id {
+			toRemove = append(toRemove, edgeID)
+		}
+	}
+
+	for _, edgeID := range toRemove {
+		_ = g.RemoveEdge(edgeID)
+	}
+}
+
 // --- graph traversal algorithms (Task 6) ------------------------------------
 
 // TransitiveDeps returns the IDs of all nodes reachable from nodeID by
