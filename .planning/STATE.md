@@ -78,6 +78,7 @@ Progress: [███████████████████████
 | Phase 12 P01 | 3 | 4 tasks | 4 files |
 | Phase 13 P04 | 16 | 3 tasks | 5 files |
 | Phase 17 P01 | 309 | 3 tasks | 4 files |
+| Phase 17 P03 | 2366 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -233,6 +234,8 @@ Recent decisions affecting current work:
 - [Phase 17]: CmdRegistryCmd falls back to graph bootstrap when no .bmd-registry.json exists
 - [Phase 17]: Pattern library approach: match known component names + standard prose patterns with confidence 0.6-0.75 for text mentions
 - [Phase 17]: isExactMatch allows name-service/name-api suffix variants for flexible component matching without false positives
+- [Phase 17]: LLMRelationship struct with FromFile/ToComponent/Confidence/Reasoning/Evidence — parallel extraction with sync.WaitGroup and cache-first strategy
+- [Phase 17]: InitFromGraphWithLLM is additive (InitFromGraph delegates); --with-llm opt-in flag for LLM extraction; graceful degradation on missing PageIndex
 
 ### Pending Todos
 
