@@ -1,179 +1,43 @@
 # Glossary
 
-Technical terms and definitions - standalone reference document with no links to other files.
+Common terms and definitions used throughout the documentation.
 
-## A
+## API
 
-**API** - Application Programming Interface. A set of protocols and tools for building software applications.
+Application Programming Interface - A set of rules and protocols for building software applications.
 
-**Authentication** - The process of verifying the identity of a user or system.
+## JWT
 
-**Authorization** - The process of determining what an authenticated user is allowed to do.
+JSON Web Token - A compact, URL-safe means of representing claims between two parties.
 
-**Availability** - The degree to which a system is operational and accessible when needed.
+## Microservice
 
-## B
+A small, independent service that performs a specific business capability and communicates with other services.
 
-**Backend** - The server-side application logic and databases.
+## Repository Pattern
 
-**Bandwidth** - The maximum rate of data transfer across a network connection.
+A design pattern that abstracts data access logic from business logic.
 
-**Batch Processing** - Processing data in groups rather than individually.
+## RBAC
 
-**Bottleneck** - A point in a system that limits overall performance.
+Role-Based Access Control - A method of restricting system access based on user roles.
 
-## C
+## REST
 
-**Cache** - A component that stores frequently accessed data for quick retrieval.
+Representational State Transfer - An architectural style for designing networked applications.
 
-**Cluster** - A group of computers working together as a single system.
+## Schema
 
-**Concurrency** - Multiple processes or threads executing simultaneously.
+The structure of a database, including tables, columns, and relationships.
 
-**Consistency** - The property that all copies of data are the same.
+## Token
 
-## D
+A cryptographic credential used to authenticate API requests.
 
-**Database** - Organized collection of structured data.
+## UUID
 
-**Deployment** - Process of installing and running software in a production environment.
+Universally Unique Identifier - A 128-bit value used to uniquely identify resources.
 
-**Distributed System** - Multiple independent computers working together.
+## Webhook
 
-**Durability** - Guarantee that committed data survives failures.
-
-## E
-
-**Endpoint** - A URL or resource that an API exposes.
-
-**Encryption** - Encoding data so it can only be read with the correct key.
-
-**Event-Driven** - Architecture where components react to events.
-
-## F
-
-**Failover** - Automatic switching to a backup system upon failure.
-
-**Firewall** - Network security system that monitors and controls traffic.
-
-**Frontend** - Client-side application logic and user interface.
-
-## G
-
-**Gateway** - A system that connects different networks or applications.
-
-**Graph** - A data structure with nodes and edges representing relationships.
-
-## H
-
-**Hash** - Fixed-size output of a mathematical function on input data.
-
-**High Availability** - System designed to operate continuously without downtime.
-
-## I
-
-**Idempotent** - Operation that produces the same result if executed multiple times.
-
-**Index** - Data structure that speeds up data retrieval operations.
-
-**Isolation** - Property ensuring concurrent transactions don't interfere.
-
-## J
-
-**JSON** - JavaScript Object Notation. Lightweight data exchange format.
-
-**JWT** - JSON Web Token. Compact representation of claims.
-
-## K
-
-**Key-Value Store** - Database that stores data as key-value pairs.
-
-## L
-
-**Latency** - Delay between request and response.
-
-**Load Balancing** - Distributing requests across multiple servers.
-
-**Logging** - Recording events and information for analysis.
-
-## M
-
-**Microservices** - Architecture style with small, independent services.
-
-**Middleware** - Software that connects different applications or services.
-
-**Monitoring** - Continuous observation of system performance.
-
-## N
-
-**NoSQL** - Non-relational database system.
-
-**Node** - Individual computer or component in a distributed system.
-
-## O
-
-**Operation** - A single unit of work performed by the system.
-
-## P
-
-**Partition Tolerance** - System continues operating despite network partitions.
-
-**Performance** - Measure of system responsiveness and throughput.
-
-**Protocol** - Set of rules for data communication.
-
-## Q
-
-**Query** - Request for data from a database.
-
-**Queue** - Data structure for storing items in order.
-
-## R
-
-**Replication** - Maintaining copies of data on multiple systems.
-
-**REST** - Representational State Transfer. API architectural style.
-
-**Retry** - Automatic re-attempt after failure.
-
-## S
-
-**Scalability** - Ability to handle increased load or growth.
-
-**Schema** - Structure and organization of data in a database.
-
-**Service** - A self-contained unit providing specific functionality.
-
-**SLA** - Service Level Agreement. Contract defining service quality.
-
-**Synchronization** - Coordinating activities between systems or components.
-
-## T
-
-**Throughput** - Amount of data processed in a given time period.
-
-**Transaction** - A sequence of operations that completes atomically.
-
-**Timeout** - Maximum time to wait for an operation to complete.
-
-## U
-
-**Uptime** - Percentage of time a system is available and operational.
-
-## V
-
-**Validation** - Checking that data meets required criteria.
-
-**Version Control** - System for tracking changes to code and files.
-
-## W
-
-**Webhook** - HTTP callback triggered by specific events.
-
-## X
-
-**XML** - Extensible Markup Language. Markup format for structured data.
-
-## Z
-
-**Zero-Downtime** - Deployment or update without service interruption.
+An HTTP callback that is triggered by specific events.

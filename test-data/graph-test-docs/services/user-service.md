@@ -10,23 +10,15 @@ The User Service manages:
 - Role-based access control
 - User data persistence
 
-## Related Services
+## Key Responsibilities
 
-- [Order Service](order-service.md) - Requires user authentication
-- [Payment Service](payment-service.md) - Validates user payment methods
-- [Database Design](../database.md) - Stores user records in `users` table
+1. User Registration - Create new user accounts
+2. Authentication - Verify credentials and issue tokens
+3. Authorization - Check user permissions
+4. Profile Management - Update user information
+5. Password Reset - Handle forgot password flows
 
-## API Endpoints
-
-For authentication endpoints, see [API Reference](../api/endpoints.md).
-
-## Configuration
-
-User service configuration is detailed in [setup guide](../config/setup.md).
-
-## Data Model
-
-The user entity is defined in [database schema](../database.md).
+## User Entity
 
 ```
 User
@@ -37,14 +29,35 @@ User
 └── roles
 ```
 
-## Security
+## Security Measures
 
 - Passwords are hashed using bcrypt
 - JWT tokens expire after 24 hours
 - All requests to other services must include valid authentication token
-- See [Configuration Guide](../config/setup.md) for security settings
+- Rate limiting on authentication endpoints
+- Account lockout after failed login attempts
 
-## Integration
+## API Endpoints
 
-- [Order Service](order-service.md) calls user service to validate orders
-- [Payment Service](payment-service.md) requires authenticated users
+This service exposes the following REST endpoints:
+- POST /users - Create new user
+- GET /users/{id} - Get user details
+- PUT /users/{id} - Update user
+- DELETE /users/{id} - Delete user
+- POST /auth/login - Login user
+- POST /auth/register - Register new user
+
+## Integration Points
+
+This service is called by:
+- Order Service - To validate user before creating orders
+- Payment Service - To verify user payment methods
+- Other services - For authentication verification
+
+## Configuration
+
+Service-specific configuration includes:
+- JWT expiration time
+- Password complexity requirements
+- Maximum login attempts
+- Session timeout values

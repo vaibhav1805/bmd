@@ -1,31 +1,25 @@
 # Architecture Overview
 
-The system is built using a microservices architecture with the following components:
+High-level system design and architectural patterns.
 
 ## System Components
 
-### Frontend
-- Web application built with React
-- Communicates via REST APIs
+The system is organized into several key layers:
 
-### Backend Services
+1. **API Layer** - REST endpoints for client communication
+2. **Service Layer** - Business logic and domain services
+3. **Data Layer** - Database and persistence mechanisms
+4. **Configuration** - Application settings and environment variables
 
-#### Core Services
-- User Service - Handles authentication and user profiles
-- Order Service - Manages order lifecycle
-- Payment Service - Processes payments securely
+## Design Patterns
 
-#### Data Layer
-- See Database Design for schema details
-- Configuration for connection strings
+- Microservices architecture for independent service scaling
+- Event-driven communication between services
+- Repository pattern for data access
 
-### Integration Points
+## Technology Stack
 
-The services integrate through:
-1. Event-driven messaging (see Order Service documentation)
-2. Synchronous REST calls (documented in API Reference)
-3. Shared caching layer (described in Configuration Guide)
-
-## Deployment
-
-See setup guide for deployment instructions.
+- Backend: Go
+- Database: PostgreSQL
+- Message Queue: Redis
+- Containerization: Docker

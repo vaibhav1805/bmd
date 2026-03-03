@@ -1,61 +1,84 @@
 # Order Service
 
-Manages the complete order lifecycle from creation to fulfillment.
+Handles order processing and management.
 
 ## Overview
 
-The Order Service:
-- Creates and tracks orders
-- Manages order status transitions
-- Coordinates with payment and inventory systems
-- Emits events for order state changes
+The Order Service manages:
+- Order creation and validation
+- Order status tracking
+- Order fulfillment
+- Order cancellation and returns
+- Order history and reporting
 
-## Dependencies
+## Order Lifecycle
 
-- **[User Service](user-service.md)**: validates user ownership of orders
-- **[Payment Service](payment-service.md)**: processes payments
-- **Database**: See [database design](../database.md) for order schema
+1. **Creation** - User creates new order
+2. **Validation** - Verify items and inventory
+3. **Payment** - Process payment
+4. **Fulfillment** - Prepare items for shipment
+5. **Shipping** - Ship order to customer
+6. **Delivery** - Track delivery status
+7. **Completion** - Mark order as complete
 
-## API Endpoints
-
-All order endpoints are documented in [API Reference](../api/endpoints.md).
-
-## Events
-
-The service publishes events:
-- `order.created` - When new order is created
-- `order.paid` - When payment is confirmed
-- `order.shipped` - When order is dispatched
-- `order.delivered` - When order reaches customer
-
-See [Architecture Overview](../architecture.md) for event-driven integration details.
-
-## Order Status Flow
+## Order Entity
 
 ```
-pending → processing → shipped → delivered
-   ↓
- cancelled
+Order
+├── id (primary key)
+├── user_id
+├── items (line items)
+├── total_amount
+├── status
+├── created_at
+└── shipping_address
 ```
 
-## Configuration
+## Status Values
 
-Order service configuration including timeouts and retry policies is in [setup guide](../config/setup.md).
+- PENDING - Order created, awaiting payment
+- CONFIRMED - Payment processed
+- PREPARING - Items being prepared
+- SHIPPED - Items in transit
+- DELIVERED - Order received
+- CANCELLED - Order cancelled
+- RETURNED - Items returned
 
-## Data Model
+## Business Logic
 
-Orders are stored with the following structure:
+### Order Validation
 
-- Order ID (from [database schema](../database.md))
-- User ID (references [User Service](user-service.md))
-- Line items
-- Payment status (from [Payment Service](payment-service.md))
-- Shipping address
+- Verify user account is active
+- Check inventory availability
+- Validate shipping address
+- Apply promotions and discounts
 
-## Integration Flow
+### Payment Processing
 
-1. User creates order via API
-2. User authenticates via User Service
-3. Order is submitted to Payment Service
-4. Events are published for downstream systems
-5. Order status updated in database
+- Request payment from Payment Service
+- Handle payment failures
+- Retry logic for transient failures
+- Webhook notifications on completion
+
+### Fulfillment
+
+- Update inventory
+- Generate picking lists
+- Create shipping labels
+- Send tracking information
+
+## Integration Points
+
+This service interacts with:
+- User Service - To validate user information
+- Payment Service - To process payments
+- Inventory System - To check stock levels
+- Shipping Provider - To arrange delivery
+
+## Notifications
+
+Sends notifications on:
+- Order confirmation
+- Shipment prepared
+- Order shipped
+- Delivery confirmation

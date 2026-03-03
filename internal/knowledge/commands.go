@@ -371,6 +371,14 @@ func CmdIndex(args []string) error {
 	gb := NewGraphBuilder(absDir)
 	graph := gb.Build(docs)
 
+	// Discover additional relationships via co-occurrence and structural analysis.
+	discovered := DiscoverRelationships(docs, nil)
+	for _, de := range discovered {
+		if de.Edge != nil {
+			_ = graph.AddEdge(de.Edge)
+		}
+	}
+
 	fmt.Fprintf(os.Stderr, "  %d nodes in knowledge graph\n", graph.NodeCount())
 	fmt.Fprintf(os.Stderr, "  %d edges (relationships)\n", graph.EdgeCount())
 

@@ -1,108 +1,55 @@
 # Troubleshooting Guide
 
-Common issues and their solutions - completely standalone document.
+Common issues and their solutions.
 
-## Problem: Connection Timeout
+## Database Connection Errors
 
-**Issue:** Application fails to connect after 30 seconds.
+**Problem**: Cannot connect to PostgreSQL
 
-**Symptoms:**
-- Long wait times on startup
-- Error messages about connection pools
-- Services failing to initialize
+**Solutions**:
+- Verify DATABASE_URL is correct
+- Check PostgreSQL is running: `pg_isready`
+- Ensure user has correct permissions
+- Check firewall rules allow connections
 
-**Solution:**
+## Authentication Token Expired
 
-1. Check network connectivity
-2. Verify firewall rules
-3. Review timeout configurations
-4. Restart the application
+**Problem**: Requests return 401 Unauthorized
 
-**Prevention:**
-- Monitor connection pool usage
-- Set appropriate timeout values
-- Use connection pooling
-- Implement retry logic
+**Solutions**:
+- Token may have expired (24-hour expiration)
+- Refresh token with POST /auth/refresh
+- Re-login and obtain new token
+- Check JWT_SECRET matches on server
 
-## Problem: Memory Leak
+## Service Timeouts
 
-**Issue:** Application memory usage increases over time.
+**Problem**: Requests timeout or hang
 
-**Symptoms:**
-- Growing memory consumption
-- Out of memory errors
-- Performance degradation
+**Solutions**:
+- Check service logs for errors
+- Verify database performance
+- Check Redis is accessible
+- Look for network connectivity issues
+- Increase timeout values if needed
 
-**Solution:**
+## Memory Leaks
 
-1. Profile the application
-2. Identify memory hotspots
-3. Fix object retention
-4. Deploy updated version
+**Problem**: Application memory usage increases over time
 
-**Root Causes:**
-- Unclosed database connections
-- Unbounded caches
-- Event listener accumulation
-- Circular references
+**Solutions**:
+- Check for unreleased database connections
+- Review goroutine count in logs
+- Profile with pprof
+- Check for circular references in code
 
-## Problem: High CPU Usage
+## Payment Processing Failures
 
-**Issue:** CPU usage constantly near 100%.
+**Problem**: Payment requests fail intermittently
 
-**Symptoms:**
-- Slow response times
-- Server unresponsive
-- High load average
-
-**Solution:**
-
-1. Identify CPU-heavy operations
-2. Optimize algorithms
-3. Add caching
-4. Scale horizontally
-
-**Prevention:**
-- Monitor CPU metrics
-- Use APM tools
-- Optimize hot paths
-- Load test before release
-
-## Problem: Data Consistency Issues
-
-**Issue:** Data becomes inconsistent across systems.
-
-**Symptoms:**
-- Mismatched records in different services
-- Validation errors
-- Transaction failures
-
-**Solution:**
-
-1. Enable transaction logging
-2. Check for race conditions
-3. Add database constraints
-4. Implement eventual consistency
-
-## Debugging Tips
-
-- Enable debug logging
-- Use distributed tracing
-- Monitor database queries
-- Check application metrics
-- Review error logs
-- Test with sample data
-
-## FAQ
-
-**Q: What's the maximum request size?**
-A: Default is 10MB, configurable in settings.
-
-**Q: How do I clear the cache?**
-A: Stop the service and delete the cache directory.
-
-**Q: Can I run multiple instances?**
-A: Yes, with proper load balancing.
-
-**Q: What's the maximum number of connections?**
-A: Depends on database configuration, default 100.
+**Solutions**:
+- Verify payment gateway credentials
+- Check network connectivity to gateway
+- Review payment logs for error codes
+- Ensure sufficient funds available
+- Contact payment provider if issues persist
