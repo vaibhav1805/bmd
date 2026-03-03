@@ -251,8 +251,8 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 18-01-PLAN.md — TDD: FileWatcher struct with polling-based .md change detection (WATCH-01)
-- [ ] 18-02-PLAN.md — IncrementalUpdater: cache-aware re-indexer composing watcher + index + graph + registry (INCREMENTAL-01)
+- [x] 18-01-PLAN.md — TDD: FileWatcher struct with polling-based .md change detection (WATCH-01) — 7 tests (3d4023d, 8ae0436)
+- [x] 18-02-PLAN.md — IncrementalUpdater: cache-aware re-indexer composing watcher + index + graph + registry (INCREMENTAL-01) — 6 tests (2973e54)
 - [ ] 18-03-PLAN.md — MCP watch tools: bmd/watch_start, bmd/watch_poll, bmd/watch_stop for agent reactivity (REACTIVITY-01)
 - [ ] 18-04-PLAN.md — CLI wiring (bmd watch command + --watch serve flag), docs, full regression pass (WATCH-01, INCREMENTAL-01, REACTIVITY-01)
 
@@ -317,7 +317,7 @@ Phases execute in numeric order: 1 → 2 → 3
 | 15. Container Deployment | 3/3 | Complete   | 2026-03-02 |
 | 16. Knowledge Versioning & Distribution | 1/1 | Complete   | 2026-03-02 |
 | 17. Component Registry & Hybrid Graph Discovery | 6/6 | Complete   | 2026-03-03 |
-| 18. Live Graph Updates & Incremental Indexing | 0/TBD | Planned    | — |
+| 18. Live Graph Updates & Incremental Indexing | 2/4 | In Progress|  |
 
 **Current Status: 17/18 phases complete — Milestone 3 in planning**
 **Milestone 1 (Phases 1-13): Complete (5 days) — Full agent documentation platform**

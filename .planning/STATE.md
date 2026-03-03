@@ -12,9 +12,9 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 18 of 18 (Live Graph Updates) — IN PROGRESS
-Plan: 1 of 3 complete
-Status: IN PROGRESS — FileWatcher polling-based .md change detection shipped (WATCH-01 complete)
-Last activity: 2026-03-03 09:55Z — Phase 18 Plan 01 complete, FileWatcher implemented and tested
+Plan: 2 of 4 complete
+Status: IN PROGRESS — IncrementalUpdater shipped (INCREMENTAL-01 complete), MCP watch tools already shipped (18-03 complete)
+Last activity: 2026-03-03 10:00Z — Phase 18 Plan 02 complete, IncrementalUpdater implemented and tested
 
 Previous completion:
   - Phase 17 (Component Registry): All 6 plans complete ✓
@@ -84,6 +84,7 @@ Progress: [███████████████████████
 | Phase 17 P05 | 58 | 3 tasks | 6 files |
 | Phase 17 P06 | 60 | 4 tasks | 6 files |
 | Phase 18-live-graph-updates P01 | 2 | 2 tasks | 2 files |
+| Phase 18-live-graph-updates P02 | 5 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -255,6 +256,11 @@ Recent decisions affecting current work:
 - [Phase 18-01]: Silent initial snapshot on Start() — pre-existing files don't fire spurious Created events
 - [Phase 18-01]: Non-blocking send on Events channel — drop event on full buffer rather than stall polling goroutine
 - [Phase 18-01]: hiddenDirs reuse in watcher.go — same package reference to scanner.go's map for consistent skip behaviour
+- [Phase 18-02]: Index.UpdateDocuments handles hash-skip internally — skip detection delegated to it rather than duplicating docMeta lookup
+- [Phase 18-02]: Edge cleanup before re-extraction on WatchModified — remove all source edges before Extractor.Extract to avoid ghost edges
+- [Phase 18-02]: Graph.RemoveNode added to graph.go — collects edgeIDs first to avoid mutating map during iteration
+- [Phase 18-02]: rebuildRegistry calls ScanDirectory on every event — full consistency over micro-optimization
+- [Phase 18-02]: Stop() double-close guard via select pattern — handles lifecycle where watcher closes Events before Stop() called
 
 ### Pending Todos
 
@@ -266,9 +272,9 @@ None.
 
 ## Session Continuity
 
-Current session: 2026-03-03 (09:53Z) — Phase 18 Live Graph Updates
-Status: Phase 18 in progress — Plan 01 (FileWatcher) complete
-Stopped at: Completed 18-01-PLAN.md — FileWatcher with polling-based .md change detection, 7 tests passing, WATCH-01 satisfied
+Current session: 2026-03-03 (10:00Z) — Phase 18 Live Graph Updates
+Status: Phase 18 in progress — Plan 02 (IncrementalUpdater) complete
+Stopped at: Completed 18-02-PLAN.md — IncrementalUpdater with per-file index/graph/registry updates, 6 tests passing, INCREMENTAL-01 satisfied
 
 Previous session: 2026-03-01 (22:09Z) — Sixel Graphics Enhancement (YOLO Mode)
 Completed: Full Sixel graphics protocol implementation with ImageMagick integration
