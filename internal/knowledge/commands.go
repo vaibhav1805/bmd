@@ -808,7 +808,7 @@ func CmdDepends(args []string) error {
 
 	// Build dependency analyzer.
 	da := NewDependencyAnalyzer(graph, services)
-	sg := da.GetComponentGraph()
+	sg := da.GetDepGraph()
 
 	// Validate component exists.
 	if _, ok := sg.Components[a.Service]; !ok {
@@ -935,7 +935,7 @@ func cmdComponentsLegacy(args []string) error {
 
 	// Build dependency counts.
 	da := NewDependencyAnalyzer(graph, services)
-	sg := da.GetComponentGraph()
+	sg := da.GetDepGraph()
 
 	depCounts := make(map[string]int, len(services))
 	for id, refs := range sg.Dependencies {

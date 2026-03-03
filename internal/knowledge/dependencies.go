@@ -28,10 +28,11 @@ type ComponentRef struct {
 	Confidence float64
 }
 
-// ComponentGraph is a directed dependency graph whose nodes are Components
-// (detected or configured) and whose edges represent component-to-component
-// dependencies.
-type ComponentGraph struct {
+// dependencyGraph is the internal directed dependency graph used by
+// DependencyAnalyzer. It maps component IDs to their outgoing ComponentRefs.
+// This is distinct from ComponentGraph (component_graph.go) which is the
+// richer component-level graph used for BFS traversal and debug context.
+type dependencyGraph struct {
 	// Components maps component ID → *Component.
 	Components map[string]*Component
 
@@ -39,9 +40,9 @@ type ComponentGraph struct {
 	Dependencies map[string][]ComponentRef
 }
 
-// newComponentGraph returns an empty, ready-to-use ComponentGraph.
-func newComponentGraph() *ComponentGraph {
-	return &ComponentGraph{
+// newDependencyGraph returns an empty, ready-to-use dependencyGraph.
+func newDependencyGraph() *dependencyGraph {
+	return &dependencyGraph{
 		Components:   make(map[string]*Component),
 		Dependencies: make(map[string][]ComponentRef),
 	}
@@ -73,31 +74,31 @@ type DependencyChain struct {
 // It operates on the component-level view of the graph: only nodes that
 // correspond to known components are included in the analysis.
 type DependencyAnalyzer struct {
-	// componentGraph is the computed component-level dependency graph.
-	componentGraph *ComponentGraph
+	// depGraph is the computed dependency graph (internal, simple format).
+	depGraph *dependencyGraph
 }
 
 // NewDependencyAnalyzer creates a DependencyAnalyzer and builds the component
 // dependency graph from graph and components.
 //
 // This is the primary entry point.  All subsequent query methods operate on
-// the pre-built ComponentGraph so they run in O(degree) time.
+// the pre-built dependencyGraph so they run in O(degree) time.
 func NewDependencyAnalyzer(graph *Graph, components []Component) *DependencyAnalyzer {
 	da := &DependencyAnalyzer{}
-	da.componentGraph = da.BuildComponentGraph(graph, components)
+	da.depGraph = da.buildDepGraph(graph, components)
 	return da
 }
 
-// BuildComponentGraph extracts a component-only subgraph from graph using components
+// buildDepGraph extracts a component-only subgraph from graph using components
 // as the set of known component nodes.
 //
 // Algorithm:
 //  1. Index components by file path (Node ID).
 //  2. For each edge in the full graph, check whether both Source and Target
 //     map to known components.
-//  3. Add qualifying edges to the ComponentGraph with appropriate type/confidence.
-func (da *DependencyAnalyzer) BuildComponentGraph(graph *Graph, components []Component) *ComponentGraph {
-	sg := newComponentGraph()
+//  3. Add qualifying edges to the dependencyGraph with appropriate type/confidence.
+func (da *DependencyAnalyzer) buildDepGraph(graph *Graph, components []Component) *dependencyGraph {
+	sg := newDependencyGraph()
 
 	// Index components by their document file path.
 	byFile := make(map[string]*Component, len(components))
@@ -135,7 +136,7 @@ func (da *DependencyAnalyzer) BuildComponentGraph(graph *Graph, components []Com
 // GetDirectDeps returns the IDs of components that componentID directly depends on.
 // Returns nil when componentID is unknown or has no dependencies.
 func (da *DependencyAnalyzer) GetDirectDeps(componentID string) []string {
-	refs, ok := da.componentGraph.Dependencies[componentID]
+	refs, ok := da.depGraph.Dependencies[componentID]
 	if !ok {
 		return nil
 	}
@@ -157,7 +158,7 @@ func (da *DependencyAnalyzer) GetDirectDeps(componentID string) []string {
 // The starting service itself is NOT included.  Returns nil when componentID is
 // unknown or has no outgoing dependencies.
 func (da *DependencyAnalyzer) GetTransitiveDeps(componentID string) []string {
-	if _, ok := da.componentGraph.Components[componentID]; !ok {
+	if _, ok := da.depGraph.Components[componentID]; !ok {
 		return nil
 	}
 
@@ -170,7 +171,7 @@ func (da *DependencyAnalyzer) GetTransitiveDeps(componentID string) []string {
 		cur := queue[0]
 		queue = queue[1:]
 
-		for _, ref := range da.componentGraph.Dependencies[cur] {
+		for _, ref := range da.depGraph.Dependencies[cur] {
 			if !visited[ref.ComponentID] {
 				visited[ref.ComponentID] = true
 				result = append(result, ref.ComponentID)
@@ -193,10 +194,10 @@ func (da *DependencyAnalyzer) FindPath(from, to string) [][]string {
 	if from == to {
 		return nil
 	}
-	if _, ok := da.componentGraph.Components[from]; !ok {
+	if _, ok := da.depGraph.Components[from]; !ok {
 		return nil
 	}
-	if _, ok := da.componentGraph.Components[to]; !ok {
+	if _, ok := da.depGraph.Components[to]; !ok {
 		return nil
 	}
 
@@ -208,7 +209,7 @@ func (da *DependencyAnalyzer) FindPath(from, to string) [][]string {
 		if len(path)-1 >= maxDepth {
 			return
 		}
-		for _, ref := range da.componentGraph.Dependencies[cur] {
+		for _, ref := range da.depGraph.Dependencies[cur] {
 			next := ref.ComponentID
 			if visited[next] {
 				continue
@@ -242,8 +243,8 @@ func (da *DependencyAnalyzer) DetectCycles() [][]string {
 		black = 2
 	)
 
-	colour := make(map[string]int, len(da.componentGraph.Components))
-	parent := make(map[string]string, len(da.componentGraph.Components))
+	colour := make(map[string]int, len(da.depGraph.Components))
+	parent := make(map[string]string, len(da.depGraph.Components))
 
 	var cycles [][]string
 	seen := make(map[string]bool) // dedup identical cycles
@@ -252,7 +253,7 @@ func (da *DependencyAnalyzer) DetectCycles() [][]string {
 	dfs = func(u string) {
 		colour[u] = gray
 
-		for _, ref := range da.componentGraph.Dependencies[u] {
+		for _, ref := range da.depGraph.Dependencies[u] {
 			v := ref.ComponentID
 			switch colour[v] {
 			case white:
@@ -272,7 +273,7 @@ func (da *DependencyAnalyzer) DetectCycles() [][]string {
 		colour[u] = black
 	}
 
-	for id := range da.componentGraph.Components {
+	for id := range da.depGraph.Components {
 		if colour[id] == white {
 			dfs(id)
 		}
@@ -292,10 +293,10 @@ func (da *DependencyAnalyzer) FindDependencyChain(from, to string) DependencyCha
 	if from == to {
 		return DependencyChain{}
 	}
-	if _, ok := da.componentGraph.Components[from]; !ok {
+	if _, ok := da.depGraph.Components[from]; !ok {
 		return DependencyChain{}
 	}
-	if _, ok := da.componentGraph.Components[to]; !ok {
+	if _, ok := da.depGraph.Components[to]; !ok {
 		return DependencyChain{}
 	}
 
@@ -317,7 +318,7 @@ func (da *DependencyAnalyzer) FindDependencyChain(from, to string) DependencyCha
 			continue
 		}
 
-		for _, ref := range da.componentGraph.Dependencies[cur.id] {
+		for _, ref := range da.depGraph.Dependencies[cur.id] {
 			if visited[ref.ComponentID] {
 				continue
 			}
@@ -344,10 +345,16 @@ func (da *DependencyAnalyzer) FindDependencyChain(from, to string) DependencyCha
 	return DependencyChain{}
 }
 
-// ComponentGraph returns a read-only view of the computed service dependency
+// GetDepGraph returns a read-only view of the computed service dependency
 // graph.  Callers should not mutate the returned value.
-func (da *DependencyAnalyzer) GetComponentGraph() *ComponentGraph {
-	return da.componentGraph
+func (da *DependencyAnalyzer) GetDepGraph() *dependencyGraph {
+	return da.depGraph
+}
+
+// GetComponentGraph is an alias for GetDepGraph retained for backward
+// compatibility with existing call sites.
+func (da *DependencyAnalyzer) GetComponentGraph() *dependencyGraph {
+	return da.depGraph
 }
 
 // --- helpers ----------------------------------------------------------------

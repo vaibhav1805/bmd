@@ -856,7 +856,7 @@ func mapKeys(m map[string]bool) []string {
 	return keys
 }
 
-func countDeps(sg *ComponentGraph) int {
+func countDeps(sg *dependencyGraph) int { //nolint:unused
 	count := 0
 	for _, deps := range sg.Dependencies {
 		count += len(deps)
