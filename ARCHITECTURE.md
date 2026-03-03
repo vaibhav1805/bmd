@@ -883,6 +883,76 @@ Benchmarks on 100-document corpus:
 
 **Files:** `Dockerfile`, `docker-compose.yaml`, `kubernetes/` (5 manifests)
 
+## Component Registry (Phase 17)
+
+**Goal:** Hybrid confidence-weighted dependency discovery combining link, mention, and LLM signals
+
+### Signal Aggregation Architecture
+
+```
+Document Corpus
+    ↓
+┌─ Link Extractor (existing graph edges, confidence=1.0)
+├─ Text Mention Extractor (pattern matching, confidence=0.60-0.75)
+└─ LLM Extractor (PageIndex reasoning, confidence=0.65, opt-in)
+    ↓
+ComponentRegistry
+    ├── Components map[ID → *RegistryComponent]
+    └── Relationships []RegistryRelationship
+              └── Signals []Signal (SourceType, Confidence, Evidence, Weight)
+    ↓
+HybridBuilder.BuildHybridGraph()
+    ↓
+Augmented Graph (higher confidence edges, new mention/LLM edges)
+    ↓
+CLI Commands
+    ├── bmd registry --from/--to (relationship queries)
+    ├── bmd relationships (signal-aware queries)
+    ├── bmd components list/search/inspect
+    └── bmd depends --registry (enriched with registry signals)
+```
+
+### Aggregation Strategy
+
+Default: **AggregationMax** — `max(signal.confidence * signal.weight)` across all signals.
+
+Rationale: Conservative, predictable, well-behaved with extreme signal weights. A link (1.0) always wins.
+
+Alternative: **AggregationWeightedAverage** available for callers that need weighted consensus.
+
+### Mention Pattern Library
+
+Text mentions use a confidence-weighted pattern library:
+- `0.75`: "depends on X", "calls X service", "uses the X"
+- `0.70`: "connects to X", "communicates with X", "integrates with X"
+- `0.65`: generic prose mentions of known component names
+- `0.60`: weak signal (component name appears but context unclear)
+
+### Data Flow
+
+```
+bmd registry --from auth-service --format json
+    ↓
+ParseRegistryArgs → loadOrBuildRegistry
+    ↓ (cache hit)
+LoadRegistry(".bmd-registry.json") → ComponentRegistry
+    ↓ (no cache — bootstrap)
+loadGraphAndServices → InitFromGraph(graph, docs)
+    [Link signals → Mention signals → LLM signals (optional)]
+    ↓
+FindRelationships("auth-service") → []RegistryRelationship
+    ↓
+marshalContract(NewOKResponse(...)) → CONTRACT-01 JSON
+```
+
+**Key files:**
+- `internal/knowledge/registry.go` — ComponentRegistry, Signal, RegistryRelationship
+- `internal/knowledge/mention_extractor.go` — Text mention extraction
+- `internal/knowledge/mention_patterns.go` — Pattern confidence library
+- `internal/knowledge/llm_extractor.go` — PageIndex LLM subprocess wrapper
+- `internal/knowledge/hybrid_builder.go` — HybridBuilder, AggregateSignals, BuildHybridGraph
+- `internal/knowledge/registry_cmd.go` — CLI commands (components list/search/inspect, relationships)
+
 ## Knowledge Versioning & Distribution
 
 **Goal:** Enable knowledge artifacts as versioned, distributable assets

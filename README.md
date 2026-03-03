@@ -157,7 +157,7 @@ BMD provides a complete knowledge system for AI agents: full-text search, semant
 - 🤖 **Knowledge graphs** — Build dependency graphs, query component architecture
 - 📊 **Full-text indexing** — BM25 search across documentation
 - 🧠 **Semantic search** — LLM-powered intent-based retrieval (PageIndex)
-- 🔗 **Component detection** — Automatically identify services and dependencies
+- 🔗 **Component registry** — Confidence-weighted relationship discovery (links + mention patterns + optional LLM signals)
 - 💾 **Local persistence** — SQLite-based indexing for fast queries
 - 📤 **Multiple formats** — JSON, text, CSV, Graphviz output
 
@@ -341,6 +341,9 @@ Creates `.bmd-index.json` and `.bmd-graph.json` with:
 | `components [--format json\|text]` | List detected components | `bmd components` |
 | `graph [--format json\|dot]` | Export relationship graph | `bmd graph --format dot` |
 | `crawl --from-multiple FILE[,FILE] [--direction] [--depth] [--format]` | Multi-start graph traversal | `bmd crawl --from-multiple api.md --direction forward` |
+| `registry [--from COMPONENT] [--min-confidence N]` | Query component registry (confidence-weighted) | `bmd registry --from auth-service --format json` |
+| `relationships [--from\|--to COMPONENT]` | Query relationships by component | `bmd relationships --to auth-service --include-signals` |
+| `components list\|search\|inspect` | Component registry subcommands | `bmd components list --format json` |
 
 
 

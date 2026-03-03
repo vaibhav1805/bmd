@@ -287,6 +287,117 @@ bmd crawl --from-multiple auth-service.md,user-service.md \
 
 ---
 
+## Component Registry
+
+The Component Registry provides confidence-weighted dependency discovery that goes beyond explicit markdown links. It aggregates signals from three sources:
+
+| Signal | Confidence | Source |
+|--------|-----------|--------|
+| Link | 1.0 | `[text](file.md)` explicit links |
+| Mention | 0.60-0.75 | Text pattern matching |
+| LLM | 0.65 | PageIndex semantic analysis (opt-in) |
+
+### Impact Analysis — Who Depends on This Service?
+
+```bash
+# Find all services that depend on auth-service
+bmd relationships --to auth-service --dir ./docs --format json
+```
+
+Response (CONTRACT-01):
+```json
+{
+  "type": "agent_response",
+  "status": "ok",
+  "code": "SUCCESS",
+  "data": {
+    "component": "auth-service",
+    "relationships": [
+      {
+        "from_component": "api-gateway",
+        "to_component": "auth-service",
+        "signals": [
+          {"source_type": "link", "confidence": 1.0, "evidence": "[auth](auth.md)"},
+          {"source_type": "mention", "confidence": 0.75, "evidence": "gateway calls auth to verify"}
+        ],
+        "aggregated_confidence": 1.0
+      }
+    ]
+  }
+}
+```
+
+### Dependency Discovery — What Does This Service Need?
+
+```bash
+# Find dependencies of payment-service with confidence >= 0.7
+bmd registry --from payment-service --min-confidence 0.7 --dir ./docs --format json
+
+# Include all signal sources (for debugging)
+bmd relationships --from payment-service --include-signals --dir ./docs
+```
+
+### LLM-Enhanced Discovery
+
+```bash
+# Enable LLM analysis to find implicit relationships (prose, comments, reasoning)
+bmd registry --dir ./docs --with-llm
+
+# With custom model
+bmd registry --dir ./docs --with-llm --llm-model claude-opus-4-6
+```
+
+### Agent Integration Workflow
+
+```python
+import subprocess
+import json
+
+def get_dependencies(service: str, docs_dir: str, min_confidence: float = 0.7) -> list[dict]:
+    """Get service dependencies from the component registry."""
+    result = subprocess.run(
+        ["bmd", "registry", "--from", service,
+         "--min-confidence", str(min_confidence),
+         "--dir", docs_dir, "--format", "json"],
+        capture_output=True, text=True
+    )
+    response = json.loads(result.stdout)
+    if response["status"] == "ok":
+        return response["data"]["relationships"]
+    return []
+
+def get_impact_set(service: str, docs_dir: str) -> list[str]:
+    """Find all services that depend on the given service."""
+    result = subprocess.run(
+        ["bmd", "relationships", "--to", service,
+         "--dir", docs_dir, "--format", "json"],
+        capture_output=True, text=True
+    )
+    response = json.loads(result.stdout)
+    if response["status"] == "ok":
+        return [r["from_component"] for r in response["data"]["relationships"]]
+    return []
+
+# Example: before deploying auth-service, check impact
+impact = get_impact_set("auth-service", "./docs")
+# Returns: ["api-gateway", "payment-service", "user-service"]
+```
+
+### Registry Flags Reference
+
+| Flag | Command | Description |
+|------|---------|-------------|
+| `--registry` | `depends`, `components` | Load and enrich from `.bmd-registry.json` |
+| `--min-confidence` | `registry`, `depends` | Minimum confidence threshold (0.0-1.0) |
+| `--with-llm` | `registry` | Enable LLM extraction via PageIndex |
+| `--no-hybrid` | `graph`, `depends`, `crawl` | Skip registry signal merging |
+| `--include-signals` | `relationships` | Show per-signal breakdown |
+| `--from` / `--to` | `relationships`, `registry` | Filter by source or target component |
+
+For complete API reference, see [REGISTRY.md](./REGISTRY.md).
+
+---
+
 ## Semantic Search (PageIndex)
 
 BMD supports two search strategies:
