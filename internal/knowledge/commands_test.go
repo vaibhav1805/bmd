@@ -1211,3 +1211,203 @@ func TestContractResponsePaths(t *testing.T) {
 		}
 	})
 }
+
+// ─── Task 1.3: Registry CLI tests ─────────────────────────────────────────────
+
+func TestParseRegistryArgs_Defaults(t *testing.T) {
+	a, err := ParseRegistryArgs([]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Dir != "." {
+		t.Errorf("Dir: got %q, want %q", a.Dir, ".")
+	}
+	if a.Format != "json" {
+		t.Errorf("Format: got %q, want %q", a.Format, "json")
+	}
+	if a.MinConf != 0.0 {
+		t.Errorf("MinConf: got %.2f, want 0.0", a.MinConf)
+	}
+	if a.From != "" {
+		t.Errorf("From: got %q, want empty", a.From)
+	}
+}
+
+func TestParseRegistryArgs_Flags(t *testing.T) {
+	a, err := ParseRegistryArgs([]string{
+		"--dir", "/docs",
+		"--format", "text",
+		"--min-confidence", "0.7",
+		"--from", "auth-service",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Dir != "/docs" {
+		t.Errorf("Dir: got %q, want /docs", a.Dir)
+	}
+	if a.Format != "text" {
+		t.Errorf("Format: got %q, want text", a.Format)
+	}
+	if a.MinConf != 0.7 {
+		t.Errorf("MinConf: got %.2f, want 0.7", a.MinConf)
+	}
+	if a.From != "auth-service" {
+		t.Errorf("From: got %q, want auth-service", a.From)
+	}
+}
+
+func TestParseRegistryArgs_InvalidConfidence(t *testing.T) {
+	_, err := ParseRegistryArgs([]string{"--min-confidence", "1.5"})
+	if err == nil {
+		t.Error("expected error for confidence > 1.0")
+	}
+}
+
+func TestParseComponentsArgs_RegistryFlag(t *testing.T) {
+	a, err := ParseComponentsArgs([]string{"--registry"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !a.Registry {
+		t.Error("expected Registry=true when --registry flag is set")
+	}
+}
+
+func TestParseComponentsArgs_RegistryDefault(t *testing.T) {
+	a, err := ParseComponentsArgs([]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Registry {
+		t.Error("Registry should default to false")
+	}
+}
+
+func TestParseDependsArgs_RegistryFlag(t *testing.T) {
+	a, err := ParseDependsArgs([]string{"my-service", "--registry"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !a.Registry {
+		t.Error("expected Registry=true when --registry flag is set")
+	}
+}
+
+func TestParseDependsArgs_RegistryDefault(t *testing.T) {
+	a, err := ParseDependsArgs([]string{"my-service"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Registry {
+		t.Error("Registry should default to false")
+	}
+}
+
+func TestCmdRegistryCmd_NoRegistryFile_FallsBackToGraph(t *testing.T) {
+	// Create a temp dir with one markdown file.
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "auth.md"), []byte("# Auth Service\n\nHandles auth."), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Capture stdout.
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := CmdRegistryCmd([]string{"--dir", tmpDir, "--format", "json"})
+
+	_ = w.Close()
+	os.Stdout = old
+
+	if err != nil {
+		t.Fatalf("CmdRegistryCmd returned error: %v", err)
+	}
+
+	buf := make([]byte, 65536)
+	n, _ := r.Read(buf)
+	output := strings.TrimSpace(string(buf[:n]))
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
+		t.Fatalf("output not valid JSON: %v\nOutput: %s", err, output)
+	}
+
+	if envelope["status"] != "ok" {
+		t.Errorf("expected status=ok, got %v\nOutput: %s", envelope["status"], output)
+	}
+}
+
+func TestCmdRegistryCmd_WithRegistryFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a registry file.
+	reg := NewComponentRegistry()
+	_ = reg.AddComponent(&RegistryComponent{ID: "auth", Name: "Auth Service", Type: ComponentTypeService})
+	_ = reg.AddSignal("auth", "user", Signal{SourceType: SignalLink, Confidence: 1.0, Weight: 1.0})
+
+	if err := SaveRegistry(reg, filepath.Join(tmpDir, RegistryFileName)); err != nil {
+		t.Fatal(err)
+	}
+
+	old := os.Stdout
+	rp, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := CmdRegistryCmd([]string{"--dir", tmpDir, "--format", "json"})
+
+	_ = w.Close()
+	os.Stdout = old
+
+	if err != nil {
+		t.Fatalf("CmdRegistryCmd returned error: %v", err)
+	}
+
+	buf := make([]byte, 65536)
+	n, _ := rp.Read(buf)
+	output := strings.TrimSpace(string(buf[:n]))
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
+		t.Fatalf("output not valid JSON: %v\nOutput: %s", err, output)
+	}
+	if envelope["status"] != "ok" {
+		t.Errorf("expected status=ok, got %v\nOutput: %s", envelope["status"], output)
+	}
+}
+
+func TestCmdRegistryCmd_TextFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	reg := NewComponentRegistry()
+	_ = reg.AddComponent(&RegistryComponent{ID: "svc", Name: "My Service", Type: ComponentTypeService, FileRef: "svc.md"})
+
+	if err := SaveRegistry(reg, filepath.Join(tmpDir, RegistryFileName)); err != nil {
+		t.Fatal(err)
+	}
+
+	old := os.Stdout
+	rp, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := CmdRegistryCmd([]string{"--dir", tmpDir, "--format", "text"})
+
+	_ = w.Close()
+	os.Stdout = old
+
+	if err != nil {
+		t.Fatalf("CmdRegistryCmd returned error: %v", err)
+	}
+
+	buf := make([]byte, 65536)
+	n, _ := rp.Read(buf)
+	output := strings.TrimSpace(string(buf[:n]))
+
+	if !strings.Contains(output, "svc") {
+		t.Errorf("expected component ID 'svc' in text output, got: %s", output)
+	}
+	if !strings.Contains(output, "Components") {
+		t.Errorf("expected 'Components' header in text output, got: %s", output)
+	}
+}

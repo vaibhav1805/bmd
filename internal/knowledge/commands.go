@@ -41,12 +41,14 @@ type DependsArgs struct {
 	Dir        string
 	Transitive bool
 	Format     string
+	Registry   bool // --registry: augment results from .bmd-registry.json
 }
 
 // ComponentsArgs holds parsed arguments for CmdComponents.
 type ComponentsArgs struct {
-	Dir    string
-	Format string
+	Dir      string
+	Format   string
+	Registry bool // --registry: load registry from .bmd-registry.json and enrich output
 }
 
 // GraphArgs holds parsed arguments for CmdGraph.
@@ -156,7 +158,7 @@ func ParseQueryArgs(args []string) (*QueryArgs, error) {
 
 // ParseDependsArgs parses raw CLI arguments for the depends command.
 //
-// Usage: bmd depends SERVICE [DIR] [--dir DIR] [--transitive] [--format json|text|dot]
+// Usage: bmd depends SERVICE [DIR] [--dir DIR] [--transitive] [--format json|text|dot] [--registry]
 func ParseDependsArgs(args []string) (*DependsArgs, error) {
 	positionals, flags := splitPositionalsAndFlags(args)
 
@@ -167,6 +169,7 @@ func ParseDependsArgs(args []string) (*DependsArgs, error) {
 	fs.StringVar(&a.Dir, "dir", ".", "Directory that was indexed")
 	fs.BoolVar(&a.Transitive, "transitive", false, "Show transitive dependencies")
 	fs.StringVar(&a.Format, "format", "json", "Output format (json|text|dot)")
+	fs.BoolVar(&a.Registry, "registry", false, "Augment results from .bmd-registry.json")
 
 	if err := fs.Parse(flags); err != nil {
 		return nil, fmt.Errorf("depends: %w", err)
@@ -185,7 +188,7 @@ func ParseDependsArgs(args []string) (*DependsArgs, error) {
 
 // ParseComponentsArgs parses raw CLI arguments for the components command.
 //
-// Usage: bmd services [--dir DIR] [--format json|text]
+// Usage: bmd services [--dir DIR] [--format json|text] [--registry]
 func ParseComponentsArgs(args []string) (*ComponentsArgs, error) {
 	positionals, flags := splitPositionalsAndFlags(args)
 
@@ -195,6 +198,7 @@ func ParseComponentsArgs(args []string) (*ComponentsArgs, error) {
 	var a ComponentsArgs
 	fs.StringVar(&a.Dir, "dir", ".", "Directory that was indexed")
 	fs.StringVar(&a.Format, "format", "json", "Output format (json|text)")
+	fs.BoolVar(&a.Registry, "registry", false, "Enrich output from .bmd-registry.json")
 
 	if err := fs.Parse(flags); err != nil {
 		return nil, fmt.Errorf("services: %w", err)
@@ -1026,6 +1030,162 @@ func CmdCrawl(args []string) error {
 	return nil
 }
 
+// RegistryArgs holds parsed arguments for CmdRegistryCmd.
+type RegistryArgs struct {
+	Dir     string
+	Format  string // "json" | "text"
+	MinConf float64
+	From    string // component ID to query relationships from (optional)
+}
+
+// ParseRegistryArgs parses raw CLI arguments for the registry command.
+//
+// Usage: bmd registry [--dir DIR] [--format json|text] [--min-confidence 0.0] [--from COMPONENT]
+func ParseRegistryArgs(args []string) (*RegistryArgs, error) {
+	positionals, flags := splitPositionalsAndFlags(args)
+
+	fs := flag.NewFlagSet("registry", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	var a RegistryArgs
+	fs.StringVar(&a.Dir, "dir", ".", "Directory containing .bmd-registry.json")
+	fs.StringVar(&a.Format, "format", "json", "Output format (json|text)")
+	fs.Float64Var(&a.MinConf, "min-confidence", 0.0, "Minimum confidence threshold (0.0–1.0)")
+	fs.StringVar(&a.From, "from", "", "Filter relationships from this component ID")
+
+	if err := fs.Parse(flags); err != nil {
+		return nil, fmt.Errorf("registry: %w", err)
+	}
+	if len(positionals) > 0 {
+		a.Dir = positionals[0]
+	}
+	if a.MinConf < 0.0 || a.MinConf > 1.0 {
+		return nil, fmt.Errorf("registry: --min-confidence must be in [0.0, 1.0]")
+	}
+	return &a, nil
+}
+
+// CmdRegistryCmd implements `bmd registry`.  It loads the ComponentRegistry
+// from .bmd-registry.json (building it from the graph if absent) and prints
+// components and relationships.
+//
+// Graceful fallback: when no .bmd-registry.json exists, the registry is
+// initialized from the knowledge graph and returned (but not persisted).
+func CmdRegistryCmd(args []string) error {
+	a, err := ParseRegistryArgs(args)
+	if err != nil {
+		return err
+	}
+
+	isJSON := strings.ToLower(a.Format) == "json"
+
+	absDir, err := filepath.Abs(a.Dir)
+	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
+		return fmt.Errorf("registry: resolve dir: %w", err)
+	}
+
+	registryPath := filepath.Join(absDir, RegistryFileName)
+	reg, err := LoadRegistry(registryPath)
+	if err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
+		return fmt.Errorf("registry: load: %w", err)
+	}
+
+	// If no registry file exists, bootstrap from graph.
+	if reg == nil {
+		db, graph, _, graphErr := loadGraphAndServices(absDir)
+		if graphErr != nil {
+			if isJSON {
+				fmt.Println(marshalContract(NewErrorResponse(classifyIndexError(graphErr), graphErr.Error())))
+				return nil
+			}
+			return fmt.Errorf("registry: bootstrap from graph: %w", graphErr)
+		}
+		defer db.Close() //nolint:errcheck
+
+		docs, _ := ScanDirectory(absDir)
+		reg = NewComponentRegistry()
+		reg.InitFromGraph(graph, docs)
+	}
+
+	// Query relationships.
+	var rels []RegistryRelationship
+	if a.From != "" {
+		rels = reg.FindRelationships(a.From)
+	} else {
+		rels = reg.QueryByConfidence(a.MinConf)
+	}
+
+	if !isJSON {
+		// Text output.
+		fmt.Printf("Components (%d):\n", reg.ComponentCount())
+		compIDs := make([]string, 0, reg.ComponentCount())
+		for id := range reg.Components {
+			compIDs = append(compIDs, id)
+		}
+		sort.Strings(compIDs)
+		for _, id := range compIDs {
+			c := reg.Components[id]
+			fmt.Printf("  %s (%s) — %s\n", c.ID, c.Type, c.FileRef)
+		}
+		fmt.Printf("\nRelationships (%d):\n", len(rels))
+		for _, r := range rels {
+			fmt.Printf("  %s → %s [%.2f]\n", r.FromComponent, r.ToComponent, r.AggregatedConfidence)
+		}
+		return nil
+	}
+
+	// JSON path: build payload and wrap in envelope.
+	type compJSON struct {
+		ID      string        `json:"id"`
+		Name    string        `json:"name"`
+		FileRef string        `json:"file_ref"`
+		Type    ComponentType `json:"type"`
+	}
+	type relJSON struct {
+		From       string  `json:"from"`
+		To         string  `json:"to"`
+		Confidence float64 `json:"confidence"`
+		Signals    int     `json:"signal_count"`
+	}
+	compList := make([]compJSON, 0, reg.ComponentCount())
+	compIDs := make([]string, 0, reg.ComponentCount())
+	for id := range reg.Components {
+		compIDs = append(compIDs, id)
+	}
+	sort.Strings(compIDs)
+	for _, id := range compIDs {
+		c := reg.Components[id]
+		compList = append(compList, compJSON{
+			ID: c.ID, Name: c.Name, FileRef: c.FileRef, Type: c.Type,
+		})
+	}
+	relList := make([]relJSON, len(rels))
+	for i, r := range rels {
+		relList[i] = relJSON{
+			From:       r.FromComponent,
+			To:         r.ToComponent,
+			Confidence: roundFloat(r.AggregatedConfidence, 4),
+			Signals:    len(r.Signals),
+		}
+	}
+	payload := map[string]interface{}{
+		"components":    compList,
+		"relationships": relList,
+		"component_count":    reg.ComponentCount(),
+		"relationship_count": len(rels),
+	}
+	fmt.Println(marshalContract(NewOKResponse("Registry loaded", payload)))
+	return nil
+}
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 // splitPositionalsAndFlags separates a slice of CLI arguments into two groups:
@@ -1086,6 +1246,7 @@ func isBoolFlag(name string) bool {
 	boolFlags := map[string]bool{
 		"watch":      true,
 		"transitive": true,
+		"registry":   true,
 	}
 	return boolFlags[name]
 }
