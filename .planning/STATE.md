@@ -79,6 +79,7 @@ Progress: [███████████████████████
 | Phase 13 P04 | 16 | 3 tasks | 5 files |
 | Phase 17 P01 | 309 | 3 tasks | 4 files |
 | Phase 17 P03 | 2366 | 2 tasks | 5 files |
+| Phase 17 P04 | 66 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -236,6 +237,9 @@ Recent decisions affecting current work:
 - [Phase 17]: isExactMatch allows name-service/name-api suffix variants for flexible component matching without false positives
 - [Phase 17]: LLMRelationship struct with FromFile/ToComponent/Confidence/Reasoning/Evidence — parallel extraction with sync.WaitGroup and cache-first strategy
 - [Phase 17]: InitFromGraphWithLLM is additive (InitFromGraph delegates); --with-llm opt-in flag for LLM extraction; graceful degradation on missing PageIndex
+- [Phase 17]: AggregationMax as default strategy: conservative, predictable, well-behaved with extreme weights
+- [Phase 17]: penwidth=0.5+confidence*2.5 for DOT edge thickness (maps [0.0-1.0] to [0.5-3.0])
+- [Phase 17]: --no-hybrid flag on graph/depends/crawl commands for backward-compatible registry opt-out
 
 ### Pending Todos
 
