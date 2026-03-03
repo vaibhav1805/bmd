@@ -1,5 +1,5 @@
 version: "1.0"
-generated: "2026-03-03T12:38:02Z"
+generated: "2026-03-03T12:58:12Z"
 algorithm_versions:
     cooccurrence: "1.0"
     structural: "1.0"
@@ -14,6 +14,9 @@ relationships:
         - type: structural
           value: 1
           evidence: API Reference
+        - type: link
+          value: 1
+          evidence: API Reference
       reviewed: false
       status: pending
       user_notes: ""
@@ -23,6 +26,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: Architecture Overview
+        - type: link
           value: 1
           evidence: Architecture Overview
       reviewed: false
@@ -36,6 +42,9 @@ relationships:
         - type: structural
           value: 1
           evidence: Configuration Guide
+        - type: link
+          value: 1
+          evidence: Configuration Guide
       reviewed: false
       status: pending
       user_notes: ""
@@ -45,6 +54,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: Database Design
+        - type: link
           value: 1
           evidence: Database Design
       reviewed: false
@@ -58,6 +70,9 @@ relationships:
         - type: structural
           value: 1
           evidence: Quick Start Guide
+        - type: link
+          value: 1
+          evidence: Quick Start Guide
       reviewed: false
       status: pending
       user_notes: ""
@@ -67,6 +82,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: Order Service
+        - type: link
           value: 1
           evidence: Order Service
       reviewed: false
@@ -80,6 +98,9 @@ relationships:
         - type: structural
           value: 1
           evidence: Payment Service
+        - type: link
+          value: 1
+          evidence: Payment Service
       reviewed: false
       status: pending
       user_notes: ""
@@ -89,6 +110,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: User Service
+        - type: link
           value: 1
           evidence: User Service
       reviewed: false
@@ -102,6 +126,9 @@ relationships:
         - type: structural
           value: 1
           evidence: setup guide
+        - type: link
+          value: 1
+          evidence: setup guide
       reviewed: false
       status: pending
       user_notes: ""
@@ -111,6 +138,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: Database Design
+        - type: link
           value: 1
           evidence: Database Design
       reviewed: false
@@ -124,6 +154,9 @@ relationships:
         - type: structural
           value: 1
           evidence: Order Service
+        - type: link
+          value: 1
+          evidence: Order Service
       reviewed: false
       status: pending
       user_notes: ""
@@ -133,6 +166,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: Payment Service
+        - type: link
           value: 1
           evidence: Payment Service
       reviewed: false
@@ -146,15 +182,18 @@ relationships:
         - type: structural
           value: 1
           evidence: User Service
+        - type: link
+          value: 1
+          evidence: User Service
       reviewed: false
       status: pending
       user_notes: ""
     - source: architecture.md
       target: api/endpoints.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: API Reference
       reviewed: false
@@ -162,10 +201,10 @@ relationships:
       user_notes: ""
     - source: architecture.md
       target: config/setup.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Configuration
       reviewed: false
@@ -173,10 +212,10 @@ relationships:
       user_notes: ""
     - source: architecture.md
       target: database.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Database Design
       reviewed: false
@@ -184,10 +223,10 @@ relationships:
       user_notes: ""
     - source: architecture.md
       target: services/order-service.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Order Service
       reviewed: false
@@ -195,10 +234,10 @@ relationships:
       user_notes: ""
     - source: architecture.md
       target: services/payment-service.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Payment Service
       reviewed: false
@@ -206,10 +245,10 @@ relationships:
       user_notes: ""
     - source: architecture.md
       target: services/user-service.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: User Service
       reviewed: false
@@ -217,10 +256,10 @@ relationships:
       user_notes: ""
     - source: config/setup.md
       target: api/endpoints.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: API Reference
       reviewed: false
@@ -228,10 +267,10 @@ relationships:
       user_notes: ""
     - source: config/setup.md
       target: architecture.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Architecture
       reviewed: false
@@ -239,10 +278,10 @@ relationships:
       user_notes: ""
     - source: config/setup.md
       target: database.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Database Design
       reviewed: false
@@ -250,10 +289,10 @@ relationships:
       user_notes: ""
     - source: config/setup.md
       target: services/order-service.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Order Service
       reviewed: false
@@ -261,10 +300,10 @@ relationships:
       user_notes: ""
     - source: config/setup.md
       target: services/payment-service.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Payment Service
       reviewed: false
@@ -272,10 +311,10 @@ relationships:
       user_notes: ""
     - source: config/setup.md
       target: services/user-service.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: User Service
       reviewed: false
@@ -289,6 +328,9 @@ relationships:
         - type: structural
           value: 1
           evidence: setup guide
+        - type: link
+          value: 1
+          evidence: setup guide
       reviewed: false
       status: pending
       user_notes: ""
@@ -298,6 +340,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: Order Service
+        - type: link
           value: 1
           evidence: Order Service
       reviewed: false
@@ -311,6 +356,9 @@ relationships:
         - type: structural
           value: 1
           evidence: Payment Service
+        - type: link
+          value: 1
+          evidence: Payment Service
       reviewed: false
       status: pending
       user_notes: ""
@@ -322,15 +370,18 @@ relationships:
         - type: structural
           value: 1
           evidence: User Service
+        - type: link
+          value: 1
+          evidence: User Service
       reviewed: false
       status: pending
       user_notes: ""
     - source: quickstart.md
       target: api/endpoints.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: API Reference
       reviewed: false
@@ -338,10 +389,10 @@ relationships:
       user_notes: ""
     - source: quickstart.md
       target: architecture.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Architecture Overview
       reviewed: false
@@ -349,10 +400,10 @@ relationships:
       user_notes: ""
     - source: quickstart.md
       target: config/setup.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Configuration Guide
       reviewed: false
@@ -360,10 +411,10 @@ relationships:
       user_notes: ""
     - source: quickstart.md
       target: database.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Database Design
       reviewed: false
@@ -371,10 +422,10 @@ relationships:
       user_notes: ""
     - source: quickstart.md
       target: services/order-service.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Order Service
       reviewed: false
@@ -382,10 +433,10 @@ relationships:
       user_notes: ""
     - source: quickstart.md
       target: services/payment-service.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: Payment Service
       reviewed: false
@@ -393,10 +444,10 @@ relationships:
       user_notes: ""
     - source: quickstart.md
       target: services/user-service.md
-      type: references
+      type: mentions
       confidence: 1
       signals:
-        - type: structural
+        - type: link
           value: 1
           evidence: User Service
       reviewed: false
@@ -410,6 +461,9 @@ relationships:
         - type: structural
           value: 1
           evidence: API Reference
+        - type: link
+          value: 1
+          evidence: API Reference
       reviewed: false
       status: pending
       user_notes: ""
@@ -421,6 +475,9 @@ relationships:
         - type: structural
           value: 1
           evidence: Architecture Overview
+        - type: link
+          value: 1
+          evidence: Architecture Overview
       reviewed: false
       status: pending
       user_notes: ""
@@ -430,6 +487,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: setup guide
+        - type: link
           value: 1
           evidence: setup guide
       reviewed: false
@@ -443,6 +503,9 @@ relationships:
         - type: structural
           value: 1
           evidence: database design
+        - type: link
+          value: 1
+          evidence: database design
       reviewed: false
       status: pending
       user_notes: ""
@@ -452,6 +515,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: Payment Service
+        - type: link
           value: 1
           evidence: Payment Service
       reviewed: false
@@ -465,6 +531,9 @@ relationships:
         - type: structural
           value: 1
           evidence: User Service
+        - type: link
+          value: 1
+          evidence: User Service
       reviewed: false
       status: pending
       user_notes: ""
@@ -474,6 +543,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: API Reference
+        - type: link
           value: 1
           evidence: API Reference
       reviewed: false
@@ -487,6 +559,9 @@ relationships:
         - type: structural
           value: 1
           evidence: Configuration
+        - type: link
+          value: 1
+          evidence: Configuration
       reviewed: false
       status: pending
       user_notes: ""
@@ -496,6 +571,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: Database
+        - type: link
           value: 1
           evidence: Database
       reviewed: false
@@ -509,6 +587,9 @@ relationships:
         - type: structural
           value: 1
           evidence: Order Service
+        - type: link
+          value: 1
+          evidence: Order Service
       reviewed: false
       status: pending
       user_notes: ""
@@ -518,6 +599,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: User Service
+        - type: link
           value: 1
           evidence: User Service
       reviewed: false
@@ -531,6 +615,9 @@ relationships:
         - type: structural
           value: 1
           evidence: API Reference
+        - type: link
+          value: 1
+          evidence: API Reference
       reviewed: false
       status: pending
       user_notes: ""
@@ -540,6 +627,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: setup guide
+        - type: link
           value: 1
           evidence: setup guide
       reviewed: false
@@ -553,6 +643,9 @@ relationships:
         - type: structural
           value: 1
           evidence: Database Design
+        - type: link
+          value: 1
+          evidence: Database Design
       reviewed: false
       status: pending
       user_notes: ""
@@ -562,6 +655,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: Order Service
+        - type: link
           value: 1
           evidence: Order Service
       reviewed: false
@@ -575,6 +671,9 @@ relationships:
         - type: structural
           value: 1
           evidence: Payment Service
+        - type: link
+          value: 1
+          evidence: Payment Service
       reviewed: false
       status: pending
       user_notes: ""
@@ -584,6 +683,9 @@ relationships:
       confidence: 1
       signals:
         - type: structural
+          value: 1
+          evidence: 'A: Depends on database configuration, default 100.'
+        - type: link
           value: 1
           evidence: 'A: Depends on database configuration, default 100.'
       reviewed: false
