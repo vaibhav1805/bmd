@@ -471,7 +471,8 @@ Knowledge commands:
 
   bmd clean [OPTIONS]
     --dir DIR                 Directory to clean (default: .)
-    Remove all BMD-generated files (.bmd/, .bmd-*.json, .bmd-*.yaml)
+    Remove all BMD-generated files: database files (.bmd/, knowledge.db*),
+    registry (.bmd-registry.json), and metadata (.bmd-*.yaml, .bmd-*.json).
     Useful for re-indexing or cleanup.
 
 Examples:

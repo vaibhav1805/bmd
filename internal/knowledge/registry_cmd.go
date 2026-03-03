@@ -917,21 +917,27 @@ func buildSignalSummary(signals []Signal) string {
 // Usage: bmd clean [--dir <dir>]
 //
 // Removes:
-//   - .bmd/ (database directory)
-//   - .bmd-registry.json
-//   - .bmd-relationships-discovered.yaml
-//   - .bmd-relationships.yaml
-//   - .bmd-llm-extractions.json
+//   - .bmd/ (database directory with tree files)
+//   - knowledge.db (primary database file)
+//   - knowledge.db-shm, knowledge.db-wal (SQLite WAL files)
+//   - .bmd-registry.json (component registry)
+//   - .bmd-relationships-discovered.yaml (discovered relationships)
+//   - .bmd-relationships.yaml (accepted relationships)
+//   - .bmd-llm-extractions.json (LLM extraction cache)
 func CmdClean(args []string) error {
 	fs := flag.NewFlagSet("clean", flag.ContinueOnError)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "Usage: bmd clean [--dir <dir>]\n\n")
-		fmt.Fprintf(fs.Output(), "Removes all BMD-generated files from the specified directory:\n")
-		fmt.Fprintf(fs.Output(), "  - .bmd/ (database directory)\n")
-		fmt.Fprintf(fs.Output(), "  - .bmd-registry.json\n")
-		fmt.Fprintf(fs.Output(), "  - .bmd-relationships-discovered.yaml\n")
-		fmt.Fprintf(fs.Output(), "  - .bmd-relationships.yaml\n")
-		fmt.Fprintf(fs.Output(), "  - .bmd-llm-extractions.json\n\n")
+		fmt.Fprintf(fs.Output(), "Removes all BMD-generated files from the specified directory:\n\n")
+		fmt.Fprintf(fs.Output(), "Database files:\n")
+		fmt.Fprintf(fs.Output(), "  - .bmd/ (database directory with tree files)\n")
+		fmt.Fprintf(fs.Output(), "  - knowledge.db (primary database)\n")
+		fmt.Fprintf(fs.Output(), "  - knowledge.db-shm, knowledge.db-wal (SQLite WAL files)\n\n")
+		fmt.Fprintf(fs.Output(), "Configuration and metadata files:\n")
+		fmt.Fprintf(fs.Output(), "  - .bmd-registry.json (component registry)\n")
+		fmt.Fprintf(fs.Output(), "  - .bmd-relationships-discovered.yaml (discovered relationships)\n")
+		fmt.Fprintf(fs.Output(), "  - .bmd-relationships.yaml (accepted relationships)\n")
+		fmt.Fprintf(fs.Output(), "  - .bmd-llm-extractions.json (LLM extraction cache)\n\n")
 		fmt.Fprintf(fs.Output(), "Flags:\n")
 		fs.PrintDefaults()
 	}
@@ -954,7 +960,10 @@ func CmdClean(args []string) error {
 
 	// Files and directories to clean
 	filesToRemove := []string{
-		filepath.Join(absDir, ".bmd"),
+		filepath.Join(absDir, ".bmd"),              // Database directory with trees
+		filepath.Join(absDir, "knowledge.db"),      // Primary database file
+		filepath.Join(absDir, "knowledge.db-shm"),  // SQLite WAL shared memory
+		filepath.Join(absDir, "knowledge.db-wal"),  // SQLite WAL log
 		filepath.Join(absDir, RegistryFileName),
 		filepath.Join(absDir, DiscoveredManifestFile),
 		filepath.Join(absDir, AcceptedManifestFile),
@@ -963,6 +972,7 @@ func CmdClean(args []string) error {
 
 	removedCount := 0
 	var failedRemovals []string
+	var removedItems []string
 
 	for _, path := range filesToRemove {
 		if _, err := os.Stat(path); err == nil {
@@ -971,6 +981,7 @@ func CmdClean(args []string) error {
 				failedRemovals = append(failedRemovals, fmt.Sprintf("%s: %v", filepath.Base(path), err))
 			} else {
 				removedCount++
+				removedItems = append(removedItems, filepath.Base(path))
 				fmt.Fprintf(os.Stderr, "  Removed: %s\n", filepath.Base(path))
 			}
 		}
