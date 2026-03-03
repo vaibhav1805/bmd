@@ -7,7 +7,8 @@ Complete guide to integrating BMD with AI agents, LLM frameworks, and MCP server
 - [Commands](#commands) — Full agent command reference
 - [MCP Server](#mcp-server-mode) — Native agent integration
 - [Integration Frameworks](#integration-with-agent-frameworks) — LangChain, Python, Node.js
-- [Troubleshooting](#troubleshooting-for-agents) — Common agent integration issues
+- [Configuration](#configuration-for-agents) — Settings and environment variables
+- [Troubleshooting](#troubleshooting-for-agents) — Common integration issues
 - [FAQ](#faq-for-agents) — Answers to agent questions
 
 ---
@@ -17,27 +18,19 @@ Complete guide to integrating BMD with AI agents, LLM frameworks, and MCP server
 ### Agent Prerequisites
 
 ```bash
-# 1. Install bmd (as per main README)
+# 1. Install bmd (as per Getting Started guide)
 curl -fsSL \
   https://github.com/vaibhav1805/bmd/releases/latest/download/install.sh \
   | bash
 
 # 2. Verify Python 3 is installed (required for PageIndex wrapper)
-# macOS:
-brew install python3
+python3 --version  # Should be 3.6+
 
-# Linux (Ubuntu/Debian):
-sudo apt-get install python3
-
-# Verify installation
-python3 --version
-
-# 4. Create a .bmd config file in your documentation root
+# 3. Create a .bmd config file in your documentation root
 cat > docs/.bmd-config.yaml << 'EOF'
 # BMD Configuration File for Agents
 strategy: pageindex          # pageindex for semantic search (auto-installed, requires Python 3)
                             # or bm25 for fast keyword search
-theme: default              # (ignored by agents, only for human UI)
 output_format: json         # Default output format for agent queries
 auto_index: true            # Auto-index on startup
 index_frequency: "1h"       # Reindex frequency (1h, 5m, etc.)
@@ -51,7 +44,7 @@ ignore_patterns:
 mcp_mode: true              # Enable MCP server mode
 EOF
 
-# 5. Set environment variables for your agent
+# 4. Set environment variables for your agent
 export BMD_DIR="./docs"
 export BMD_STRATEGY="pageindex"
 export BMD_CACHE_DIR="$HOME/.cache/bmd"
@@ -62,6 +55,7 @@ export PATH="$HOME/.local/bin:$PATH"
 ### PageIndex Wrapper
 
 **Default behavior (BM25):** Works out-of-the-box — fast keyword-based search
+
 **Semantic search (PageIndex):** `pageindex` wrapper is **automatically installed** with the one-line installer
 
 The wrapper is installed to `~/.local/bin/pageindex` and requires **Python 3** (3.6+).
@@ -85,7 +79,9 @@ pageindex --help
 
 ## Commands
 
-### Agent Command Reference
+See [commands.md](./commands.md) for the complete command reference.
+
+### Agent Command Quick Reference
 
 | Command | Purpose | Example |
 |---------|---------|---------|
@@ -101,300 +97,6 @@ pageindex --help
 | `bmd graph` | Export dependency graph | `bmd graph --format dot` |
 | `bmd crawl --from-multiple <FILES>` | Multi-start graph traversal | `bmd crawl --from-multiple api.md,auth.md --depth 3` |
 | `bmd serve --mcp` | Start MCP server for agent fleets | `bmd serve --mcp` |
-
-### Querying & Analysis
-
-#### `bmd query` — Full-Text Search
-
-Searches your documentation using keyword matching or semantic reasoning.
-
-**How it works:**
-- **BM25 Strategy** (default): Tokenizes markdown, ranks results by relevance using BM25 algorithm
-- **PageIndex Strategy** (LLM-powered): Parses sections into a tree, uses LLM to match intent to content
-
-**Usage:**
-```bash
-# Keyword search (BM25) - fast, no AI needed
-bmd query "database patterns" --dir ./docs
-
-# Semantic search (LLM-powered) - understands intent
-bmd query "how are databases configured?" --dir ./docs --strategy pageindex
-
-# JSON output for agents
-bmd query "components" --dir ./docs --format json
-
-# Show top 10 results
-bmd query "authentication" --dir ./docs --top 10
-```
-
-**Output fields:**
-- `content`: Full text of matching section
-- `content_preview`: First 200 characters with ellipsis
-- `score`: Relevance score (higher = better match)
-- `heading_path`: Full heading hierarchy (e.g., "API Gateway > Authentication")
-- `start_line`, `end_line`: Location in source file
-
-#### `bmd components` — Detect Components
-
-Automatically identifies all components in your documentation and their dependencies.
-
-**How it detects services:**
-1. **Filename pattern**: Looks for `*-component.md` files (e.g., `auth-component.md`)
-2. **Heading pattern**: Looks for headings containing "Component" (e.g., `# User Component`)
-3. **High in-degree**: Documents heavily referenced by others (hub services)
-4. **Configuration**: Custom patterns defined in `.bmd-config.yaml` (highest confidence)
-
-**Usage:**
-```bash
-# List all detected services with dependencies
-bmd components --dir ./docs
-
-# JSON output (for agents)
-bmd components --dir ./docs --format json
-
-# Example output:
-# [
-#   {
-#     "id": "auth-component",
-#     "name": "Auth Service",
-#     "file": "services/auth-component.md",
-#     "confidence": 0.9,
-#     "dependency_count": 5
-#   }
-# ]
-```
-
-**Finding dependencies:**
-```bash
-# Show services that auth-component depends on
-bmd depends auth-component --dir ./docs
-
-# Show what depends on auth-component
-bmd depends auth-component --dir ./docs --reverse
-
-# JSON with full dependency paths
-bmd depends auth-component --dir ./docs --format json --transitive
-```
-
-#### `bmd graph` — Visualize Architecture
-
-Renders the complete dependency graph of your services and documents.
-
-**How it works:**
-- Builds a knowledge graph from cross-document links and service references
-- Uses hierarchical layout algorithm to minimize edge crossings
-- Renders as ASCII art for terminals or Graphviz DOT format for processing
-
-**Usage:**
-```bash
-# View graph in terminal (interactive)
-bmd graph --dir ./docs
-
-# Export as Graphviz format
-bmd graph --dir ./docs --format dot > architecture.dot
-dot -Tpng architecture.dot -o architecture.png
-
-# JSON format (for programmatic analysis)
-bmd graph --dir ./docs --format json
-
-# Statistics
-bmd graph --dir ./docs --format text
-```
-
-**Graph components:**
-- **Nodes**: Services, documents, modules
-- **Edges**: Dependencies, references, relationships
-- **Confidence**: Strength of detected relationship (0.0-1.0)
-- **Edge types**: `calls`, `references`, `depends_on`, `imports`
-
-**Example workflow:**
-```bash
-# 1. Build index
-bmd index ./docs --strategy pageindex
-
-# 2. Analyze services
-bmd components --dir ./docs
-
-# 3. Check specific service
-bmd depends payment-service --transitive
-
-# 4. Visualize full architecture
-bmd graph --dir ./docs --format dot | dot -Tsvg > architecture.svg
-```
-
-#### `bmd context` — RAG-Ready Context Assembly
-
-Combines search results and service information into coherent context blocks for agent systems.
-
-**Usage:**
-```bash
-# Assemble context for authentication question
-bmd context "how does authentication work?" --dir ./docs
-
-# Returns: Relevant sections + related services + dependency context
-```
-
-#### `bmd crawl` — Multi-Start Graph Traversal
-
-Traverse the knowledge graph from one or more starting files, expanding all branches using BFS. Useful for understanding dependency chains, impact analysis, and building context around a set of files.
-
-**CLI Usage:**
-```bash
-# Crawl forward from api-gateway.md (what does it depend on?)
-bmd crawl --from-multiple api-gateway.md --direction forward
-
-# Crawl backward from auth-service.md (who depends on it?)
-bmd crawl --from-multiple auth-service.md --direction backward
-
-# Multi-start crawl with depth limit and tree output
-bmd crawl --from-multiple api.md,auth.md --depth 3 --format tree
-
-# DOT output for Graphviz visualization
-bmd crawl --from-multiple api.md --direction both --format dot | dot -Tpng -o graph.png
-```
-
-**Agent Workflow: Search + Crawl**
-
-Agents can combine search and crawl for targeted context assembly:
-
-```bash
-# Step 1: Search for relevant files
-bmd query "authentication" --format json --top 3
-
-# Step 2: Extract file paths from results, then crawl their dependencies
-bmd crawl --from-multiple auth-service.md,user-service.md \
-  --direction forward --depth 5 --format json
-```
-
-**Output Formats:**
-
-| Format | Flag | Description |
-|--------|------|-------------|
-| JSON | `--format json` | ContractResponse envelope with nodes, edges, cycles (default) |
-| Tree | `--format tree` | ASCII tree showing parent-child hierarchy |
-| DOT | `--format dot` | Graphviz-compatible graph for visualization |
-| List | `--format list` | Flat list sorted by depth with parent info |
-
-**Crawl Options:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--from-multiple` | (required) | Comma-separated starting file paths |
-| `--dir` | `.` | Directory that was indexed |
-| `--direction` | `backward` | `forward` (outgoing), `backward` (incoming), `both` |
-| `--depth` | `3` | Maximum BFS traversal depth |
-| `--format` | `json` | Output format: `json`, `tree`, `dot`, `list` |
-
----
-
-## Component Registry
-
-The Component Registry provides confidence-weighted dependency discovery that goes beyond explicit markdown links. It aggregates signals from three sources:
-
-| Signal | Confidence | Source |
-|--------|-----------|--------|
-| Link | 1.0 | `[text](file.md)` explicit links |
-| Mention | 0.60-0.75 | Text pattern matching |
-| LLM | 0.65 | PageIndex semantic analysis (opt-in) |
-
-### Impact Analysis — Who Depends on This Service?
-
-```bash
-# Find all services that depend on auth-service
-bmd relationships --to auth-service --dir ./docs --format json
-```
-
-Response (CONTRACT-01):
-```json
-{
-  "type": "agent_response",
-  "status": "ok",
-  "code": "SUCCESS",
-  "data": {
-    "component": "auth-service",
-    "relationships": [
-      {
-        "from_component": "api-gateway",
-        "to_component": "auth-service",
-        "signals": [
-          {"source_type": "link", "confidence": 1.0, "evidence": "[auth](auth.md)"},
-          {"source_type": "mention", "confidence": 0.75, "evidence": "gateway calls auth to verify"}
-        ],
-        "aggregated_confidence": 1.0
-      }
-    ]
-  }
-}
-```
-
-### Dependency Discovery — What Does This Service Need?
-
-```bash
-# Find dependencies of payment-service with confidence >= 0.7
-bmd registry --from payment-service --min-confidence 0.7 --dir ./docs --format json
-
-# Include all signal sources (for debugging)
-bmd relationships --from payment-service --include-signals --dir ./docs
-```
-
-### LLM-Enhanced Discovery
-
-```bash
-# Enable LLM analysis to find implicit relationships (prose, comments, reasoning)
-bmd registry --dir ./docs --with-llm
-
-# With custom model
-bmd registry --dir ./docs --with-llm --llm-model claude-opus-4-6
-```
-
-### Agent Integration Workflow
-
-```python
-import subprocess
-import json
-
-def get_dependencies(service: str, docs_dir: str, min_confidence: float = 0.7) -> list[dict]:
-    """Get service dependencies from the component registry."""
-    result = subprocess.run(
-        ["bmd", "registry", "--from", service,
-         "--min-confidence", str(min_confidence),
-         "--dir", docs_dir, "--format", "json"],
-        capture_output=True, text=True
-    )
-    response = json.loads(result.stdout)
-    if response["status"] == "ok":
-        return response["data"]["relationships"]
-    return []
-
-def get_impact_set(service: str, docs_dir: str) -> list[str]:
-    """Find all services that depend on the given service."""
-    result = subprocess.run(
-        ["bmd", "relationships", "--to", service,
-         "--dir", docs_dir, "--format", "json"],
-        capture_output=True, text=True
-    )
-    response = json.loads(result.stdout)
-    if response["status"] == "ok":
-        return [r["from_component"] for r in response["data"]["relationships"]]
-    return []
-
-# Example: before deploying auth-service, check impact
-impact = get_impact_set("auth-service", "./docs")
-# Returns: ["api-gateway", "payment-service", "user-service"]
-```
-
-### Registry Flags Reference
-
-| Flag | Command | Description |
-|------|---------|-------------|
-| `--registry` | `depends`, `components` | Load and enrich from `.bmd-registry.json` |
-| `--min-confidence` | `registry`, `depends` | Minimum confidence threshold (0.0-1.0) |
-| `--with-llm` | `registry` | Enable LLM extraction via PageIndex |
-| `--no-hybrid` | `graph`, `depends`, `crawl` | Skip registry signal merging |
-| `--include-signals` | `relationships` | Show per-signal breakdown |
-| `--from` / `--to` | `relationships`, `registry` | Filter by source or target component |
-
-For complete API reference, see [REGISTRY.md](./REGISTRY.md).
 
 ---
 
@@ -456,6 +158,47 @@ Just ensure Python 3 is available and `~/.local/bin` is in PATH:
 python3 --version
 echo $PATH | grep -q "$HOME/.local/bin" || export PATH="$HOME/.local/bin:$PATH"
 ```
+
+---
+
+## Component Registry
+
+The Component Registry provides confidence-weighted dependency discovery that goes beyond explicit markdown links. It aggregates signals from three sources:
+
+| Signal | Confidence | Source |
+|--------|-----------|--------|
+| Link | 1.0 | `[text](file.md)` explicit links |
+| Mention | 0.60-0.75 | Text pattern matching |
+| LLM | 0.65 | PageIndex semantic analysis (opt-in) |
+
+### Impact Analysis — Who Depends on This Service?
+
+```bash
+# Find all services that depend on auth-service
+bmd relationships --to auth-service --dir ./docs --format json
+```
+
+### Dependency Discovery — What Does This Service Need?
+
+```bash
+# Find dependencies of payment-service with confidence >= 0.7
+bmd registry --from payment-service --min-confidence 0.7 --dir ./docs --format json
+
+# Include all signal sources (for debugging)
+bmd relationships --from payment-service --include-signals --dir ./docs
+```
+
+### LLM-Enhanced Discovery
+
+```bash
+# Enable LLM analysis to find implicit relationships (prose, comments, reasoning)
+bmd registry --dir ./docs --with-llm
+
+# With custom model
+bmd registry --dir ./docs --with-llm --llm-model claude-opus-4-6
+```
+
+See [component-registry.md](./component-registry.md) for detailed registry documentation.
 
 ---
 
@@ -638,6 +381,35 @@ def get_context(query, top=5):
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     return json.loads(result.stdout)
+
+def get_dependencies(service: str, docs_dir: str, min_confidence: float = 0.7):
+    """Get service dependencies from the component registry."""
+    result = subprocess.run(
+        ["bmd", "registry", "--from", service,
+         "--min-confidence", str(min_confidence),
+         "--dir", docs_dir, "--format", "json"],
+        capture_output=True, text=True
+    )
+    response = json.loads(result.stdout)
+    if response["status"] == "ok":
+        return response["data"]["relationships"]
+    return []
+
+def get_impact_set(service: str, docs_dir: str):
+    """Find all services that depend on the given service."""
+    result = subprocess.run(
+        ["bmd", "relationships", "--to", service,
+         "--dir", docs_dir, "--format", "json"],
+        capture_output=True, text=True
+    )
+    response = json.loads(result.stdout)
+    if response["status"] == "ok":
+        return [r["from_component"] for r in response["data"]["relationships"]]
+    return []
+
+# Example: before deploying auth-service, check impact
+impact = get_impact_set("auth-service", "./docs")
+# Returns: ["api-gateway", "payment-service", "user-service"]
 ```
 
 ### Using with Node.js
@@ -764,6 +536,7 @@ log_file: ~/.cache/bmd/bmd.log   # Optional file logging
 ### "INDEX_NOT_FOUND" errors
 
 **Cause:** No index exists
+
 **Fix:** Build the index first
 
 ```bash
@@ -873,6 +646,7 @@ docker run -it \
 ## FAQ for Agents
 
 **Q: How do I integrate bmd with my agent?**
+
 A: Use the subprocess mode or MCP server. Minimal example:
 
 ```python
@@ -882,21 +656,27 @@ data = json.loads(result.stdout)
 ```
 
 **Q: Should I use BM25 or PageIndex?**
+
 A: Use **PageIndex for semantic queries** ("How do we handle auth?"), **BM25 for exact keywords** ("async patterns"). PageIndex is auto-installed (needs Python 3) and gives better reasoning.
 
 **Q: How do I cache results?**
+
 A: Index once with `bmd index ./docs`, then all queries use the cached index. Rebuild with same command to refresh.
 
 **Q: Can multiple agents query the same index?**
+
 A: Yes! The index is a regular JSON file (`.bmd-index.json`). Multiple processes can read it safely. Write-lock is held only during indexing.
 
 **Q: How do I detect breaking changes in documentation?**
+
 A: Use `bmd depends service-name` to track dependencies, or check the graph with `bmd graph --format json`. Compare outputs to detect changes.
 
 **Q: What format should I use for output?**
+
 A: Use `--format json` for programmatic parsing. Other formats (text, csv, dot) are for human readability.
 
 **Q: How do I handle missing documentation?**
+
 A: BMD returns error responses with CONTRACT-01 envelope:
 
 ```json
@@ -911,9 +691,11 @@ A: BMD returns error responses with CONTRACT-01 envelope:
 Check `status` and `code` to handle gracefully.
 
 **Q: Can I use bmd in a Docker container?**
+
 A: Yes! See Docker section above. Map volumes for `/docs` and cache directory.
 
 **Q: How do I set up semantic search with a custom LLM model?**
+
 A: Set the `BMD_PAGEINDEX_MODEL` environment variable:
 
 ```bash
@@ -924,4 +706,4 @@ bmd query "question" --dir ./docs --strategy pageindex
 
 ---
 
-**See also:** [Main README](./README.md) for human-focused usage guide.
+**See also:** [Commands](./commands.md) for full command reference, [Deployment](./deployment.md) for container setup.

@@ -1,0 +1,591 @@
+version: "1.0"
+generated: "2026-03-03T12:38:02Z"
+algorithm_versions:
+    cooccurrence: "1.0"
+    structural: "1.0"
+    semantic: "1.0"
+    ner: "1.0"
+relationships:
+    - source: README.md
+      target: api/endpoints.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: API Reference
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: architecture.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Architecture Overview
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: config/setup.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Configuration Guide
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: database.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Database Design
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: quickstart.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Quick Start Guide
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: services/order-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Order Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: services/payment-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Payment Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: services/user-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: User Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: api/endpoints.md
+      target: config/setup.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: setup guide
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: api/endpoints.md
+      target: database.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Database Design
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: api/endpoints.md
+      target: services/order-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Order Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: api/endpoints.md
+      target: services/payment-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Payment Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: api/endpoints.md
+      target: services/user-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: User Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: architecture.md
+      target: api/endpoints.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: API Reference
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: architecture.md
+      target: config/setup.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Configuration
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: architecture.md
+      target: database.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Database Design
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: architecture.md
+      target: services/order-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Order Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: architecture.md
+      target: services/payment-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Payment Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: architecture.md
+      target: services/user-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: User Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: config/setup.md
+      target: api/endpoints.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: API Reference
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: config/setup.md
+      target: architecture.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Architecture
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: config/setup.md
+      target: database.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Database Design
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: config/setup.md
+      target: services/order-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Order Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: config/setup.md
+      target: services/payment-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Payment Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: config/setup.md
+      target: services/user-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: User Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: database.md
+      target: config/setup.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: setup guide
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: database.md
+      target: services/order-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Order Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: database.md
+      target: services/payment-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Payment Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: database.md
+      target: services/user-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: User Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: quickstart.md
+      target: api/endpoints.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: API Reference
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: quickstart.md
+      target: architecture.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Architecture Overview
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: quickstart.md
+      target: config/setup.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Configuration Guide
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: quickstart.md
+      target: database.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Database Design
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: quickstart.md
+      target: services/order-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Order Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: quickstart.md
+      target: services/payment-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Payment Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: quickstart.md
+      target: services/user-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: User Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/order-service.md
+      target: api/endpoints.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: API Reference
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/order-service.md
+      target: architecture.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Architecture Overview
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/order-service.md
+      target: config/setup.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: setup guide
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/order-service.md
+      target: database.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: database design
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/order-service.md
+      target: services/payment-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Payment Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/order-service.md
+      target: services/user-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: User Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/payment-service.md
+      target: api/endpoints.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: API Reference
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/payment-service.md
+      target: config/setup.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Configuration
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/payment-service.md
+      target: database.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Database
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/payment-service.md
+      target: services/order-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Order Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/payment-service.md
+      target: services/user-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: User Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/user-service.md
+      target: api/endpoints.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: API Reference
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/user-service.md
+      target: config/setup.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: setup guide
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/user-service.md
+      target: database.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Database Design
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/user-service.md
+      target: services/order-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Order Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: services/user-service.md
+      target: services/payment-service.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Payment Service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: troubleshooting.md
+      target: database.md
+      type: depends-on
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: 'A: Depends on database configuration, default 100.'
+      reviewed: false
+      status: pending
+      user_notes: ""

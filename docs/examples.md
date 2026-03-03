@@ -165,10 +165,9 @@ The knowledge system will automatically detect:
 
 The BMD project itself is documented with:
 - `README.md` — Project overview
-- `QUICKSTART.md` — Quick start guide
+- [Getting Started](./getting-started.md) — Installation and first steps
 - `ARCHITECTURE.md` — Technical design
-- `COMMANDS.md` — Command reference
-- Phase planning in `.planning/` directory
+- [Commands](./commands.md) — Command reference
 
 Try indexing the BMD repo itself:
 
@@ -181,4 +180,4 @@ bmd graph --format dot > bmd-architecture.dot
 
 ---
 
-For more information, see [README.md](../README.md) and [COMMANDS.md](../COMMANDS.md).
+For more information, see [README.md](../README.md), [Commands](./commands.md), and [Getting Started](./getting-started.md).

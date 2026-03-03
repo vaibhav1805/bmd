@@ -333,16 +333,8 @@ Typical performance on a 50-file codebase (Apple M3):
 
 ## Cache Files
 
-The registry system creates two optional cache files:
-
-| File | Purpose | Gitignored |
-|------|---------|-----------|
-| `.bmd-registry.json` | Aggregated component registry | Yes |
-| `.bmd-llm-extractions.json` | LLM relationship extraction cache | Yes |
-
-Both are excluded from git by default (added to `.gitignore`). Rebuild with:
+The registry system creates optional cache files that are excluded from git by default. Rebuild the registry with:
 ```bash
-rm .bmd-registry.json .bmd-llm-extractions.json
 bmd registry --dir .
 ```
 
@@ -408,12 +400,12 @@ bmd registry --dir ./docs
 
 1. **Mention extraction false positives**: Pattern matching may detect component names that appear in unrelated context (e.g., comments, examples). Use `--min-confidence 0.8` to filter.
 2. **LLM extraction accuracy**: PageIndex reasoning can misidentify relationships. LLM signals have lower default confidence (0.65) to reflect this.
-3. **No live updates**: Registry is rebuilt from scratch on each `bmd registry` call. Phase 18 will add incremental indexing.
+3. **No live updates**: Registry is rebuilt from scratch on each `bmd registry` call. Future versions will add incremental indexing.
 4. **Single-directory scope**: Registry currently covers one directory. Cross-directory relationships are not yet supported.
 
 ---
 
-## Future Work (Phase 18+)
+## Future Work
 
 - **Live indexing**: `bmd watch` for real-time registry updates
 - **Incremental updates**: Only re-extract changed files
