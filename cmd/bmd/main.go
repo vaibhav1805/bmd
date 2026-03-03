@@ -81,6 +81,13 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "registry":
+			cmdErr = knowledge.CmdRegistryCmd(args[1:])
+			if cmdErr != nil {
+				fmt.Fprintln(os.Stderr, "bmd registry:", cmdErr)
+				os.Exit(1)
+			}
+			return
 		case "export":
 			cmdErr = knowledge.CmdExport(args[1:])
 			if cmdErr != nil {
