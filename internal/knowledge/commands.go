@@ -1032,10 +1032,14 @@ func CmdCrawl(args []string) error {
 
 // RegistryArgs holds parsed arguments for CmdRegistryCmd.
 type RegistryArgs struct {
-	Dir     string
-	Format  string // "json" | "text"
-	MinConf float64
-	From    string // component ID to query relationships from (optional)
+	Dir      string
+	Format   string // "json" | "text"
+	MinConf  float64
+	From     string // component ID to query relationships from (optional)
+	WithLLM  bool   // --with-llm: enable LLM-powered relationship extraction
+	LLMBin   string // --llm-bin: path to pageindex binary (default: "pageindex")
+	LLMModel string // --llm-model: LLM model name (default: "claude-sonnet-4-5")
+	LLMCache string // --llm-cache: path to .bmd-llm-extractions.json
 }
 
 // ParseRegistryArgs parses raw CLI arguments for the registry command.
@@ -1052,6 +1056,10 @@ func ParseRegistryArgs(args []string) (*RegistryArgs, error) {
 	fs.StringVar(&a.Format, "format", "json", "Output format (json|text)")
 	fs.Float64Var(&a.MinConf, "min-confidence", 0.0, "Minimum confidence threshold (0.0–1.0)")
 	fs.StringVar(&a.From, "from", "", "Filter relationships from this component ID")
+	fs.BoolVar(&a.WithLLM, "with-llm", false, "Enable LLM-powered relationship extraction via PageIndex")
+	fs.StringVar(&a.LLMBin, "llm-bin", "pageindex", "Path to pageindex binary for LLM extraction")
+	fs.StringVar(&a.LLMModel, "llm-model", "claude-sonnet-4-5", "LLM model for extraction")
+	fs.StringVar(&a.LLMCache, "llm-cache", LLMCacheFileName, "Path to LLM extraction cache file")
 
 	if err := fs.Parse(flags); err != nil {
 		return nil, fmt.Errorf("registry: %w", err)
@@ -1112,7 +1120,23 @@ func CmdRegistryCmd(args []string) error {
 
 		docs, _ := ScanDirectory(absDir)
 		reg = NewComponentRegistry()
-		reg.InitFromGraph(graph, docs)
+
+		if a.WithLLM {
+			llmCfg := QueryLLMConfig{
+				Enabled:      true,
+				CachePath:    a.LLMCache,
+				SkipExisting: true,
+				TimeoutSecs:  30,
+				PageIndexBin: a.LLMBin,
+				Model:        a.LLMModel,
+			}
+			if llmCfg.CachePath == "" {
+				llmCfg.CachePath = filepath.Join(absDir, LLMCacheFileName)
+			}
+			reg.InitFromGraphWithLLM(graph, docs, llmCfg)
+		} else {
+			reg.InitFromGraph(graph, docs)
+		}
 	}
 
 	// Query relationships.
@@ -1247,6 +1271,7 @@ func isBoolFlag(name string) bool {
 		"watch":      true,
 		"transitive": true,
 		"registry":   true,
+		"with-llm":   true,
 	}
 	return boolFlags[name]
 }

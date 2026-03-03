@@ -288,8 +288,18 @@ func (r *ComponentRegistry) RelationshipCount() int { return len(r.Relationships
 //  1. Extract components from graph nodes.
 //  2. Extract link-based relationships from graph edges (SignalLink).
 //  3. Extract text mention relationships from document content (SignalMention).
-//  4. Aggregate all signals.
+//  4. Extract LLM-inferred relationships from PageIndex (SignalLLM) — optional.
+//  5. Aggregate all signals.
 func (r *ComponentRegistry) InitFromGraph(g *Graph, docs []Document) {
+	r.InitFromGraphWithLLM(g, docs, QueryLLMConfig{})
+}
+
+// InitFromGraphWithLLM populates the registry like InitFromGraph, but also
+// runs LLM-powered extraction when llmCfg.Enabled is true.
+//
+// When llmCfg.Enabled is false (the zero value), this is identical to
+// InitFromGraph with no LLM overhead.
+func (r *ComponentRegistry) InitFromGraphWithLLM(g *Graph, docs []Document, llmCfg QueryLLMConfig) {
 	// Build doc lookup for type inference.
 	docByID := make(map[string]*Document, len(docs))
 	for i := range docs {
@@ -331,11 +341,28 @@ func (r *ComponentRegistry) InitFromGraph(g *Graph, docs []Document) {
 		if len(components) > 0 {
 			mentions := ExtractMentionsFromDocuments(docs, components)
 			r.BuildFromMentions(mentions)
-			return // BuildFromMentions already calls AggregateConfidence.
+
+			// Step 4 (optional): LLM extraction — try but don't fail.
+			if llmCfg.Enabled && len(docs) > 0 {
+				llmRels, _ := RunLLMExtraction(llmCfg, docs, components)
+				r.BuildFromLLMExtraction(llmRels)
+			}
+
+			return
 		}
 	}
 
-	// Step 4: Aggregate all signals (when no mention extraction ran).
+	// Step 4 (optional): LLM extraction when no component detector ran.
+	// Build component list from registered components for filtering.
+	if llmCfg.Enabled && len(docs) > 0 {
+		components := registryComponentsToComponents(r)
+		if len(components) > 0 {
+			llmRels, _ := RunLLMExtraction(llmCfg, docs, components)
+			r.BuildFromLLMExtraction(llmRels)
+		}
+	}
+
+	// Step 5: Aggregate all signals (when no mention extraction ran).
 	r.AggregateConfidence()
 }
 
@@ -465,5 +492,62 @@ func (r *ComponentRegistry) GetMentionsFor(componentID string) []RegistryRelatio
 		}
 		return result[i].FromComponent < result[j].FromComponent
 	})
+	return result
+}
+
+// BuildFromLLMExtraction converts a slice of LLMRelationship values into
+// SignalLLM entries and adds them to the registry.
+//
+// Each LLM relationship becomes a signal with source type SignalLLM.
+// After loading all relationships, AggregateConfidence is called.
+func (r *ComponentRegistry) BuildFromLLMExtraction(relationships []LLMRelationship) {
+	for _, rel := range relationships {
+		_ = r.AddSignal(rel.FromFile, rel.ToComponent, Signal{
+			SourceType: SignalLLM,
+			Confidence: rel.Confidence,
+			Evidence:   rel.Evidence,
+			Weight:     1.0,
+		})
+	}
+	r.AggregateConfidence()
+}
+
+// GetLLMRelationships returns all relationships that target the given component
+// and have at least one LLM-type signal.
+//
+// Results are sorted by AggregatedConfidence descending.
+func (r *ComponentRegistry) GetLLMRelationships(componentID string) []RegistryRelationship {
+	var result []RegistryRelationship
+	for _, rel := range r.Relationships {
+		if rel.ToComponent != componentID {
+			continue
+		}
+		for _, sig := range rel.Signals {
+			if sig.SourceType == SignalLLM {
+				result = append(result, rel)
+				break
+			}
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].AggregatedConfidence != result[j].AggregatedConfidence {
+			return result[i].AggregatedConfidence > result[j].AggregatedConfidence
+		}
+		return result[i].FromComponent < result[j].FromComponent
+	})
+	return result
+}
+
+// registryComponentsToComponents converts the registry's component map into
+// the []Component slice expected by LLM extraction filters.
+func registryComponentsToComponents(r *ComponentRegistry) []Component {
+	result := make([]Component, 0, len(r.Components))
+	for _, rc := range r.Components {
+		result = append(result, Component{
+			ID:   rc.ID,
+			Name: rc.Name,
+			File: rc.FileRef,
+		})
+	}
 	return result
 }
