@@ -419,6 +419,15 @@ func CmdIndex(args []string) error {
 		fmt.Fprintf(os.Stderr, "  %d relationships written to %s\n", len(manifest.Relationships), DiscoveredManifestFile)
 	}
 
+	// Create and save registry for subsequent commands to reuse index without rebuilding.
+	reg := NewComponentRegistry()
+	reg.InitFromGraph(graph, docs)
+	if err := SaveRegistry(reg, registryPath); err != nil {
+		fmt.Fprintf(os.Stderr, "  warning: save registry: %v\n", err)
+	} else {
+		fmt.Fprintf(os.Stderr, "  Registry saved to %s\n", RegistryFileName)
+	}
+
 	// Check for accepted relationships and merge into graph.
 	acceptedPath := filepath.Join(absDir, AcceptedManifestFile)
 	acceptedEdges, loadErr := LoadAcceptedRelationships(acceptedPath)
