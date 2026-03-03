@@ -414,14 +414,20 @@ Knowledge commands:
     --format table|json|dot   Output format (default: table)
 
   bmd relationships-review [OPTIONS]
-    --dir DIR                 Directory containing manifest files (default: .)
-    --accept-all              Auto-accept all discovered relationships
-    --reject-all              Reject all discovered relationships
-    --edit                    Open manifest in $EDITOR for manual review
-    --export-to PATH          Save accepted relationships to specific path
+    --dir DIR                        Directory containing manifest files (default: .)
+    --accept-all                     Auto-accept all discovered relationships
+    --reject-all                     Reject all discovered relationships
+    --edit                           Open manifest in $EDITOR for manual review
+    --export-to PATH                 Save accepted relationships to specific path
+    --llm-validate                   Validate pending relationships via LLM subprocess
+    --llm-validate-bin PATH          Path to LLM validator binary (default: pageindex)
+    --llm-model MODEL                LLM model for validation (default: claude-sonnet-4-5)
+    --auto-accept-threshold N        Auto-accept if LLM confidence >= N (0.0 = off)
+    --auto-reject-threshold N        Auto-reject if LLM confidence < N (0.0 = off)
     Review discovered relationships and persist review decisions.
     Discovered relationships are written by 'bmd index' to .bmd-relationships-discovered.yaml.
     User decisions are saved to .bmd-relationships.yaml, which is merged into the graph on index.
+    With --llm-validate, each pending relationship is validated via LLM before review.
 
   bmd graph [SERVICE] [OPTIONS]
     --format dot|json         Output format (default: json)

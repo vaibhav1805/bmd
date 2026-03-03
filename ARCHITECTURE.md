@@ -146,11 +146,21 @@ File Scanner (find all .md)
     ↓
 BM25 Indexing (full-text)
     ↓
-Graph Builder (relationships)
+Graph Builder (explicit markdown links)
+    ↓
+DiscoverRelationships (co-occurrence, structural, semantic)
+    ↓
+Merge discovered edges into graph
     ↓
 Component Detection (microservices)
     ↓
 SQLite Persistence
+    ↓
+Relationship Manifest (.bmd-relationships-discovered.yaml)
+    ↓
+User Review & Optional LLM Validation
+    ↓
+Accepted Relationships (.bmd-relationships.yaml)
     ↓
 CLI Query Interface
 ```
@@ -538,6 +548,55 @@ Graph Database Tables
     ├── auth-user | auth-service.md | user-service.md | dependency | 1.0 | see also...
     └── auth-redis | auth-service.md | redis | dependency | 0.7 | redis (caching)
 ```
+
+### Relationship Discovery Layer
+
+In addition to explicit markdown links, BMD automatically discovers implicit relationships using pattern-matching algorithms:
+
+**Discovery Methods:**
+1. **Co-Occurrence Analysis** (0.5–0.75 confidence)
+   - Detects service names mentioned in the same document or nearby sections
+   - Example: If `auth.md` mentions "redis" and "cache", adds edge auth.md → redis
+
+2. **Structural Pattern Matching** (0.6–0.85 confidence)
+   - Analyzes function calls, class references, imports, and configuration references
+   - Example: `database.Connect()` or `import { UserService }` trigger edges
+
+3. **Semantic Similarity (TF-IDF)** (0.45–0.75 confidence)
+   - Computes term-frequency similarity between documents
+   - Example: Documents with similar vocabulary get lower-confidence edges
+
+4. **Named Entity Recognition + SVO Patterns** (0.5–0.8 confidence)
+   - Identifies service names (NER) and subject-verb-object patterns
+   - Example: "auth-service calls user-service" → creates directed edge
+
+**Discovery Flow:**
+```
+Indexed Documents
+    ↓
+Run all 4 discovery algorithms in parallel
+    ↓
+Aggregate signals (deduplicate by source→target)
+    ↓
+Generate confidence scores (0.45–0.85 range)
+    ↓
+Merge into graph structure
+    ↓
+Create .bmd-relationships-discovered.yaml manifest
+    ↓
+User review + optional LLM validation (Phase 20)
+    ↓
+User accepts/rejects, saves to .bmd-relationships.yaml
+    ↓
+Accepted relationships merged into final graph
+```
+
+**Confidence Ranges:**
+- 1.0: Explicit markdown links (highest confidence)
+- 0.8–0.95: Strong structural patterns (imports, function calls)
+- 0.65–0.8: Semantic patterns + strong co-occurrence
+- 0.45–0.65: Weak co-occurrence, NER-based patterns
+- 0.0–0.45: Rejected by user or below threshold
 
 ### Graph Traversal: Multi-Start BFS Example
 
@@ -998,7 +1057,7 @@ Goal: Go beyond explicit links to discover implicit component relationships from
 
 ## Project Status
 
-All 19 phases complete and production-ready:
+All 20 phases complete and production-ready:
 - ✅ Rendering engine with syntax highlighting
 - ✅ Full editor with persistence and undo/redo
 - ✅ Navigation and link following
@@ -1014,6 +1073,7 @@ All 19 phases complete and production-ready:
 - ✅ **Component registry with hybrid signal aggregation**
 - ✅ **Live graph updates with file watching**
 - ✅ **Intelligent relationship discovery from prose and manifests**
+- ✅ **LLM-powered relationship validation with auto-accept/reject thresholds**
 - ✅ 415+ unit tests
 
 **Current Status:** Feature-complete. All phases shipped. Production-ready.

@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -45,11 +46,16 @@ type RelationshipsArgs struct {
 
 // ReviewArgs holds parsed arguments for CmdRelationshipsReview.
 type ReviewArgs struct {
-	Dir       string
-	AcceptAll bool   // --accept-all: auto-accept all suggestions
-	RejectAll bool   // --reject-all: reject all suggestions
-	Edit      bool   // --edit: open in $EDITOR
-	ExportTo  string // --export-to: save to specific location
+	Dir                 string
+	AcceptAll           bool    // --accept-all: auto-accept all suggestions
+	RejectAll           bool    // --reject-all: reject all suggestions
+	Edit                bool    // --edit: open in $EDITOR
+	ExportTo            string  // --export-to: save to specific location
+	LLMValidate         bool    // --llm-validate: validate pending relationships via LLM subprocess
+	LLMValidateBin      string  // --llm-validate-bin: path to LLM validator binary (default "pageindex")
+	LLMModel            string  // --llm-model: LLM model for validation (default "claude-sonnet-4-5")
+	AutoAcceptThreshold float64 // --auto-accept-threshold: auto-accept if LLM confidence >= threshold (0.0 = off)
+	AutoRejectThreshold float64 // --auto-reject-threshold: auto-reject if LLM confidence < threshold (0.0 = off)
 }
 
 // ─── argument parsers ─────────────────────────────────────────────────────────
@@ -165,6 +171,8 @@ func ParseRelationshipsArgs(args []string) (*RelationshipsArgs, error) {
 // ParseReviewArgs parses args for CmdRelationshipsReview.
 //
 // Usage: bmd relationships-review [--dir DIR] [--accept-all] [--reject-all] [--edit] [--export-to PATH]
+//        [--llm-validate] [--llm-validate-bin PATH] [--llm-model MODEL]
+//        [--auto-accept-threshold N] [--auto-reject-threshold N]
 func ParseReviewArgs(args []string) (*ReviewArgs, error) {
 	positionals, flags := splitPositionalsAndFlags(args)
 
@@ -177,6 +185,13 @@ func ParseReviewArgs(args []string) (*ReviewArgs, error) {
 	fs.BoolVar(&a.RejectAll, "reject-all", false, "Reject all discovered relationships")
 	fs.BoolVar(&a.Edit, "edit", false, "Open manifest in $EDITOR for review")
 	fs.StringVar(&a.ExportTo, "export-to", "", "Save accepted relationships to a specific path")
+	fs.BoolVar(&a.LLMValidate, "llm-validate", false, "Validate pending relationships via LLM subprocess")
+	fs.StringVar(&a.LLMValidateBin, "llm-validate-bin", "pageindex", "Path to LLM validator binary")
+	fs.StringVar(&a.LLMModel, "llm-model", "claude-sonnet-4-5", "LLM model for validation")
+	fs.Float64Var(&a.AutoAcceptThreshold, "auto-accept-threshold", 0.0,
+		"Auto-accept if LLM confidence >= threshold (0.0 = off)")
+	fs.Float64Var(&a.AutoRejectThreshold, "auto-reject-threshold", 0.0,
+		"Auto-reject if LLM confidence < threshold (0.0 = off)")
 
 	if err := fs.Parse(flags); err != nil {
 		return nil, fmt.Errorf("relationships-review: %w", err)
@@ -643,6 +658,53 @@ func CmdRelationshipsReview(args []string) error {
 
 	// Merge previous review decisions into the discovered manifest.
 	discovered.MergeUserEdits(accepted)
+
+	// Validate with LLM if requested.
+	if a.LLMValidate {
+		cfg := LLMValidatorConfig{
+			ExecutablePath: a.LLMValidateBin,
+			Model:          a.LLMModel,
+		}
+		pendingCount := 0
+		for _, r := range discovered.Relationships {
+			if r.Status == "pending" {
+				pendingCount++
+			}
+		}
+		fmt.Fprintf(os.Stderr, "  LLM validating %d pending relationships...\n", pendingCount)
+
+		for i := range discovered.Relationships {
+			rel := &discovered.Relationships[i]
+			if rel.Status != "pending" {
+				continue // skip already-reviewed
+			}
+			result, err := ValidateRelationship(cfg, rel)
+			if errors.Is(err, ErrLLMValidatorNotFound) {
+				return fmt.Errorf("relationships-review: --llm-validate requires LLM validator: %w", err)
+			}
+			if err != nil {
+				continue // graceful degradation on other errors
+			}
+			// Append LLM signal to manifest entry
+			rel.Signals = append(rel.Signals, ManifestSignal{
+				Type:     string(SignalLLM),
+				Value:    result.Confidence,
+				Evidence: result.Reasoning,
+			})
+			if result.Confidence > rel.Confidence {
+				rel.Confidence = result.Confidence
+			}
+			// Auto-accept/reject based on thresholds
+			if a.AutoAcceptThreshold > 0 && result.Valid && result.Confidence >= a.AutoAcceptThreshold {
+				rel.Status = "accepted"
+				rel.Reviewed = true
+			} else if a.AutoRejectThreshold > 0 && (!result.Valid || result.Confidence < a.AutoRejectThreshold) {
+				rel.Status = "rejected"
+				rel.Reviewed = true
+			}
+		}
+		fmt.Fprintf(os.Stderr, "  LLM validation complete\n")
+	}
 
 	// Apply bulk actions.
 	switch {

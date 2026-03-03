@@ -37,7 +37,7 @@ func (s *Server) Start(ctx context.Context) error {
 		server.WithToolCapabilities(true),
 	)
 
-	// Register all 10 knowledge tools.
+	// Register all 11 knowledge tools.
 	s.registerQueryTool(mcpServer)
 	s.registerIndexTool(mcpServer)
 	s.registerDependsTool(mcpServer)
@@ -45,6 +45,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.registerGraphTool(mcpServer)
 	s.registerContextTool(mcpServer)
 	s.registerGraphCrawlTool(mcpServer)
+	s.registerRelationshipsValidateTool(mcpServer)
 	s.registerWatchStartTool(mcpServer)
 	s.registerWatchPollTool(mcpServer)
 	s.registerWatchStopTool(mcpServer)
@@ -231,4 +232,26 @@ func (s *Server) registerGraphCrawlTool(mcpServer *server.MCPServer) {
 	)
 
 	mcpServer.AddTool(tool, s.handleGraphCrawl)
+}
+
+// registerRelationshipsValidateTool registers the bmd/relationships_validate tool for LLM-powered validation.
+func (s *Server) registerRelationshipsValidateTool(mcpServer *server.MCPServer) {
+	tool := mcpsdk.NewTool(
+		"bmd/relationships_validate",
+		mcpsdk.WithDescription("Validate pending relationships in the discovered manifest via LLM subprocess. Each pending relationship is assessed for confidence and can be auto-accepted or auto-rejected based on thresholds."),
+		mcpsdk.WithString("dir",
+			mcpsdk.Description("Directory containing .bmd-relationships-discovered.yaml (default: configured baseDir)"),
+		),
+		mcpsdk.WithString("llm_model",
+			mcpsdk.Description("LLM model for validation (default: claude-sonnet-4-5)"),
+		),
+		mcpsdk.WithNumber("auto_accept_threshold",
+			mcpsdk.Description("Auto-accept if LLM confidence >= threshold (0.0 = off, default: 0.0)"),
+		),
+		mcpsdk.WithNumber("auto_reject_threshold",
+			mcpsdk.Description("Auto-reject if LLM confidence < threshold (0.0 = off, default: 0.0)"),
+		),
+	)
+
+	mcpServer.AddTool(tool, s.handleRelationshipsValidate)
 }

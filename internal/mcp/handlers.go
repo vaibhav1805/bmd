@@ -235,6 +235,75 @@ func (s *Server) handleGraphCrawl(ctx context.Context, req mcpsdk.CallToolReques
 	return mcpsdk.NewToolResultText(string(data)), nil
 }
 
+// handleRelationshipsValidate handles the bmd/relationships_validate MCP tool invocation.
+// It validates pending relationships in the discovered manifest via LLM subprocess.
+func (s *Server) handleRelationshipsValidate(ctx context.Context, req mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+	dir := mcpsdk.ParseString(req, "dir", s.baseDir)
+	llmModel := mcpsdk.ParseString(req, "llm_model", "claude-sonnet-4-5")
+	// Parse thresholds - use ParseString and manual float conversion for compatibility
+	autoAcceptThresholdStr := mcpsdk.ParseString(req, "auto_accept_threshold", "0.0")
+	autoRejectThresholdStr := mcpsdk.ParseString(req, "auto_reject_threshold", "0.0")
+	autoAcceptThreshold := parseThreshold(autoAcceptThresholdStr)
+	autoRejectThreshold := parseThreshold(autoRejectThresholdStr)
+
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		errResp := knowledge.NewErrorResponse("INVALID_PATH", fmt.Sprintf("failed to resolve dir: %v", err))
+		data, _ := json.MarshalIndent(errResp, "", "  ")
+		return mcpsdk.NewToolResultText(string(data)), nil
+	}
+
+	// Build args for CmdRelationshipsReview with validation.
+	args := []string{
+		"--dir", absDir,
+		"--llm-validate",
+		"--llm-model", llmModel,
+	}
+	if autoAcceptThreshold > 0.0 {
+		args = append(args, "--auto-accept-threshold", fmt.Sprintf("%v", autoAcceptThreshold))
+	}
+	if autoRejectThreshold > 0.0 {
+		args = append(args, "--auto-reject-threshold", fmt.Sprintf("%v", autoRejectThreshold))
+	}
+
+	// Run validation.
+	stderr, err := captureStderr(func() error {
+		return knowledge.CmdRelationshipsReview(args)
+	})
+	if err != nil {
+		errResp := knowledge.NewErrorResponse("VALIDATION_FAILED", fmt.Sprintf("validation failed: %v", err))
+		data, _ := json.MarshalIndent(errResp, "", "  ")
+		return mcpsdk.NewToolResultText(string(data)), nil
+	}
+
+	// Load the result manifest to extract summary stats.
+	acceptedPath := filepath.Join(absDir, knowledge.AcceptedManifestFile)
+	manifest, err := knowledge.LoadRelationshipManifest(acceptedPath)
+	if err != nil {
+		errResp := knowledge.NewErrorResponse("LOAD_FAILED", fmt.Sprintf("failed to load result manifest: %v", err))
+		data, _ := json.MarshalIndent(errResp, "", "  ")
+		return mcpsdk.NewToolResultText(string(data)), nil
+	}
+	if manifest == nil {
+		errResp := knowledge.NewErrorResponse("NO_MANIFEST", "no relationships manifest found")
+		data, _ := json.MarshalIndent(errResp, "", "  ")
+		return mcpsdk.NewToolResultText(string(data)), nil
+	}
+
+	summary := manifest.Summarize()
+	resultData := map[string]interface{}{
+		"validated": summary.Total,
+		"accepted":  summary.Accepted,
+		"rejected":  summary.Rejected,
+		"pending":   summary.Pending,
+		"message":   stderr,
+	}
+
+	okResp := knowledge.NewOKResponse("Relationships validated", resultData)
+	data, _ := json.MarshalIndent(okResp, "", "  ")
+	return mcpsdk.NewToolResultText(string(data)), nil
+}
+
 // handleWatchStart handles the bmd/watch_start MCP tool invocation.
 // It creates a FileWatcher and IncrementalUpdater for the requested directory,
 // registers a new WatchSession, and returns the session ID.
@@ -358,6 +427,13 @@ func (s *Server) handleWatchStop(ctx context.Context, req mcpsdk.CallToolRequest
 	})
 	data, _ := json.MarshalIndent(resp, "", "  ")
 	return mcpsdk.NewToolResultText(string(data)), nil
+}
+
+// parseThreshold parses a threshold string to a float64, defaulting to 0.0 on error.
+func parseThreshold(s string) float64 {
+	var f float64
+	fmt.Sscanf(s, "%f", &f)
+	return f
 }
 
 // absPath resolves a directory path to an absolute path.
