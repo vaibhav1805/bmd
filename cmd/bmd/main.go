@@ -81,13 +81,6 @@ func main() {
 				os.Exit(1)
 			}
 			return
-		case "registry":
-			cmdErr = knowledge.CmdRegistryCmd(args[1:])
-			if cmdErr != nil {
-				fmt.Fprintln(os.Stderr, "bmd registry:", cmdErr)
-				os.Exit(1)
-			}
-			return
 		case "relationships-review":
 			cmdErr = knowledge.CmdRelationshipsReview(args[1:])
 			if cmdErr != nil {
@@ -380,7 +373,7 @@ View a single markdown file:
 Knowledge commands:
   bmd index [DIR] [OPTIONS]
     --dir DIR                 Directory to index (default: .)
-    --db DB                   Database path (default: knowledge.db)
+    --db DB                   Database path (default: .bmd/knowledge.db)
     --strategy pageindex      Use PageIndex for semantic indexing (optional)
     --model MODEL             LLM model for PageIndex (default: claude-sonnet-4-5)
     --pageindex-bin PATH      Path to pageindex CLI (default: pageindex)

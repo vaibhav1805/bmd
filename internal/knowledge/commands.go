@@ -101,7 +101,7 @@ func ParseIndexArgs(args []string) (*IndexArgs, error) {
 
 	var a IndexArgs
 	fs.StringVar(&a.Dir, "dir", ".", "Directory to index")
-	fs.StringVar(&a.DB, "db", "knowledge.db", "Path to SQLite database")
+	fs.StringVar(&a.DB, "db", ".bmd/knowledge.db", "Path to SQLite database")
 	fs.BoolVar(&a.Watch, "watch", false, "Rebuild index on file changes")
 	fs.IntVar(&a.PollInterval, "poll-interval", 5, "Polling interval in seconds (watch mode)")
 	fs.StringVar(&a.Strategy, "strategy", "", "Indexing strategy: '' (BM25 default) | 'pageindex'")
@@ -380,7 +380,11 @@ func CmdIndex(args []string) error {
 	fmt.Fprintf(os.Stderr, "  %d microservices detected\n", len(services))
 
 	// Open / create database.
+	// Make database path relative to indexed directory if not absolute.
 	dbPath := a.DB
+	if !filepath.IsAbs(dbPath) {
+		dbPath = filepath.Join(absDir, dbPath)
+	}
 	db, err := OpenDB(dbPath)
 	if err != nil {
 		return fmt.Errorf("index: open db %q: %w", dbPath, err)
@@ -1116,186 +1120,6 @@ func CmdCrawl(args []string) error {
 		fmt.Println(output)
 	}
 
-	return nil
-}
-
-// RegistryArgs holds parsed arguments for CmdRegistryCmd.
-type RegistryArgs struct {
-	Dir      string
-	Format   string // "json" | "text"
-	MinConf  float64
-	From     string // component ID to query relationships from (optional)
-	WithLLM  bool   // --with-llm: enable LLM-powered relationship extraction
-	LLMBin   string // --llm-bin: path to pageindex binary (default: "pageindex")
-	LLMModel string // --llm-model: LLM model name (default: "claude-sonnet-4-5")
-	LLMCache string // --llm-cache: path to .bmd-llm-extractions.json
-}
-
-// ParseRegistryArgs parses raw CLI arguments for the registry command.
-//
-// Usage: bmd registry [--dir DIR] [--format json|text] [--min-confidence 0.0] [--from COMPONENT]
-func ParseRegistryArgs(args []string) (*RegistryArgs, error) {
-	positionals, flags := splitPositionalsAndFlags(args)
-
-	fs := flag.NewFlagSet("registry", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-
-	var a RegistryArgs
-	fs.StringVar(&a.Dir, "dir", ".", "Directory containing .bmd-registry.json")
-	fs.StringVar(&a.Format, "format", "json", "Output format (json|text)")
-	fs.Float64Var(&a.MinConf, "min-confidence", 0.0, "Minimum confidence threshold (0.0–1.0)")
-	fs.StringVar(&a.From, "from", "", "Filter relationships from this component ID")
-	fs.BoolVar(&a.WithLLM, "with-llm", false, "Enable LLM-powered relationship extraction via PageIndex")
-	fs.StringVar(&a.LLMBin, "llm-bin", "pageindex", "Path to pageindex binary for LLM extraction")
-	fs.StringVar(&a.LLMModel, "llm-model", "claude-sonnet-4-5", "LLM model for extraction")
-	fs.StringVar(&a.LLMCache, "llm-cache", LLMCacheFileName, "Path to LLM extraction cache file")
-
-	if err := fs.Parse(flags); err != nil {
-		return nil, fmt.Errorf("registry: %w", err)
-	}
-	if len(positionals) > 0 {
-		a.Dir = positionals[0]
-	}
-	if a.MinConf < 0.0 || a.MinConf > 1.0 {
-		return nil, fmt.Errorf("registry: --min-confidence must be in [0.0, 1.0]")
-	}
-	return &a, nil
-}
-
-// CmdRegistryCmd implements `bmd registry`.  It loads the ComponentRegistry
-// from .bmd-registry.json (building it from the graph if absent) and prints
-// components and relationships.
-//
-// Graceful fallback: when no .bmd-registry.json exists, the registry is
-// initialized from the knowledge graph and returned (but not persisted).
-func CmdRegistryCmd(args []string) error {
-	a, err := ParseRegistryArgs(args)
-	if err != nil {
-		return err
-	}
-
-	isJSON := strings.ToLower(a.Format) == "json"
-
-	absDir, err := filepath.Abs(a.Dir)
-	if err != nil {
-		if isJSON {
-			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
-			return nil
-		}
-		return fmt.Errorf("registry: resolve dir: %w", err)
-	}
-
-	registryPath := filepath.Join(absDir, RegistryFileName)
-	reg, err := LoadRegistry(registryPath)
-	if err != nil {
-		if isJSON {
-			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
-			return nil
-		}
-		return fmt.Errorf("registry: load: %w", err)
-	}
-
-	// If no registry file exists, bootstrap from graph.
-	if reg == nil {
-		db, graph, _, graphErr := loadGraphAndServices(absDir)
-		if graphErr != nil {
-			if isJSON {
-				fmt.Println(marshalContract(NewErrorResponse(classifyIndexError(graphErr), graphErr.Error())))
-				return nil
-			}
-			return fmt.Errorf("registry: bootstrap from graph: %w", graphErr)
-		}
-		defer db.Close() //nolint:errcheck
-
-		docs, _ := ScanDirectory(absDir)
-		reg = NewComponentRegistry()
-
-		if a.WithLLM {
-			llmCfg := QueryLLMConfig{
-				Enabled:      true,
-				CachePath:    a.LLMCache,
-				SkipExisting: true,
-				TimeoutSecs:  30,
-				PageIndexBin: a.LLMBin,
-				Model:        a.LLMModel,
-			}
-			if llmCfg.CachePath == "" {
-				llmCfg.CachePath = filepath.Join(absDir, LLMCacheFileName)
-			}
-			reg.InitFromGraphWithLLM(graph, docs, llmCfg)
-		} else {
-			reg.InitFromGraph(graph, docs)
-		}
-	}
-
-	// Query relationships.
-	var rels []RegistryRelationship
-	if a.From != "" {
-		rels = reg.FindRelationships(a.From)
-	} else {
-		rels = reg.QueryByConfidence(a.MinConf)
-	}
-
-	if !isJSON {
-		// Text output.
-		fmt.Printf("Components (%d):\n", reg.ComponentCount())
-		compIDs := make([]string, 0, reg.ComponentCount())
-		for id := range reg.Components {
-			compIDs = append(compIDs, id)
-		}
-		sort.Strings(compIDs)
-		for _, id := range compIDs {
-			c := reg.Components[id]
-			fmt.Printf("  %s (%s) — %s\n", c.ID, c.Type, c.FileRef)
-		}
-		fmt.Printf("\nRelationships (%d):\n", len(rels))
-		for _, r := range rels {
-			fmt.Printf("  %s → %s [%.2f]\n", r.FromComponent, r.ToComponent, r.AggregatedConfidence)
-		}
-		return nil
-	}
-
-	// JSON path: build payload and wrap in envelope.
-	type compJSON struct {
-		ID      string        `json:"id"`
-		Name    string        `json:"name"`
-		FileRef string        `json:"file_ref"`
-		Type    ComponentType `json:"type"`
-	}
-	type relJSON struct {
-		From       string  `json:"from"`
-		To         string  `json:"to"`
-		Confidence float64 `json:"confidence"`
-		Signals    int     `json:"signal_count"`
-	}
-	compList := make([]compJSON, 0, reg.ComponentCount())
-	compIDs := make([]string, 0, reg.ComponentCount())
-	for id := range reg.Components {
-		compIDs = append(compIDs, id)
-	}
-	sort.Strings(compIDs)
-	for _, id := range compIDs {
-		c := reg.Components[id]
-		compList = append(compList, compJSON{
-			ID: c.ID, Name: c.Name, FileRef: c.FileRef, Type: c.Type,
-		})
-	}
-	relList := make([]relJSON, len(rels))
-	for i, r := range rels {
-		relList[i] = relJSON{
-			From:       r.FromComponent,
-			To:         r.ToComponent,
-			Confidence: roundFloat(r.AggregatedConfidence, 4),
-			Signals:    len(r.Signals),
-		}
-	}
-	payload := map[string]interface{}{
-		"components":    compList,
-		"relationships": relList,
-		"component_count":    reg.ComponentCount(),
-		"relationship_count": len(rels),
-	}
-	fmt.Println(marshalContract(NewOKResponse("Registry loaded", payload)))
 	return nil
 }
 
