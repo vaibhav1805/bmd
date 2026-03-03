@@ -1,0 +1,407 @@
+package knowledge
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+)
+
+// RegistryFileName is the name of the JSON file that persists the registry.
+const RegistryFileName = ".bmd-registry.json"
+
+// SignalSource identifies the origin of a relationship signal.
+type SignalSource string
+
+const (
+	// SignalLink is an explicit markdown link (highest confidence: 1.0).
+	SignalLink SignalSource = "link"
+
+	// SignalMention is a text mention without an explicit link (0.6–0.75).
+	SignalMention SignalSource = "mention"
+
+	// SignalLLM is a relationship inferred by an LLM (PageIndex, 0.65).
+	SignalLLM SignalSource = "llm"
+)
+
+// ComponentType categorises the kind of component.
+type ComponentType string
+
+const (
+	ComponentTypeService  ComponentType = "service"
+	ComponentTypeAPI      ComponentType = "api"
+	ComponentTypeConfig   ComponentType = "config"
+	ComponentTypeDatabase ComponentType = "database"
+	ComponentTypeUnknown  ComponentType = "unknown"
+)
+
+// RegistryComponent is a component tracked by the ComponentRegistry.
+// It extends the existing Component detection with richer metadata.
+type RegistryComponent struct {
+	// ID is the canonical identifier for this component (e.g. "auth-service").
+	ID string `json:"id"`
+
+	// Name is the human-readable display name (e.g. "Auth Service").
+	Name string `json:"name"`
+
+	// FileRef is the primary documentation file for this component.
+	FileRef string `json:"file_ref"`
+
+	// Type describes the component category.
+	Type ComponentType `json:"type"`
+
+	// SourceFile is the file where this component was first detected.
+	SourceFile string `json:"source_file"`
+
+	// DetectedAt records when this component was first added to the registry.
+	DetectedAt time.Time `json:"detected_at"`
+}
+
+// Signal captures a single piece of evidence for a relationship between
+// two components.
+type Signal struct {
+	// SourceType identifies where this signal came from.
+	SourceType SignalSource `json:"source_type"`
+
+	// Confidence is a score in [0.0, 1.0] indicating how certain this signal is.
+	Confidence float64 `json:"confidence"`
+
+	// Evidence is a human-readable description of where the signal was found.
+	Evidence string `json:"evidence"`
+
+	// Weight is an optional multiplier (default 1.0) applied during aggregation.
+	Weight float64 `json:"weight"`
+}
+
+// RegistryRelationship represents a directed relationship between two components
+// backed by one or more evidence signals.
+type RegistryRelationship struct {
+	// FromComponent is the ID of the source component.
+	FromComponent string `json:"from_component"`
+
+	// ToComponent is the ID of the target component.
+	ToComponent string `json:"to_component"`
+
+	// Signals is the list of evidence signals supporting this relationship.
+	Signals []Signal `json:"signals"`
+
+	// AggregatedConfidence is the computed confidence from all signals.
+	// Use AggregateConfidence() to recompute this after adding signals.
+	AggregatedConfidence float64 `json:"aggregated_confidence"`
+}
+
+// ComponentRegistry is the central store for components and their relationships.
+// It aggregates signals from multiple sources (links, text mentions, LLM)
+// into a unified, confidence-weighted relationship graph.
+//
+// Zero value is NOT valid; always create via NewComponentRegistry.
+type ComponentRegistry struct {
+	// Components maps component ID → *RegistryComponent.
+	Components map[string]*RegistryComponent `json:"components"`
+
+	// Relationships is the list of all directed relationships.
+	Relationships []RegistryRelationship `json:"relationships"`
+
+	// Index maps "from:to" → index into Relationships for fast lookup.
+	// Not serialized — rebuilt from Relationships on load.
+	index map[string]int `json:"-"`
+}
+
+// NewComponentRegistry creates an empty, ready-to-use ComponentRegistry.
+func NewComponentRegistry() *ComponentRegistry {
+	return &ComponentRegistry{
+		Components:    make(map[string]*RegistryComponent),
+		Relationships: []RegistryRelationship{},
+		index:         make(map[string]int),
+	}
+}
+
+// AddComponent registers a component in the registry.
+// If a component with the same ID already exists, it is replaced (idempotent).
+// Returns an error if the component or its ID is nil/empty.
+func (r *ComponentRegistry) AddComponent(comp *RegistryComponent) error {
+	if comp == nil {
+		return fmt.Errorf("ComponentRegistry.AddComponent: component must not be nil")
+	}
+	if comp.ID == "" {
+		return fmt.Errorf("ComponentRegistry.AddComponent: component.ID must not be empty")
+	}
+	if comp.DetectedAt.IsZero() {
+		comp.DetectedAt = time.Now()
+	}
+	r.Components[comp.ID] = comp
+	return nil
+}
+
+// AddSignal appends a signal to the relationship between fromID and toID.
+// If no relationship exists between the two components, one is created.
+// Returns an error if from/to IDs are empty or equal.
+//
+// After adding signals, call AggregateConfidence (or let queries call it
+// lazily) to refresh AggregatedConfidence.
+func (r *ComponentRegistry) AddSignal(fromID, toID string, signal Signal) error {
+	if fromID == "" {
+		return fmt.Errorf("ComponentRegistry.AddSignal: fromID must not be empty")
+	}
+	if toID == "" {
+		return fmt.Errorf("ComponentRegistry.AddSignal: toID must not be empty")
+	}
+	if fromID == toID {
+		return fmt.Errorf("ComponentRegistry.AddSignal: self-relationship not allowed (%q)", fromID)
+	}
+
+	// Default weight to 1.0 if not set.
+	if signal.Weight == 0 {
+		signal.Weight = 1.0
+	}
+
+	key := fromID + ":" + toID
+	if idx, ok := r.index[key]; ok {
+		// Relationship already exists — deduplicate signals.
+		rel := &r.Relationships[idx]
+		if !r.hasDuplicateSignal(rel.Signals, signal) {
+			rel.Signals = append(rel.Signals, signal)
+			rel.AggregatedConfidence = computeAggregatedConfidence(rel.Signals)
+		}
+		return nil
+	}
+
+	// Create a new relationship.
+	rel := RegistryRelationship{
+		FromComponent:        fromID,
+		ToComponent:          toID,
+		Signals:              []Signal{signal},
+		AggregatedConfidence: signal.Confidence,
+	}
+	r.index[key] = len(r.Relationships)
+	r.Relationships = append(r.Relationships, rel)
+	return nil
+}
+
+// hasDuplicateSignal returns true when signals already contains a signal
+// with the same SourceType and Evidence.
+func (r *ComponentRegistry) hasDuplicateSignal(signals []Signal, candidate Signal) bool {
+	for _, s := range signals {
+		if s.SourceType == candidate.SourceType && s.Evidence == candidate.Evidence {
+			return true
+		}
+	}
+	return false
+}
+
+// AggregateConfidence recomputes AggregatedConfidence for all relationships
+// in the registry. Call this after bulk-loading signals.
+func (r *ComponentRegistry) AggregateConfidence() {
+	for i := range r.Relationships {
+		r.Relationships[i].AggregatedConfidence = computeAggregatedConfidence(r.Relationships[i].Signals)
+	}
+}
+
+// computeAggregatedConfidence applies the max(signal.Confidence * signal.Weight)
+// aggregation rule: the strongest available signal wins.
+func computeAggregatedConfidence(signals []Signal) float64 {
+	if len(signals) == 0 {
+		return 0.0
+	}
+	max := 0.0
+	for _, s := range signals {
+		w := s.Weight
+		if w <= 0 {
+			w = 1.0
+		}
+		score := s.Confidence * w
+		if score > max {
+			max = score
+		}
+	}
+	// Cap at 1.0.
+	if max > 1.0 {
+		max = 1.0
+	}
+	return max
+}
+
+// GetComponent returns the component with the given ID, or nil if not found.
+func (r *ComponentRegistry) GetComponent(id string) *RegistryComponent {
+	return r.Components[id]
+}
+
+// FindByName searches for a component whose Name matches (case-insensitive).
+// Returns nil if no match is found.
+func (r *ComponentRegistry) FindByName(name string) *RegistryComponent {
+	lower := strings.ToLower(name)
+	for _, comp := range r.Components {
+		if strings.ToLower(comp.Name) == lower {
+			return comp
+		}
+	}
+	return nil
+}
+
+// FindRelationships returns all outgoing relationships from the component
+// with fromID. Returns nil (not an error) when no relationships exist.
+func (r *ComponentRegistry) FindRelationships(fromID string) []RegistryRelationship {
+	var result []RegistryRelationship
+	for _, rel := range r.Relationships {
+		if rel.FromComponent == fromID {
+			result = append(result, rel)
+		}
+	}
+	return result
+}
+
+// QueryByConfidence returns all relationships whose AggregatedConfidence is
+// >= minConfidence. Results are sorted by confidence descending, then
+// from/to alphabetically for stable output.
+func (r *ComponentRegistry) QueryByConfidence(minConfidence float64) []RegistryRelationship {
+	var result []RegistryRelationship
+	for _, rel := range r.Relationships {
+		if rel.AggregatedConfidence >= minConfidence {
+			result = append(result, rel)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].AggregatedConfidence != result[j].AggregatedConfidence {
+			return result[i].AggregatedConfidence > result[j].AggregatedConfidence
+		}
+		if result[i].FromComponent != result[j].FromComponent {
+			return result[i].FromComponent < result[j].FromComponent
+		}
+		return result[i].ToComponent < result[j].ToComponent
+	})
+	return result
+}
+
+// ComponentCount returns the number of components in the registry.
+func (r *ComponentRegistry) ComponentCount() int { return len(r.Components) }
+
+// RelationshipCount returns the number of relationships in the registry.
+func (r *ComponentRegistry) RelationshipCount() int { return len(r.Relationships) }
+
+// InitFromGraph populates the registry from an existing Graph and document
+// collection. All graph nodes become components; all graph edges become
+// relationships with SignalLink confidence.
+func (r *ComponentRegistry) InitFromGraph(g *Graph, docs []Document) {
+	// Build doc lookup for type inference.
+	docByID := make(map[string]*Document, len(docs))
+	for i := range docs {
+		docByID[docs[i].ID] = &docs[i]
+	}
+
+	// Register each graph node as a component.
+	for id, node := range g.Nodes {
+		compType := inferComponentType(node.ID)
+		comp := &RegistryComponent{
+			ID:         nodeToRegistryID(node.ID),
+			Name:       node.Title,
+			FileRef:    id,
+			Type:       compType,
+			SourceFile: id,
+			DetectedAt: time.Now(),
+		}
+		_ = r.AddComponent(comp)
+	}
+
+	// Convert graph edges to relationships with link-confidence signals.
+	for _, edge := range g.Edges {
+		fromCompID := nodeToRegistryID(edge.Source)
+		toCompID := nodeToRegistryID(edge.Target)
+
+		signal := Signal{
+			SourceType: SignalLink,
+			Confidence: edge.Confidence,
+			Evidence:   edge.Evidence,
+			Weight:     1.0,
+		}
+		_ = r.AddSignal(fromCompID, toCompID, signal)
+	}
+}
+
+// rebuildIndex reconstructs the index map from Relationships.
+// Call this after loading from JSON since the index field is not serialized.
+func (r *ComponentRegistry) rebuildIndex() {
+	r.index = make(map[string]int, len(r.Relationships))
+	for i, rel := range r.Relationships {
+		key := rel.FromComponent + ":" + rel.ToComponent
+		r.index[key] = i
+	}
+}
+
+// nodeToRegistryID converts a graph node ID (relative file path) to a
+// registry component ID. Uses the filename stem in kebab-case.
+func nodeToRegistryID(nodeID string) string {
+	base := filepath.Base(nodeID)
+	ext := filepath.Ext(base)
+	stem := strings.TrimSuffix(base, ext)
+	return strings.ToLower(stem)
+}
+
+// inferComponentType infers a ComponentType from the node file path.
+func inferComponentType(nodeID string) ComponentType {
+	lower := strings.ToLower(nodeID)
+	switch {
+	case strings.Contains(lower, "service"):
+		return ComponentTypeService
+	case strings.Contains(lower, "api"):
+		return ComponentTypeAPI
+	case strings.Contains(lower, "config"):
+		return ComponentTypeConfig
+	case strings.Contains(lower, "db") || strings.Contains(lower, "database") || strings.Contains(lower, "store"):
+		return ComponentTypeDatabase
+	default:
+		return ComponentTypeUnknown
+	}
+}
+
+// ToJSON serializes the registry to JSON bytes.
+func (r *ComponentRegistry) ToJSON() ([]byte, error) {
+	return json.MarshalIndent(r, "", "  ")
+}
+
+// FromJSON deserializes the registry from JSON bytes.
+// Rebuilds the internal index after loading.
+func (r *ComponentRegistry) FromJSON(data []byte) error {
+	if err := json.Unmarshal(data, r); err != nil {
+		return fmt.Errorf("ComponentRegistry.FromJSON: %w", err)
+	}
+	if r.Components == nil {
+		r.Components = make(map[string]*RegistryComponent)
+	}
+	if r.Relationships == nil {
+		r.Relationships = []RegistryRelationship{}
+	}
+	r.rebuildIndex()
+	return nil
+}
+
+// SaveRegistry writes the registry to a JSON file at path.
+func SaveRegistry(r *ComponentRegistry, path string) error {
+	data, err := r.ToJSON()
+	if err != nil {
+		return fmt.Errorf("SaveRegistry: marshal: %w", err)
+	}
+	if err := os.WriteFile(filepath.Clean(path), data, 0o600); err != nil {
+		return fmt.Errorf("SaveRegistry: write %q: %w", path, err)
+	}
+	return nil
+}
+
+// LoadRegistry reads a ComponentRegistry from a JSON file at path.
+// Returns nil, nil when the file does not exist (graceful fallback).
+func LoadRegistry(path string) (*ComponentRegistry, error) {
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("LoadRegistry: read %q: %w", path, err)
+	}
+	r := NewComponentRegistry()
+	if err := r.FromJSON(data); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
