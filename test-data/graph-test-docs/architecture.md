@@ -11,21 +11,21 @@ The system is built using a microservices architecture with the following compon
 ### Backend Services
 
 #### Core Services
-- [User Service](services/user-service.md) - Handles authentication and user profiles
-- [Order Service](services/order-service.md) - Manages order lifecycle
-- [Payment Service](services/payment-service.md) - Processes payments securely
+- User Service - Handles authentication and user profiles
+- Order Service - Manages order lifecycle
+- Payment Service - Processes payments securely
 
 #### Data Layer
-- See [Database Design](database.md) for schema details
-- [Configuration](config/setup.md) for connection strings
+- See Database Design for schema details
+- Configuration for connection strings
 
 ### Integration Points
 
 The services integrate through:
-1. Event-driven messaging (see [Order Service](services/order-service.md) documentation)
-2. Synchronous REST calls (documented in [API Reference](api/endpoints.md))
-3. Shared caching layer (described in [Configuration Guide](config/setup.md))
+1. Event-driven messaging (see Order Service documentation)
+2. Synchronous REST calls (documented in API Reference)
+3. Shared caching layer (described in Configuration Guide)
 
 ## Deployment
 
-See [setup guide](config/setup.md) for deployment instructions.
+See setup guide for deployment instructions.

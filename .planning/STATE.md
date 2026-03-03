@@ -289,9 +289,14 @@ Activities:
 - Removed .planning/ directory references from docs/
 - Cleaned ARCHITECTURE.md: removed Phase metadata from feature descriptions
 - Consolidated documentation into docs/ directory for cleaner organization
-- Verified: no Phase numbers, .planning references, or internal implementation details in user docs
-- Commit: c7e8d81 (docs: remove Phase references and .planning directory mentions)
-- Documentation is now user-focused, implementation-agnostic
+- Removed all references to deprecated 'bmd registry' command
+  * Replaced with appropriate commands: bmd depends, bmd relationships, bmd index
+  * Updated examples in docs/agents.md, docs/commands.md, docs/component-registry.md
+- Verified: no Phase numbers, .planning references, deprecated commands in user docs
+- Commits:
+  * c7e8d81 (docs: remove Phase references and .planning directory mentions)
+  * 4383f71 (docs: remove deprecated 'bmd registry' command references)
+- Documentation is now user-focused, implementation-agnostic, and up-to-date
 
 Previous session: 2026-03-03 (18:00Z) — CLI Cleanup
 - Removed deprecated 'registry' command: -189 lines of legacy code

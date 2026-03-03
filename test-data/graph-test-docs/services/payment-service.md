@@ -29,7 +29,7 @@ Supported payment methods:
 - All payments use PCI DSS compliant processing
 - Card data never stored locally; uses tokenization
 - See [Configuration Guide](../config/setup.md) for TLS/encryption settings
-- Audit logs stored in [database](../database.md)
+- Audit logs stored in database
 
 ## API Reference
 
@@ -49,11 +49,11 @@ Payment endpoints are documented in [API Reference](../api/endpoints.md).
 
 Failed payments trigger:
 - Automatic retry (configurable in [setup guide](../config/setup.md))
-- Notification to [Order Service](order-service.md)
+- Notification to Order Service
 - User notification with reason
 
 ## Compliance
 
 - PCI DSS Level 1 certified
 - GDPR compliant data retention (see [Configuration](../config/setup.md))
-- Audit trail in [database](../database.md)
+- Audit trail in database

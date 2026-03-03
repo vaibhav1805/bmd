@@ -55,7 +55,7 @@ Orders are stored with the following structure:
 ## Integration Flow
 
 1. User creates order via API
-2. User authenticates via [User Service](user-service.md)
-3. Order is submitted to [Payment Service](payment-service.md)
+2. User authenticates via User Service
+3. Order is submitted to Payment Service
 4. Events are published for downstream systems
-5. Order status updated in [database](../database.md)
+5. Order status updated in database

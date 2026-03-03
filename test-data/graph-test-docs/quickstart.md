@@ -17,16 +17,16 @@ npm install
 
 ## 3. Setup Environment
 
-Create `.env` file (see [Configuration Guide](config/setup.md)):
+Create `.env` file (see Configuration Guide):
 
 ```bash
 cp .env.example .env
 ```
 
 Edit `.env` with your settings:
-- Database URL (see [Database Design](database.md))
-- Payment gateway key (see [Payment Service](services/payment-service.md))
-- JWT secret (see [User Service](services/user-service.md))
+- Database URL (see Database Design)
+- Payment gateway key (see Payment Service)
+- JWT secret (see User Service)
 
 ## 4. Start the Services
 
@@ -46,7 +46,7 @@ Server starts on `http://localhost:3000`
 
 ## 5. Create a User Account
 
-Using the [User Service](services/user-service.md) API:
+Using the User Service API:
 
 ```bash
 curl -X POST http://localhost:3000/auth/register \
@@ -68,7 +68,7 @@ Response:
 
 ## 6. Create Your First Order
 
-Using the [Order Service](services/order-service.md) API:
+Using the Order Service API:
 
 ```bash
 curl -X POST http://localhost:3000/orders \
@@ -95,11 +95,11 @@ Response:
 }
 ```
 
-See [Order Service](services/order-service.md) for workflow details.
+See Order Service for workflow details.
 
 ## 7. Process Payment
 
-Using the [Payment Service](services/payment-service.md) API:
+Using the Payment Service API:
 
 ```bash
 curl -X POST http://localhost:3000/payments \
@@ -122,7 +122,7 @@ Response:
 }
 ```
 
-See [Payment Service](services/payment-service.md) for supported methods.
+See Payment Service for supported methods.
 
 ## 8. Check Order Status
 
@@ -133,32 +133,32 @@ curl -X GET http://localhost:3000/orders/ORD-123 \
 
 ## Next Steps
 
-- Read the [Architecture Overview](architecture.md) to understand the system design
-- Review [API Reference](api/endpoints.md) for all available endpoints
-- Check [Configuration Guide](config/setup.md) for advanced setup options
-- See [Database Design](database.md) for data model details
+- Read the Architecture Overview to understand the system design
+- Review API Reference for all available endpoints
+- Check Configuration Guide for advanced setup options
+- See Database Design for data model details
 
 ## Services Documentation
 
-- [User Service](services/user-service.md) - Authentication and user management
-- [Order Service](services/order-service.md) - Order processing
-- [Payment Service](services/payment-service.md) - Payment handling
+- User Service - Authentication and user management
+- Order Service - Order processing
+- Payment Service - Payment handling
 
 ## Troubleshooting
 
 ### Database Connection Error
 
-Verify `DATABASE_URL` in `.env` matches your PostgreSQL instance (see [Database Design](database.md)).
+Verify `DATABASE_URL` in `.env` matches your PostgreSQL instance (see Database Design).
 
 ### Payment Processing Fails
 
-Check [Payment Service](services/payment-service.md) configuration and credentials.
+Check Payment Service configuration and credentials.
 
 ### Authentication Token Invalid
 
-See [User Service](services/user-service.md) for token refresh procedures.
+See User Service for token refresh procedures.
 
 ## Support
 
-For detailed configuration, see [Setup Guide](config/setup.md).
-For system architecture details, see [Architecture Overview](architecture.md).
+For detailed configuration, see Setup Guide.
+For system architecture details, see Architecture Overview.

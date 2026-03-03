@@ -51,7 +51,7 @@ postgresql://postgres:postgres@localhost:5432/project_dev
 npm run migrate
 ```
 
-See [Database Design](../database.md) for schema details.
+See Database Design for schema details.
 
 ### Backup {#backup}
 
@@ -75,7 +75,7 @@ Configuration in `.env`:
 - `JWT_EXPIRY` - Token expiration time (default: 24h)
 - `PASSWORD_HASH_ROUNDS` - Bcrypt rounds (default: 10)
 
-See [User Service](../services/user-service.md) for details.
+See User Service for details.
 
 ### Order Service
 
@@ -84,7 +84,7 @@ Configuration in `.env`:
 - `MAX_RETRIES` - Payment retry attempts (default: 3)
 - `EVENT_BROKER_URL` - Message queue URL
 
-See [Order Service](../services/order-service.md) for workflow.
+See Order Service for workflow.
 
 ### Payment Service
 
@@ -93,7 +93,7 @@ Configuration in `.env`:
 - `PAYMENT_TIMEOUT` - Request timeout (default: 10s)
 - `STRIPE_PUBLIC_KEY` - Stripe public key
 
-See [Payment Service](../services/payment-service.md) for security details.
+See Payment Service for security details.
 
 ## Security {#security}
 
@@ -117,11 +117,11 @@ RATE_LIMIT_REQUESTS=100
 RATE_LIMIT_WINDOW=60000
 ```
 
-See [API Reference](../api/endpoints.md) for endpoint documentation.
+See API Reference for endpoint documentation.
 
 ### User Authentication
 
-Detailed in [User Service](../services/user-service.md) configuration.
+Detailed in User Service configuration.
 
 ## Caching {#caching}
 
@@ -132,7 +132,7 @@ REDIS_URL=redis://localhost:6379
 CACHE_TTL=3600
 ```
 
-See [Architecture](../architecture.md) for integration details.
+See Architecture for integration details.
 
 ## Docker Deployment
 
@@ -175,9 +175,9 @@ Expected response:
 
 ## Related Documentation
 
-- [Architecture Overview](../architecture.md) - System design
-- [Database Design](../database.md) - Data models
-- [API Reference](../api/endpoints.md) - REST endpoints
-- [User Service](../services/user-service.md) - Authentication
-- [Order Service](../services/order-service.md) - Order processing
-- [Payment Service](../services/payment-service.md) - Payment handling
+- Architecture Overview - System design
+- Database Design - Data models
+- API Reference - REST endpoints
+- User Service - Authentication
+- Order Service - Order processing
+- Payment Service - Payment handling
