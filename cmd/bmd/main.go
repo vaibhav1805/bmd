@@ -364,10 +364,26 @@ Knowledge commands:
 
   bmd depends SERVICE [DIR] [OPTIONS]
     --transitive              Include transitive dependencies
+    --min-confidence <0-1>    Filter dependencies below this confidence score
+    --show-confidence         Display confidence scores in output
+    --include-signals         Show signal type breakdown (link/mention/llm)
     --format json|text|dot    Output format (default: json)
 
-  bmd components [DIR] [OPTIONS]
-    --format json|text        Output format (default: json)
+  bmd components [SUBCOMMAND] [OPTIONS]
+    list [--dir DIR] [--format table|json]
+      List all detected components
+    search QUERY [--dir DIR] [--format table|json]
+      Search components by name or ID
+    inspect COMPONENT_ID [--dir DIR] [--format table|json]
+      Detailed view of a single component with all relationships
+    --format json|text        Output format for legacy usage (default: json)
+
+  bmd relationships [OPTIONS]
+    --from <component>        Show downstream dependencies of this component
+    --to <component>          Show upstream dependents of this component
+    --confidence <0-1>        Filter by minimum confidence threshold
+    --include-signals         Show signal breakdown (link/mention/llm)
+    --format table|json|dot   Output format (default: table)
 
   bmd graph [SERVICE] [OPTIONS]
     --format dot|json         Output format (default: json)
@@ -411,6 +427,14 @@ Examples:
   bmd query "auth" --strategy pageindex  Semantic search (needs trees)
   bmd context "how auth works"     Assemble RAG context block
   bmd depends api-gateway          Show service dependencies
+  bmd depends api-gateway --show-confidence --include-signals  With signal breakdown
+  bmd depends auth --min-confidence 0.8   High-confidence deps only
+  bmd components list              List all detected components
+  bmd components search auth       Search for "auth" components
+  bmd components inspect api-gateway  Detailed component view
+  bmd relationships --from api-gateway           What does api-gateway depend on?
+  bmd relationships --to auth-service            What depends on auth-service?
+  bmd relationships --from api-gateway --confidence 0.8  High-confidence deps only
   bmd crawl --from-multiple api.md Crawl graph backward from api.md
   bmd crawl --from-multiple api.md,svc.md --format tree  ASCII tree view
   bmd export --from ./docs --output knowledge.tar.gz    Package for deployment
