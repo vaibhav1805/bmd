@@ -81,6 +81,7 @@ Progress: [███████████████████████
 | Phase 17 P03 | 2366 | 2 tasks | 5 files |
 | Phase 17 P04 | 66 | 3 tasks | 4 files |
 | Phase 17 P05 | 58 | 3 tasks | 6 files |
+| Phase 17 P06 | 60 | 4 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -244,6 +245,9 @@ Recent decisions affecting current work:
 - [Phase 17]: CmdComponents subcommand routing (list/search/inspect) with backward-compatible legacy fallback for flag-first invocations
 - [Phase 17]: loadOrBuildRegistry auto-bootstraps registry from graph when .bmd-registry.json absent — zero-config for new users
 - [Phase 17]: include-signals and show-confidence added to CmdDepends for agent signal breakdown reporting
+- [Phase 17]: Integration tests use stdout capture for Cmd* functions (write to stdout)
+- [Phase 17]: Pre-existing tui/nav/renderer test failures are out of scope (confirmed pre-date Phase 17)
+- [Phase 17]: Registry documentation: REGISTRY.md as standalone reference, AGENT.md for integration examples
 
 ### Pending Todos
 
