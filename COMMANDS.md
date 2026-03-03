@@ -512,4 +512,55 @@ bmd graph --format dot | neato -Goverlap=scale -Tpng -o architecture.png
 
 ---
 
+## Watch Mode (Phase 18)
+
+### bmd watch
+
+Monitor a directory for .md file changes and update indexes incrementally.
+
+```
+bmd watch [--dir DIR] [--interval-ms N]
+```
+
+Options:
+- `--dir DIR` — Directory to watch (default: current directory)
+- `--interval-ms N` — Poll interval in milliseconds (default: 500)
+
+Prints change events to stderr as they arrive. Press Ctrl+C to stop.
+
+Example:
+```
+bmd watch --dir ./docs
+```
+
+### MCP Watch Tools (bmd serve --mcp)
+
+Three MCP tools are available for agent-driven watching:
+
+| Tool | Description |
+|------|-------------|
+| `bmd/watch_start` | Start watching a directory. Returns `session_id`. |
+| `bmd/watch_poll` | Poll for pending change notifications since last poll. |
+| `bmd/watch_stop` | Stop an active watch session. |
+
+#### bmd/watch_start
+```json
+{ "dir": "./docs", "interval_ms": 500 }
+→ { "session_id": "ws-1234567890", "dir": "/abs/path", "status": "watching" }
+```
+
+#### bmd/watch_poll
+```json
+{ "session_id": "ws-1234567890" }
+→ { "notifications": [{"kind": "modified", "rel_path": "api.md"}], "count": 1 }
+```
+
+#### bmd/watch_stop
+```json
+{ "session_id": "ws-1234567890" }
+→ { "status": "stopped" }
+```
+
+---
+
 See [README.md](README.md) for viewer features and [QUICKSTART.md](QUICKSTART.md) for quick examples.
