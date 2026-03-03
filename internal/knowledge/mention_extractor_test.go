@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// makeTestDoc builds a simple Document for use in tests.
-func makeTestDoc(id, content string) Document {
+// makeMentionTestDoc builds a simple Document for use in mention tests.
+func makeMentionTestDoc(id, content string) Document {
 	return Document{
 		ID:      id,
 		RelPath: id,
@@ -29,7 +29,7 @@ func makeComponent(id, name, file string) Component {
 // ─── ExtractMentionsFromDocument ─────────────────────────────────────────────
 
 func TestExtractMentionsFromDocumentBasic(t *testing.T) {
-	doc := makeTestDoc("services/gateway.md",
+	doc := makeMentionTestDoc("services/gateway.md",
 		"This service calls auth to verify tokens and depends on payment for billing.")
 
 	components := []Component{
@@ -57,7 +57,7 @@ func TestExtractMentionsFromDocumentBasic(t *testing.T) {
 }
 
 func TestExtractMentionsFromDocumentConfidenceRange(t *testing.T) {
-	doc := makeTestDoc("services/gateway.md",
+	doc := makeMentionTestDoc("services/gateway.md",
 		"calls auth to verify the user identity")
 
 	components := []Component{
@@ -77,7 +77,7 @@ func TestExtractMentionsFromDocumentConfidenceRange(t *testing.T) {
 
 func TestExtractMentionsFromDocumentExcludesSelf(t *testing.T) {
 	// The document belongs to the "auth" component; it should NOT mention itself.
-	doc := makeTestDoc("services/auth.md",
+	doc := makeMentionTestDoc("services/auth.md",
 		"The auth service handles authentication. calls auth to process tokens.")
 
 	components := []Component{
@@ -94,7 +94,7 @@ func TestExtractMentionsFromDocumentExcludesSelf(t *testing.T) {
 }
 
 func TestExtractMentionsFromDocumentEvidenceTracking(t *testing.T) {
-	doc := makeTestDoc("services/gateway.md",
+	doc := makeMentionTestDoc("services/gateway.md",
 		"calls auth to verify\nauth-service handles tokens\ndepends on auth for all requests")
 
 	components := []Component{
@@ -117,7 +117,7 @@ func TestExtractMentionsFromDocumentEvidenceTracking(t *testing.T) {
 
 func TestExtractMentionsFromDocumentMultipleMatches(t *testing.T) {
 	// Multiple lines mentioning the same component should be counted.
-	doc := makeTestDoc("services/gateway.md",
+	doc := makeMentionTestDoc("services/gateway.md",
 		"calls auth\nuses auth-service\ndepends on auth for processing")
 
 	components := []Component{
@@ -137,7 +137,7 @@ func TestExtractMentionsFromDocumentMultipleMatches(t *testing.T) {
 
 func TestExtractMentionsFromDocumentHighestConfidenceRetained(t *testing.T) {
 	// "calls auth" (0.75) and "uses auth" (0.7) — should keep 0.75.
-	doc := makeTestDoc("services/gateway.md",
+	doc := makeMentionTestDoc("services/gateway.md",
 		"uses auth for validation\ncalls auth to verify identity")
 
 	components := []Component{
@@ -166,7 +166,7 @@ func TestExtractMentionsFromDocumentEmptyDoc(t *testing.T) {
 }
 
 func TestExtractMentionsFromDocumentNoComponents(t *testing.T) {
-	doc := makeTestDoc("gateway.md", "calls auth to verify")
+	doc := makeMentionTestDoc("gateway.md", "calls auth to verify")
 	mentions := ExtractMentionsFromDocument(doc, nil)
 	if len(mentions) != 0 {
 		t.Errorf("expected no mentions with no components, got %d", len(mentions))
@@ -174,7 +174,7 @@ func TestExtractMentionsFromDocumentNoComponents(t *testing.T) {
 }
 
 func TestExtractMentionsFromDocumentNoMatch(t *testing.T) {
-	doc := makeTestDoc("gateway.md", "This document does not mention any known services")
+	doc := makeMentionTestDoc("gateway.md", "This document does not mention any known services")
 	components := []Component{makeComponent("auth", "Auth Service", "auth.md")}
 
 	mentions := ExtractMentionsFromDocument(doc, components)
@@ -184,7 +184,7 @@ func TestExtractMentionsFromDocumentNoMatch(t *testing.T) {
 }
 
 func TestExtractMentionsFromDocumentAPIPattern(t *testing.T) {
-	doc := makeTestDoc("services/gateway.md",
+	doc := makeMentionTestDoc("services/gateway.md",
 		"Requests are forwarded to the auth API for token validation.")
 
 	components := []Component{
@@ -198,7 +198,7 @@ func TestExtractMentionsFromDocumentAPIPattern(t *testing.T) {
 }
 
 func TestExtractMentionsFromDocumentServiceSuffixPattern(t *testing.T) {
-	doc := makeTestDoc("services/gateway.md",
+	doc := makeMentionTestDoc("services/gateway.md",
 		"Requests are forwarded to auth-service for validation.")
 
 	components := []Component{
@@ -215,9 +215,9 @@ func TestExtractMentionsFromDocumentServiceSuffixPattern(t *testing.T) {
 
 func TestExtractMentionsFromDocumentsBatch(t *testing.T) {
 	docs := []Document{
-		makeTestDoc("a.md", "calls auth for verification"),
-		makeTestDoc("b.md", "depends on payment for billing"),
-		makeTestDoc("c.md", "no relevant mentions here"),
+		makeMentionTestDoc("a.md", "calls auth for verification"),
+		makeMentionTestDoc("b.md", "depends on payment for billing"),
+		makeMentionTestDoc("c.md", "no relevant mentions here"),
 	}
 	components := []Component{
 		makeComponent("auth", "Auth", "auth.md"),
@@ -236,7 +236,7 @@ func TestExtractMentionsFromDocumentsEmpty(t *testing.T) {
 		t.Errorf("expected no mentions, got %d", len(mentions))
 	}
 
-	mentions = ExtractMentionsFromDocuments([]Document{makeTestDoc("a.md", "hello")}, nil)
+	mentions = ExtractMentionsFromDocuments([]Document{makeMentionTestDoc("a.md", "hello")}, nil)
 	if len(mentions) != 0 {
 		t.Errorf("expected no mentions with no components, got %d", len(mentions))
 	}
@@ -316,7 +316,7 @@ func TestExtractMentionsFromDocumentPerformance(t *testing.T) {
 		sb.WriteString("It also depends on payment for billing.\n")
 	}
 
-	doc := makeTestDoc("perf.md", sb.String())
+	doc := makeMentionTestDoc("perf.md", sb.String())
 	components := []Component{
 		makeComponent("auth", "Auth Service", "auth.md"),
 		makeComponent("payment", "Payment Service", "payment.md"),

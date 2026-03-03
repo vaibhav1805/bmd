@@ -30,6 +30,10 @@ const (
 	// EdgeMentions indicates the source document contains a textual mention of
 	// the target (e.g. a service name following "integrates with"). Confidence: 0.7.
 	EdgeMentions EdgeType = "mentions"
+
+	// EdgeRelated indicates two documents are semantically related based on
+	// TF-IDF vector similarity. Confidence range: [0.5, 0.75].
+	EdgeRelated EdgeType = "related"
 )
 
 // Confidence values used by the three extractor types.
