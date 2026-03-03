@@ -282,8 +282,13 @@ func (r *ComponentRegistry) ComponentCount() int { return len(r.Components) }
 func (r *ComponentRegistry) RelationshipCount() int { return len(r.Relationships) }
 
 // InitFromGraph populates the registry from an existing Graph and document
-// collection. All graph nodes become components; all graph edges become
-// relationships with SignalLink confidence.
+// collection.
+//
+// Pipeline:
+//  1. Extract components from graph nodes.
+//  2. Extract link-based relationships from graph edges (SignalLink).
+//  3. Extract text mention relationships from document content (SignalMention).
+//  4. Aggregate all signals.
 func (r *ComponentRegistry) InitFromGraph(g *Graph, docs []Document) {
 	// Build doc lookup for type inference.
 	docByID := make(map[string]*Document, len(docs))
@@ -291,7 +296,7 @@ func (r *ComponentRegistry) InitFromGraph(g *Graph, docs []Document) {
 		docByID[docs[i].ID] = &docs[i]
 	}
 
-	// Register each graph node as a component.
+	// Step 1: Register each graph node as a component.
 	for id, node := range g.Nodes {
 		compType := inferComponentType(node.ID)
 		comp := &RegistryComponent{
@@ -305,7 +310,7 @@ func (r *ComponentRegistry) InitFromGraph(g *Graph, docs []Document) {
 		_ = r.AddComponent(comp)
 	}
 
-	// Convert graph edges to relationships with link-confidence signals.
+	// Step 2: Convert graph edges to relationships with link-confidence signals.
 	for _, edge := range g.Edges {
 		fromCompID := nodeToRegistryID(edge.Source)
 		toCompID := nodeToRegistryID(edge.Target)
@@ -318,6 +323,20 @@ func (r *ComponentRegistry) InitFromGraph(g *Graph, docs []Document) {
 		}
 		_ = r.AddSignal(fromCompID, toCompID, signal)
 	}
+
+	// Step 3: Extract text mentions using the component detector results.
+	if len(docs) > 0 {
+		detector := NewComponentDetector()
+		components := detector.DetectComponents(g, docs)
+		if len(components) > 0 {
+			mentions := ExtractMentionsFromDocuments(docs, components)
+			r.BuildFromMentions(mentions)
+			return // BuildFromMentions already calls AggregateConfidence.
+		}
+	}
+
+	// Step 4: Aggregate all signals (when no mention extraction ran).
+	r.AggregateConfidence()
 }
 
 // rebuildIndex reconstructs the index map from Relationships.
@@ -404,4 +423,47 @@ func LoadRegistry(path string) (*ComponentRegistry, error) {
 		return nil, err
 	}
 	return r, nil
+}
+
+// BuildFromMentions converts a slice of Mention values into Signal entries
+// and adds them to the registry.
+//
+// Each mention becomes a SignalMention signal with the mention's confidence.
+// After loading all mentions, AggregateConfidence is called to refresh scores.
+func (r *ComponentRegistry) BuildFromMentions(mentions []Mention) {
+	for _, m := range mentions {
+		_ = r.AddSignal(m.FromFile, m.ToComponent, Signal{
+			SourceType: SignalMention,
+			Confidence: m.Confidence,
+			Evidence:   m.ExampleEvidence,
+			Weight:     1.0,
+		})
+	}
+	r.AggregateConfidence()
+}
+
+// GetMentionsFor returns all relationships that target the given component
+// and have at least one mention-type signal.
+//
+// Results are sorted by AggregatedConfidence descending.
+func (r *ComponentRegistry) GetMentionsFor(componentID string) []RegistryRelationship {
+	var result []RegistryRelationship
+	for _, rel := range r.Relationships {
+		if rel.ToComponent != componentID {
+			continue
+		}
+		for _, sig := range rel.Signals {
+			if sig.SourceType == SignalMention {
+				result = append(result, rel)
+				break
+			}
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].AggregatedConfidence != result[j].AggregatedConfidence {
+			return result[i].AggregatedConfidence > result[j].AggregatedConfidence
+		}
+		return result[i].FromComponent < result[j].FromComponent
+	})
+	return result
 }
