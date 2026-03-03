@@ -254,12 +254,14 @@ func CmdComponents(args []string) error {
 		return CmdComponentsSearch(args[1:])
 	case "inspect":
 		return CmdComponentsInspect(args[1:])
+	case "graph":
+		return CmdComponentsGraph(args[1:])
 	default:
 		// If first arg starts with '-' or is a flag, treat as legacy invocation.
 		if strings.HasPrefix(args[0], "-") {
 			return cmdComponentsLegacy(args)
 		}
-		return fmt.Errorf("components: unknown subcommand %q (use list, search, or inspect)", args[0])
+		return fmt.Errorf("components: unknown subcommand %q (use list, search, inspect, or graph)", args[0])
 	}
 }
 
