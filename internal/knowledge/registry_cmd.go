@@ -912,3 +912,85 @@ func buildSignalSummary(signals []Signal) string {
 	return fmt.Sprintf("(%s)", strings.Join(types, "+"))
 }
 
+// CmdClean removes all BMD-generated files from a directory.
+//
+// Usage: bmd clean [--dir <dir>]
+//
+// Removes:
+//   - .bmd/ (database directory)
+//   - .bmd-registry.json
+//   - .bmd-relationships-discovered.yaml
+//   - .bmd-relationships.yaml
+//   - .bmd-llm-extractions.json
+func CmdClean(args []string) error {
+	fs := flag.NewFlagSet("clean", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(fs.Output(), "Usage: bmd clean [--dir <dir>]\n\n")
+		fmt.Fprintf(fs.Output(), "Removes all BMD-generated files from the specified directory:\n")
+		fmt.Fprintf(fs.Output(), "  - .bmd/ (database directory)\n")
+		fmt.Fprintf(fs.Output(), "  - .bmd-registry.json\n")
+		fmt.Fprintf(fs.Output(), "  - .bmd-relationships-discovered.yaml\n")
+		fmt.Fprintf(fs.Output(), "  - .bmd-relationships.yaml\n")
+		fmt.Fprintf(fs.Output(), "  - .bmd-llm-extractions.json\n\n")
+		fmt.Fprintf(fs.Output(), "Flags:\n")
+		fs.PrintDefaults()
+	}
+
+	var dir string
+	fs.StringVar(&dir, "dir", ".", "Directory to clean")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if dir == "" {
+		dir = "."
+	}
+
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("clean: resolve dir %q: %w", dir, err)
+	}
+
+	// Files and directories to clean
+	filesToRemove := []string{
+		filepath.Join(absDir, ".bmd"),
+		filepath.Join(absDir, RegistryFileName),
+		filepath.Join(absDir, DiscoveredManifestFile),
+		filepath.Join(absDir, AcceptedManifestFile),
+		filepath.Join(absDir, LLMCacheFileName),
+	}
+
+	removedCount := 0
+	var failedRemovals []string
+
+	for _, path := range filesToRemove {
+		if _, err := os.Stat(path); err == nil {
+			// File/directory exists, attempt removal
+			if err := os.RemoveAll(path); err != nil {
+				failedRemovals = append(failedRemovals, fmt.Sprintf("%s: %v", filepath.Base(path), err))
+			} else {
+				removedCount++
+				fmt.Fprintf(os.Stderr, "  Removed: %s\n", filepath.Base(path))
+			}
+		}
+	}
+
+	if removedCount == 0 {
+		fmt.Fprintf(os.Stderr, "No BMD files found in %s\n", absDir)
+		return nil
+	}
+
+	fmt.Fprintf(os.Stderr, "Cleaned %d BMD file(s)\n", removedCount)
+
+	if len(failedRemovals) > 0 {
+		fmt.Fprintf(os.Stderr, "Failed to remove:\n")
+		for _, fail := range failedRemovals {
+			fmt.Fprintf(os.Stderr, "  %s\n", fail)
+		}
+		return fmt.Errorf("clean: some files could not be removed")
+	}
+
+	return nil
+}
+

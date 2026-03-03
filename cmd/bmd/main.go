@@ -121,6 +121,13 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "clean":
+			cmdErr = knowledge.CmdClean(args[1:])
+			if cmdErr != nil {
+				fmt.Fprintln(os.Stderr, "bmd clean:", cmdErr)
+				os.Exit(1)
+			}
+			return
 		case "-h", "--help", "help":
 			usage()
 			return
@@ -462,6 +469,11 @@ Knowledge commands:
     Tools: bmd/query, bmd/index, bmd/depends, bmd/components, bmd/graph,
            bmd/context, bmd/graph_crawl, bmd/watch_start, bmd/watch_poll, bmd/watch_stop
 
+  bmd clean [OPTIONS]
+    --dir DIR                 Directory to clean (default: .)
+    Remove all BMD-generated files (.bmd/, .bmd-*.json, .bmd-*.yaml)
+    Useful for re-indexing or cleanup.
+
 Examples:
   bmd                              Browse current directory
   bmd --browse ./docs              Browse specific directory
@@ -484,6 +496,7 @@ Examples:
   bmd crawl --from-multiple api.md,svc.md --format tree  ASCII tree view
   bmd export --from ./docs --output knowledge.tar.gz    Package for deployment
   bmd serve --headless --mcp --knowledge-tar k.tar.gz   Agent-only server
+  bmd clean --dir ./docs                                Remove all BMD files
 
 Notes:
   - Directory browser search uses BM25 (Phase 11+: PageIndex support planned)
