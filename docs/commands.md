@@ -29,7 +29,6 @@ Complete reference for all BMD commands, organized by category.
 | `bmd depends SERVICE --transitive` | Show full dependency chain |
 | `bmd graph` | Export dependency graph |
 | `bmd crawl --from-multiple FILES` | Multi-start graph traversal |
-| `bmd registry` | Query component registry |
 | `bmd relationships --from/--to COMPONENT` | Query relationships by component |
 
 ### Portability & Deployment
@@ -301,30 +300,6 @@ bmd crawl --from-multiple api.md,auth.md --depth 3
 
 # Graphviz output
 bmd crawl --from-multiple api.md --direction both --format dot | dot -Tpng -o graph.png
-```
-
-### `bmd registry`
-
-Query the component registry with confidence-weighted signals.
-
-**Syntax:**
-```bash
-bmd registry [--dir DIR] [--from COMPONENT] [--to COMPONENT] [--min-confidence N] [--with-llm] [--format json|text]
-```
-
-**Examples:**
-```bash
-# Show all relationships
-bmd registry --dir ./docs --format json
-
-# Dependencies of auth-service
-bmd registry --dir ./docs --from auth-service
-
-# With LLM extraction
-bmd registry --dir ./docs --with-llm
-
-# Filter by confidence
-bmd registry --dir ./docs --min-confidence 0.8
 ```
 
 ### `bmd relationships`

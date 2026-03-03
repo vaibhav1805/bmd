@@ -182,7 +182,7 @@ bmd relationships --to auth-service --dir ./docs --format json
 
 ```bash
 # Find dependencies of payment-service with confidence >= 0.7
-bmd registry --from payment-service --min-confidence 0.7 --dir ./docs --format json
+bmd depends payment-service --min-confidence 0.7 --dir ./docs --format json
 
 # Include all signal sources (for debugging)
 bmd relationships --from payment-service --include-signals --dir ./docs
@@ -192,10 +192,11 @@ bmd relationships --from payment-service --include-signals --dir ./docs
 
 ```bash
 # Enable LLM analysis to find implicit relationships (prose, comments, reasoning)
-bmd registry --dir ./docs --with-llm
+# Build index with LLM extraction
+bmd index ./docs --with-llm
 
 # With custom model
-bmd registry --dir ./docs --with-llm --llm-model claude-opus-4-6
+bmd index ./docs --with-llm --llm-model claude-opus-4-6
 ```
 
 See [component-registry.md](./component-registry.md) for detailed registry documentation.

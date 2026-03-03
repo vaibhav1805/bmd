@@ -26,7 +26,7 @@ Component Registry (aggregated signals)
 Hybrid Graph Builder (merges into existing graph)
     ↓
 CLI Commands
-    ├─ bmd registry         — confidence-weighted relationships
+    ├─ bmd relationships    — confidence-weighted relationships
     ├─ bmd depends          — dependency lookup with --registry flag
     └─ bmd graph            — graph output with registry-augmented edges
 ```
@@ -58,52 +58,6 @@ builder := &HybridBuilder{Strategy: AggregationWeightedAverage}
 ---
 
 ## CLI Commands
-
-### `bmd registry` — Query Component Registry
-
-```bash
-# Show all relationships (JSON envelope)
-bmd registry --dir ./docs --format json
-
-# Show relationships from a specific component
-bmd registry --dir ./docs --from auth-service
-
-# Filter by minimum confidence
-bmd registry --dir ./docs --min-confidence 0.8
-
-# Enable LLM extraction (requires pageindex)
-bmd registry --dir ./docs --with-llm
-
-# Custom pageindex binary path and model
-bmd registry --dir ./docs --with-llm --llm-bin /usr/local/bin/pageindex --llm-model claude-opus-4-6
-```
-
-**Response format (CONTRACT-01):**
-```json
-{
-  "type": "agent_response",
-  "status": "ok",
-  "code": "SUCCESS",
-  "message": "Registry loaded",
-  "data": {
-    "component": "auth-service",
-    "relationship_count": 3,
-    "relationships": [
-      {
-        "from_component": "auth-service",
-        "to_component": "cache",
-        "signals": [
-          {"source_type": "link", "confidence": 1.0, "evidence": "[cache](cache.md)"},
-          {"source_type": "mention", "confidence": 0.75, "evidence": "auth service uses cache for sessions"}
-        ],
-        "aggregated_confidence": 1.0
-      }
-    ]
-  }
-}
-```
-
----
 
 ### `bmd depends` — Dependencies with Registry Enrichment
 
@@ -324,7 +278,7 @@ Typical performance on a 50-file codebase (Apple M3):
 | Cache hit (LLM results) | < 5ms |
 
 **Optimization tips for large codebases (100+ files):**
-- Build registry once: `bmd registry --dir ./docs` (auto-saves to `.bmd-registry.json`)
+- Registry is built during indexing: `bmd index --dir ./docs`
 - Subsequent queries are in-memory (< 1ms)
 - LLM extraction is optional: skip with `--no-hybrid` or omit `--with-llm`
 - Mention extraction adds < 200ms; use `--registry` flag only when needed
@@ -333,9 +287,9 @@ Typical performance on a 50-file codebase (Apple M3):
 
 ## Cache Files
 
-The registry system creates optional cache files that are excluded from git by default. Rebuild the registry with:
+The registry system creates optional cache files that are excluded from git by default. Rebuild the index (and registry) with:
 ```bash
-bmd registry --dir .
+bmd index --dir .
 ```
 
 ---
@@ -357,15 +311,7 @@ pageindex --help
 
 Or specify a custom path:
 ```bash
-bmd registry --with-llm --llm-bin /usr/local/bin/pageindex
-```
-
-### "Registry cache stale — missing new services"
-
-```bash
-# Delete cache files and rebuild
-rm .bmd-registry.json .bmd-llm-extractions.json
-bmd registry --dir ./docs
+bmd index --with-llm --llm-bin /usr/local/bin/pageindex
 ```
 
 ### "Missing relationships — expected service X to appear"
@@ -385,13 +331,13 @@ bmd registry --dir ./docs
    ```
 4. Enable LLM extraction for semantic discovery:
    ```bash
-   bmd registry --with-llm --dir ./docs
+   bmd index ./docs --with-llm
    ```
 
 ### "Performance degradation on large corpus"
 
 - Disable LLM extraction (most expensive): omit `--with-llm`
-- Load from cache: ensure `.bmd-registry.json` exists before queries
+- Registry is cached during indexing: run `bmd index` once, then subsequent queries are fast
 - For registries > 1000 components, consider filtering by `--min-confidence 0.7`
 
 ---
@@ -400,7 +346,7 @@ bmd registry --dir ./docs
 
 1. **Mention extraction false positives**: Pattern matching may detect component names that appear in unrelated context (e.g., comments, examples). Use `--min-confidence 0.8` to filter.
 2. **LLM extraction accuracy**: PageIndex reasoning can misidentify relationships. LLM signals have lower default confidence (0.65) to reflect this.
-3. **No live updates**: Registry is rebuilt from scratch on each `bmd registry` call. Future versions will add incremental indexing.
+3. **No live updates**: Registry is rebuilt from scratch on each `bmd index` call. Future versions will add incremental indexing.
 4. **Single-directory scope**: Registry currently covers one directory. Cross-directory relationships are not yet supported.
 
 ---
