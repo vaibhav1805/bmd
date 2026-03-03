@@ -80,6 +80,7 @@ Progress: [███████████████████████
 | Phase 17 P01 | 309 | 3 tasks | 4 files |
 | Phase 17 P03 | 2366 | 2 tasks | 5 files |
 | Phase 17 P04 | 66 | 3 tasks | 4 files |
+| Phase 17 P05 | 58 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -240,6 +241,9 @@ Recent decisions affecting current work:
 - [Phase 17]: AggregationMax as default strategy: conservative, predictable, well-behaved with extreme weights
 - [Phase 17]: penwidth=0.5+confidence*2.5 for DOT edge thickness (maps [0.0-1.0] to [0.5-3.0])
 - [Phase 17]: --no-hybrid flag on graph/depends/crawl commands for backward-compatible registry opt-out
+- [Phase 17]: CmdComponents subcommand routing (list/search/inspect) with backward-compatible legacy fallback for flag-first invocations
+- [Phase 17]: loadOrBuildRegistry auto-bootstraps registry from graph when .bmd-registry.json absent — zero-config for new users
+- [Phase 17]: include-signals and show-confidence added to CmdDepends for agent signal breakdown reporting
 
 ### Pending Todos
 
