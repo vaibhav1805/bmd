@@ -584,7 +584,7 @@ Merge into graph structure
     ↓
 Create .bmd-relationships-discovered.yaml manifest
     ↓
-User review + optional LLM validation (Phase 20)
+User review + optional LLM validation
     ↓
 User accepts/rejects, saves to .bmd-relationships.yaml
     ↓
@@ -965,10 +965,10 @@ HybridBuilder.BuildHybridGraph()
 Augmented Graph (higher confidence edges, new mention/LLM edges)
     ↓
 CLI Commands
-    ├── bmd registry --from/--to (relationship queries)
+    ├── bmd depends --from/--to (relationship queries)
     ├── bmd relationships (signal-aware queries)
     ├── bmd components list/search/inspect
-    └── bmd depends --registry (enriched with registry signals)
+    └── bmd depends (enriched with hybrid signals)
 ```
 
 ### Aggregation Strategy
@@ -990,9 +990,9 @@ Text mentions use a confidence-weighted pattern library:
 ### Data Flow
 
 ```
-bmd registry --from auth-service --format json
+bmd depends --from auth-service --format json
     ↓
-ParseRegistryArgs → loadOrBuildRegistry
+ParseDependsArgs → loadOrBuildRegistry
     ↓ (cache hit)
 LoadRegistry(".bmd-registry.json") → ComponentRegistry
     ↓ (no cache — bootstrap)

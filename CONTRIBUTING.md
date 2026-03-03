@@ -122,20 +122,17 @@ Understanding the project layout helps with contributions:
 
 ```
 internal/
-├── knowledge/       Phase 6: Knowledge system (BM25, graph, services)
-├── renderer/        Phase 1: ANSI rendering, images
-├── theme/           Phase 5: Color themes
-├── tui/             Phase 2-5: Terminal UI
-├── nav/             Phase 2: Navigation
-├── search/          Phase 2: Search
-├── parser/          Phase 1: Markdown parsing
-└── terminal/        Phase 3: Terminal utilities
+├── knowledge/       Knowledge system (BM25, graph, services)
+├── renderer/        ANSI rendering, images
+├── theme/           Color themes
+├── tui/             Terminal UI framework
+├── nav/             Navigation
+├── search/          Search algorithms
+├── parser/          Markdown parsing
+└── terminal/        Terminal utilities
 
 cmd/bmd/
 └── main.go          Entry point, CLI routing
-
-.planning/
-└── phases/          GSD project planning documents
 ```
 
 ## Adding a Feature
@@ -223,7 +220,7 @@ Releases follow semantic versioning:
 
 ```bash
 # Tag the release
-git tag -a v0.6.0 -m "Phase 6: Agent Intelligence & Knowledge Graphs"
+git tag -a v0.6.0 -m "Add knowledge graphs and agent intelligence"
 
 # Push tag
 git push origin v0.6.0
@@ -271,7 +268,7 @@ go tool pprof cpu.prof
 ## Thank You!
 
 Contributors who've helped make BMD better:
-- Phase implementations
+- Feature implementations
 - Bug fixes
 - Documentation improvements
 - Testing and validation
