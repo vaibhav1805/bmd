@@ -1,7 +1,6 @@
 package knowledge
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"

@@ -199,3 +199,468 @@ func TestScanDirectory_PerformanceBaseline(t *testing.T) {
 		t.Error("expected docs from performance test tree")
 	}
 }
+
+// ─── Tests for directory/file filtering (Phase 21b) ───────────────────────────────
+
+func TestScanConfig_SkipsHiddenDirsByDefault(t *testing.T) {
+	root := createTestTree(t, map[string]string{
+		"visible/readme.md":    "# Visible",
+		".git/config.md":       "# Git config",
+		".venv/lib/note.md":    "# Venv",
+		".cache/data.md":       "# Cache",
+		".hidden/secret.md":    "# Hidden dir",
+		"public.md":            "# Public",
+	})
+
+	config := ScanConfig{
+		IncludeHidden:     false,
+		UseDefaultIgnores: true,
+	}
+
+	docs, err := ScanDirectory(root, config)
+	if err != nil {
+		t.Fatalf("ScanDirectory: %v", err)
+	}
+
+	// Check that hidden dirs are excluded
+	hiddenPaths := map[string]bool{
+		".git/config.md":    false,
+		".venv/lib/note.md": false,
+		".cache/data.md":    false,
+		".hidden/secret.md": false,
+	}
+
+	for _, doc := range docs {
+		if _, exists := hiddenPaths[doc.RelPath]; exists {
+			t.Errorf("hidden directory file should be skipped: %q", doc.RelPath)
+		}
+	}
+
+	// Verify visible files ARE included
+	visibleCount := 0
+	for _, doc := range docs {
+		if doc.RelPath == "public.md" || doc.RelPath == "visible/readme.md" {
+			visibleCount++
+		}
+	}
+	if visibleCount != 2 {
+		t.Errorf("expected 2 visible files, found %d", visibleCount)
+	}
+}
+
+func TestScanConfig_IncludesHiddenDirsWithFlag(t *testing.T) {
+	root := createTestTree(t, map[string]string{
+		"visible/readme.md": "# Visible",
+		".git/config.md":    "# Git config (hardcoded, always skipped)",
+		".custom/note.md":   "# Custom hidden dir",
+		"public.md":         "# Public",
+	})
+
+	config := ScanConfig{
+		IncludeHidden:     true, // -A flag
+		UseDefaultIgnores: true,
+	}
+
+	docs, err := ScanDirectory(root, config)
+	if err != nil {
+		t.Fatalf("ScanDirectory: %v", err)
+	}
+
+	// With IncludeHidden, .custom (user-created hidden dir) should be scanned
+	// But .git is hardcoded and always skipped
+	customFound := false
+	gitFound := false
+
+	for _, doc := range docs {
+		if doc.RelPath == ".custom/note.md" {
+			customFound = true
+		}
+		if doc.RelPath == ".git/config.md" {
+			gitFound = true
+		}
+	}
+
+	if !customFound {
+		t.Error("expected .custom/note.md when IncludeHidden is true")
+	}
+	if gitFound {
+		t.Error(".git/ should always be skipped (hardcoded, not user-created)")
+	}
+}
+
+func TestScanConfig_IgnoresDefaultPatterns(t *testing.T) {
+	root := createTestTree(t, map[string]string{
+		"readme.md":              "# Readme",
+		"vendor/pkg.md":          "# Vendor package",
+		"node_modules/dep.md":    "# Node dep",
+		"__pycache__/cache.md":   "# Python cache",
+		".gradle/build.md":       "# Gradle",
+		"build/artifact.md":      "# Build artifact",
+		"dist/output.md":         "# Distribution",
+		"src/main.md":            "# Source",
+	})
+
+	config := ScanConfig{
+		IncludeHidden:     false,
+		UseDefaultIgnores: true,
+	}
+
+	docs, err := ScanDirectory(root, config)
+	if err != nil {
+		t.Fatalf("ScanDirectory: %v", err)
+	}
+
+	// Check that default ignore patterns exclude vendor, node_modules, etc.
+	defaultIgnored := map[string]bool{
+		"vendor/pkg.md":        false,
+		"node_modules/dep.md":  false,
+		"__pycache__/cache.md": false,
+		".gradle/build.md":     false,
+		"build/artifact.md":    false,
+		"dist/output.md":       false,
+	}
+
+	for _, doc := range docs {
+		if _, shouldIgnore := defaultIgnored[doc.RelPath]; shouldIgnore {
+			t.Errorf("default ignored pattern should be skipped: %q", doc.RelPath)
+		}
+	}
+
+	// Verify non-ignored files ARE included
+	srcFound := false
+	for _, doc := range docs {
+		if doc.RelPath == "src/main.md" {
+			srcFound = true
+		}
+	}
+	if !srcFound {
+		t.Error("expected src/main.md to be included")
+	}
+}
+
+func TestScanConfig_CustomIgnoreDirs(t *testing.T) {
+	root := createTestTree(t, map[string]string{
+		"src/code.md":       "# Source",
+		"custom/note.md":    "# Custom",
+		"local/data.md":     "# Local",
+		"vendor/lib.md":     "# Vendor",
+		"test/spec.md":      "# Test",
+	})
+
+	config := ScanConfig{
+		IgnoreDirs:        []string{"custom", "local"},
+		IncludeHidden:     false,
+		UseDefaultIgnores: false, // Disable defaults to test custom-only
+	}
+
+	docs, err := ScanDirectory(root, config)
+	if err != nil {
+		t.Fatalf("ScanDirectory: %v", err)
+	}
+
+	// custom/ and local/ should be skipped
+	customFound := false
+	localFound := false
+	vendorFound := false // vendor should NOT be skipped since defaults are disabled
+
+	for _, doc := range docs {
+		if doc.RelPath == "custom/note.md" {
+			customFound = true
+		}
+		if doc.RelPath == "local/data.md" {
+			localFound = true
+		}
+		if doc.RelPath == "vendor/lib.md" {
+			vendorFound = true
+		}
+	}
+
+	if customFound {
+		t.Error("custom/ should be ignored by custom pattern")
+	}
+	if localFound {
+		t.Error("local/ should be ignored by custom pattern")
+	}
+	if !vendorFound {
+		t.Error("vendor/ should NOT be ignored when defaults are disabled")
+	}
+}
+
+func TestScanConfig_IgnoreFilesPatterns(t *testing.T) {
+	root := createTestTree(t, map[string]string{
+		"readme.md":        "# Readme",
+		"draft.md":         "# Draft",
+		"DRAFT.md":         "# Draft uppercase",
+		"config.backup":    "backup",
+		"settings.lock":    "lock",
+		"script.py":        "python",
+		"src/main.md":      "# Source",
+		"src/test.backup":  "test backup",
+	})
+
+	config := ScanConfig{
+		IgnoreFiles:       []string{"*.backup", "*.lock", "DRAFT.md"},
+		IncludeHidden:     false,
+		UseDefaultIgnores: true,
+	}
+
+	docs, err := ScanDirectory(root, config)
+	if err != nil {
+		t.Fatalf("ScanDirectory: %v", err)
+	}
+
+	// Files matching patterns should be excluded
+	for _, doc := range docs {
+		if doc.RelPath == "config.backup" {
+			t.Errorf("*.backup should be ignored: %q", doc.RelPath)
+		}
+		if doc.RelPath == "settings.lock" {
+			t.Errorf("*.lock should be ignored: %q", doc.RelPath)
+		}
+		if doc.RelPath == "DRAFT.md" {
+			t.Errorf("DRAFT.md should be ignored: %q", doc.RelPath)
+		}
+		if doc.RelPath == "src/test.backup" {
+			t.Errorf("*.backup in subdirs should be ignored: %q", doc.RelPath)
+		}
+	}
+
+	// Verify included files
+	readmeFound := false
+	draftFound := false
+	srcMainFound := false
+
+	for _, doc := range docs {
+		if doc.RelPath == "readme.md" {
+			readmeFound = true
+		}
+		if doc.RelPath == "draft.md" {
+			draftFound = true
+		}
+		if doc.RelPath == "src/main.md" {
+			srcMainFound = true
+		}
+	}
+
+	if !readmeFound {
+		t.Error("readme.md should be included")
+	}
+	if !draftFound {
+		t.Error("draft.md (lowercase) should be included, only DRAFT.md is ignored")
+	}
+	if !srcMainFound {
+		t.Error("src/main.md should be included")
+	}
+}
+
+func TestScanConfig_CombinedCustomAndDefaults(t *testing.T) {
+	root := createTestTree(t, map[string]string{
+		"readme.md":         "# Readme",
+		"vendor/pkg.md":     "# Vendor (default ignored)",
+		"custom/note.md":    "# Custom (custom ignored)",
+		"src/main.md":       "# Source",
+		"test.backup":       "# Test (file ignored)",
+	})
+
+	config := ScanConfig{
+		IgnoreDirs:        []string{"custom"},
+		IgnoreFiles:       []string{"*.backup"},
+		IncludeHidden:     false,
+		UseDefaultIgnores: true, // Use both defaults AND custom
+	}
+
+	docs, err := ScanDirectory(root, config)
+	if err != nil {
+		t.Fatalf("ScanDirectory: %v", err)
+	}
+
+	// Verify vendor/ (default) and custom/ (custom) are both ignored
+	vendorFound := false
+	customFound := false
+	testBackupFound := false
+
+	for _, doc := range docs {
+		if doc.RelPath == "vendor/pkg.md" {
+			vendorFound = true
+		}
+		if doc.RelPath == "custom/note.md" {
+			customFound = true
+		}
+		if doc.RelPath == "test.backup" {
+			testBackupFound = true
+		}
+	}
+
+	if vendorFound {
+		t.Error("vendor/ should be ignored (default pattern)")
+	}
+	if customFound {
+		t.Error("custom/ should be ignored (custom pattern)")
+	}
+	if testBackupFound {
+		t.Error("*.backup should be ignored (custom file pattern)")
+	}
+
+	// Verify other files are included
+	readmeFound := false
+	srcMainFound := false
+	for _, doc := range docs {
+		if doc.RelPath == "readme.md" {
+			readmeFound = true
+		}
+		if doc.RelPath == "src/main.md" {
+			srcMainFound = true
+		}
+	}
+
+	if !readmeFound || !srcMainFound {
+		t.Error("readme.md and src/main.md should be included")
+	}
+}
+
+func TestScanConfig_NoIgnoreDefaults(t *testing.T) {
+	root := createTestTree(t, map[string]string{
+		"readme.md":         "# Readme",
+		"vendor/pkg.md":     "# Vendor",
+		"node_modules/d.md": "# Node (hardcoded, always skipped)",
+		"build/out.md":      "# Build",
+		"src/main.md":       "# Source",
+	})
+
+	config := ScanConfig{
+		IncludeHidden:     false,
+		UseDefaultIgnores: false, // Disable default ignores
+	}
+
+	docs, err := ScanDirectory(root, config)
+	if err != nil {
+		t.Fatalf("ScanDirectory: %v", err)
+	}
+
+	// With no default ignores, vendor/ and build/ should be included
+	// node_modules/ is hardcoded and always skipped
+	vendorFound := false
+	nodeModulesFound := false
+	buildFound := false
+
+	for _, doc := range docs {
+		if doc.RelPath == "vendor/pkg.md" {
+			vendorFound = true
+		}
+		if doc.RelPath == "node_modules/d.md" {
+			nodeModulesFound = true
+		}
+		if doc.RelPath == "build/out.md" {
+			buildFound = true
+		}
+	}
+
+	if !vendorFound {
+		t.Error("vendor/ should be included when defaults are disabled")
+	}
+	if nodeModulesFound {
+		t.Error("node_modules/ should NOT be included (hardcoded, always skipped)")
+	}
+	if !buildFound {
+		t.Error("build/ should be included when defaults are disabled")
+	}
+}
+
+// ─── Tests for matchPattern helper ─────────────────────────────────────────────
+
+func TestMatchPattern_ExactMatch(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		name_   string
+		want    bool
+	}{
+		{"exact vendor", "vendor", "vendor", true},
+		{"exact build", "build", "build", true},
+		{"exact mismatch", "vendor", "vendor2", false},
+		{"case sensitive", "Vendor", "vendor", false},
+		{"empty pattern", "", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchPattern(tt.name_, tt.pattern)
+			if result != tt.want {
+				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.name_, tt.pattern, result, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatchPattern_SuffixWildcard(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		name_   string
+		want    bool
+	}{
+		{"*.lock matches package.lock", "*.lock", "package.lock", true},
+		{"*.backup matches file.backup", "*.backup", "file.backup", true},
+		{"*.md matches readme.md", "*.md", "readme.md", true},
+		{"*.lock does not match package.txt", "*.lock", "package.txt", false},
+		{"*.lock does not match lock", "*.lock", "lock", false},
+		{"universal wildcard", "*", "anything", true},
+		{"universal wildcard empty", "*", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchPattern(tt.name_, tt.pattern)
+			if result != tt.want {
+				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.name_, tt.pattern, result, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatchPattern_PrefixWildcard(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		name_   string
+		want    bool
+	}{
+		{"node_* matches node_modules", "node_*", "node_modules", true},
+		{"node_* matches node_stuff", "node_*", "node_stuff", true},
+		{"node_* does not match nodejs", "node_*", "nodejs", false},
+		{"py* matches python", "py*", "python", true},
+		{"py* does not matchepy", "py*", "epy", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchPattern(tt.name_, tt.pattern)
+			if result != tt.want {
+				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.name_, tt.pattern, result, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatchPattern_MultipleWildcards(t *testing.T) {
+	// Patterns with multiple wildcards are not currently supported;
+	// they should only match exactly as-is
+	tests := []struct {
+		name    string
+		pattern string
+		name_   string
+		want    bool
+	}{
+		{"*test* exact match", "*test*", "*test*", true},
+		{"*test* no prefix/suffix wildcard support", "*test*", "atest", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchPattern(tt.name_, tt.pattern)
+			if result != tt.want {
+				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.name_, tt.pattern, result, tt.want)
+			}
+		})
+	}
+}
