@@ -249,7 +249,9 @@ func (idx *Index) DocCount() int { return idx.bm25.DocCount() }
 // differs), or if new files have appeared, or if indexed files have been
 // deleted.
 func (idx *Index) IsStale(root string) (bool, error) {
-	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
+	// Use default Knowledge configuration for backward compatibility.
+	k := DefaultKnowledge()
+	docs, err := k.Scan(root)
 	if err != nil {
 		return false, err
 	}

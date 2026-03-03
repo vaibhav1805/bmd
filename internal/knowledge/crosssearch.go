@@ -206,7 +206,9 @@ func SearchAllDocuments(rootPath, query string, topK int) ([]SearchResult, error
 	}
 
 	// Re-scan to populate content for snippet extraction.
-	docs, scanErr := ScanDirectory(rootPath, ScanConfig{UseDefaultIgnores: true})
+	// Use default Knowledge configuration for backward compatibility.
+	k := DefaultKnowledge()
+	docs, scanErr := k.Scan(rootPath)
 	if scanErr == nil && len(docs) > 0 {
 		_ = idx.Build(docs)
 	}

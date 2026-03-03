@@ -115,7 +115,9 @@ func CmdExport(args []string) error {
 	}
 
 	// Step 2: Scan markdown files.
-	docs, err := ScanDirectory(absFrom, ScanConfig{UseDefaultIgnores: true})
+	// Use default Knowledge configuration for backward compatibility.
+	k := DefaultKnowledge()
+	docs, err := k.Scan(absFrom)
 	if err != nil {
 		return fmt.Errorf("export: scan: %w", err)
 	}

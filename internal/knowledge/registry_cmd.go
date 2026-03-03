@@ -226,7 +226,9 @@ func loadOrBuildRegistry(absDir string) (*ComponentRegistry, error) {
 	}
 	defer db.Close() //nolint:errcheck
 
-	docs, _ := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
+	// Use default Knowledge configuration for backward compatibility.
+	k := DefaultKnowledge()
+	docs, _ := k.Scan(absDir)
 	reg = NewComponentRegistry()
 	reg.InitFromGraph(graph, docs)
 	return reg, nil

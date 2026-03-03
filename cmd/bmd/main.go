@@ -377,6 +377,10 @@ Knowledge commands:
     --strategy pageindex      Use PageIndex for semantic indexing (optional)
     --model MODEL             LLM model for PageIndex (default: claude-sonnet-4-5)
     --pageindex-bin PATH      Path to pageindex CLI (default: pageindex)
+    --ignore-dirs DIRS        Comma-separated directory patterns to ignore (appends to defaults)
+    --ignore-files PATTERNS   Comma-separated file patterns to ignore
+    -A, --include-hidden      Include hidden directories and files (default: skip .* dirs)
+    --no-ignore-defaults      Disable all default ignore patterns
 
   bmd query TERM [DIR] [OPTIONS]
     --dir DIR                 Directory to search (default: .)
@@ -480,6 +484,9 @@ Examples:
   bmd README.md                    View file
   bmd index ./docs                 Index with BM25 (default)
   bmd index ./docs --strategy pageindex  Index with semantic trees
+  bmd index ./docs --ignore-dirs vendor,build  Skip additional dirs
+  bmd index ./docs -A              Include hidden directories
+  bmd index ./docs --no-ignore-defaults --ignore-files "*.backup"  Custom ignore rules
   bmd query "authentication"       BM25 search (fast)
   bmd query "auth" --strategy pageindex  Semantic search (needs trees)
   bmd context "how auth works"     Assemble RAG context block

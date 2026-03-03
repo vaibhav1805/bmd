@@ -204,7 +204,9 @@ func CmdContext(args []string) error {
 		}
 
 		// Re-scan to populate ContentPreview (DB stores only metadata).
-		if docs, scanErr := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true}); scanErr == nil {
+		// Use default Knowledge configuration for backward compatibility.
+		k := DefaultKnowledge()
+		if docs, scanErr := k.Scan(absDir); scanErr == nil {
 			_ = idx.Build(docs)
 		}
 

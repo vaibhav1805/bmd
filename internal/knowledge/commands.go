@@ -23,6 +23,11 @@ type IndexArgs struct {
 	Strategy     string // "" | "pageindex" — default "" means BM25-only
 	Model        string // LLM model for pageindex strategy; default "claude-sonnet-4-5"
 	PageIndexBin string // path to pageindex executable; default "pageindex"
+	// Scan configuration flags
+	IgnoreDirs       string // comma-separated directory patterns to ignore
+	IgnoreFiles      string // comma-separated file patterns to ignore
+	IncludeHidden    bool   // -A flag: include hidden directories
+	NoIgnoreDefaults bool   // disable default ignore patterns
 }
 
 // QueryArgs holds parsed arguments for CmdQuery.
@@ -95,6 +100,7 @@ func resolveStrategy(flagValue string) string {
 // ParseIndexArgs parses raw CLI arguments for the index command.
 //
 // Usage: bmd index [DIR] [--dir DIR] [--db PATH] [--watch] [--poll-interval N]
+//        [--ignore-dirs DIRS] [--ignore-files FILES] [-A|--include-hidden] [--no-ignore-defaults]
 func ParseIndexArgs(args []string) (*IndexArgs, error) {
 	fs := flag.NewFlagSet("index", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -107,6 +113,13 @@ func ParseIndexArgs(args []string) (*IndexArgs, error) {
 	fs.StringVar(&a.Strategy, "strategy", "", "Indexing strategy: '' (BM25 default) | 'pageindex'")
 	fs.StringVar(&a.Model, "model", "claude-sonnet-4-5", "LLM model for pageindex strategy")
 	fs.StringVar(&a.PageIndexBin, "pageindex-bin", "pageindex", "Path to pageindex CLI binary")
+	// Scan configuration flags
+	fs.StringVar(&a.IgnoreDirs, "ignore-dirs", "", "Comma-separated directory patterns to ignore (appends to defaults)")
+	fs.StringVar(&a.IgnoreFiles, "ignore-files", "", "Comma-separated file patterns to ignore")
+	fs.BoolVar(&a.IncludeHidden, "A", false, "Include hidden directories and files")
+	fs.BoolVar(&a.NoIgnoreDefaults, "no-ignore-defaults", false, "Disable default ignore patterns")
+	// Also register --include-hidden as an alias for -A
+	fs.BoolVar(&a.IncludeHidden, "include-hidden", a.IncludeHidden, "Include hidden directories and files")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("index: %w", err)
@@ -349,8 +362,22 @@ func CmdIndex(args []string) error {
 
 	start := time.Now()
 
+	// Build ScanConfig from parsed flags.
+	config := ScanConfig{
+		IncludeHidden:     a.IncludeHidden,
+		UseDefaultIgnores: !a.NoIgnoreDefaults,
+	}
+
+	// Parse comma-separated ignore patterns.
+	if a.IgnoreDirs != "" {
+		config.IgnoreDirs = strings.Split(a.IgnoreDirs, ",")
+	}
+	if a.IgnoreFiles != "" {
+		config.IgnoreFiles = strings.Split(a.IgnoreFiles, ",")
+	}
+
 	// Scan markdown files.
-	docs, err := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
+	docs, err := ScanDirectory(absDir, config)
 	if err != nil {
 		return fmt.Errorf("index: scan: %w", err)
 	}
@@ -574,7 +601,9 @@ func CmdQuery(args []string) error {
 	}
 
 	// Re-scan to populate content for snippets (db stores only metadata).
-	docs, scanErr := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
+	// Use default Knowledge configuration for backward compatibility.
+	k := DefaultKnowledge()
+	docs, scanErr := k.Scan(absDir)
 	if scanErr == nil {
 		// Re-build in-memory so snippets are available.
 		_ = idx.Build(docs)
@@ -1264,7 +1293,9 @@ func loadGraphAndServices(absDir string) (*Database, *Graph, []Component, error)
 	}
 
 	// Scan documents for service detection (endpoint extraction needs content).
-	docs, scanErr := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
+	// Use default Knowledge configuration for backward compatibility.
+	k := DefaultKnowledge()
+	docs, scanErr := k.Scan(absDir)
 	if scanErr != nil {
 		// Non-fatal: service detection works with empty docs.
 		docs = nil
@@ -1316,10 +1347,25 @@ func watchAndRebuild(a *IndexArgs, absDir string, initialDocs []Document) error 
 	_ = initialDocs
 	pollDur := time.Duration(a.PollInterval) * time.Second
 
+	// Build ScanConfig from parsed flags for use in scan operations.
+	scanConfig := ScanConfig{
+		IncludeHidden:     a.IncludeHidden,
+		UseDefaultIgnores: !a.NoIgnoreDefaults,
+	}
+	if a.IgnoreDirs != "" {
+		scanConfig.IgnoreDirs = strings.Split(a.IgnoreDirs, ",")
+	}
+	if a.IgnoreFiles != "" {
+		scanConfig.IgnoreFiles = strings.Split(a.IgnoreFiles, ",")
+	}
+
+	// Create Knowledge instance with the scan configuration.
+	k := NewKnowledge(scanConfig)
+
 	for {
 		time.Sleep(pollDur)
 
-		docs, err := ScanDirectory(absDir, ScanConfig{UseDefaultIgnores: true})
+		docs, err := k.Scan(absDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "watch: scan error: %v\n", err)
 			continue
