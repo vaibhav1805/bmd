@@ -11,16 +11,21 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 
 ## Current Position
 
-Phase: 19 (Intelligent Component Relationship Discovery) — COMPLETE ✓
-Status: Post-project CLI refinements
-Last activity: 2026-03-03 18:00Z — CLI cleanup: removed deprecated 'registry' command
-  - Analyzed all 15 commands and 39+ options for redundancy
-  - Identified 'registry' command as superseded by modern 'components' interface
-  - Removed CmdRegistryCmd, ParseRegistryArgs, RegistryArgs (-189 lines)
-  - Verified components command still works perfectly
-  - Binary compiles cleanly, all tests passing
+Phase: 22 (Component-Scoped Graph Construction) — COMPLETE ✓
+Status: Extended development — advanced features shipping
+Last activity: 2026-03-03 22:35Z — Phase 22 YOLO execution completed
+  - 6 parallel agents executed 4 waves across 15 new files
+  - ComponentDiscovery infrastructure with 4-level cascade
+  - ComponentGraph + ComponentSearch with PageIndex integration
+  - BFS traversal for context aggregation
+  - `bmd components graph` and `bmd debug` CLI commands shipped
+  - 3 MCP tools registered (component_list, component_graph, debug_component_context)
+  - 82 new tests + 918 total passing (0 regressions)
+  - All code committed, build passing cleanly
 
 All phases complete:
+  - Phase 22 (Component-Scoped Graph): YOLO execution complete ✓
+  - Phase 21 (Directory/File Filtering): YOLO execution complete ✓
   - Phase 19 (Intelligent Relationships): All 5 plans complete ✓
   - Phase 18 (Live Graph Updates): All 4 plans complete ✓
   - Phase 17 (Component Registry): All 6 plans complete ✓
@@ -30,7 +35,7 @@ All phases complete:
   - Phase 12 (MCP Infrastructure): All 3 plans complete ✓
   - Phases 1-11: All complete (48+ plans, production-ready) ✓
 
-Progress: [████████████████████████████] 19 OF 19 PHASES COMPLETE
+Progress: [████████████████████████████] 22 OF 22 PHASES COMPLETE
 
 ## Performance Metrics
 
@@ -90,6 +95,7 @@ Progress: [███████████████████████
 | Phase 18-live-graph-updates P01 | 2 | 2 tasks | 2 files |
 | Phase 18-live-graph-updates P02 | 5 | 2 tasks | 4 files |
 | Phase 18-live-graph-updates P04 | 2 | 2 tasks | 4 files |
+| Phase 22 P6 | 45 | 5 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -274,6 +280,7 @@ Recent decisions affecting current work:
 - [Phase 22]: CmdDebug and CmdComponentsGraph consolidated in commands_components.go for all Phase 22 CLI
 - [Phase 22]: bmd debug --format flag maps to DebugArgs.Output field; JSON output uses STATUS-01 ContractResponse envelope
 - [Phase 22]: ASCII graph format uses sorted 'from -> to (confidence)' notation; JSON uses componentGraphPayload with nodes/edges/stats
+- [Phase 22]: Wave 4 tests: used .bmd/components.yaml override in MCP tests for reliable detection; tested ASCII/text mode error path since single-file dirs don't satisfy component detector heuristics
 
 ### Pending Todos
 

@@ -224,6 +224,9 @@ This starts bmd as an MCP (Model Context Protocol) server on stdin/stdout, expos
 | `bmd/graph` | Export the knowledge graph | `{ "format": "json"\|"dot"?, "dir": string? }` |
 | `bmd/context` | Assemble RAG-ready context blocks | `{ "query": string, "dir": string?, "top": number?, "strategy": "bm25"\|"pageindex"? }` |
 | `bmd/graph_crawl` | Multi-start graph traversal with cycle detection | `{ "start_files": string, "direction": "forward"\|"backward"\|"both"?, "depth": number?, "include_cycles": bool?, "dir": string? }` |
+| `bmd/component_list` | List all discovered components | `{ "dir": string?, "include_hidden": bool? }` |
+| `bmd/component_graph` | Build and visualize component dependency graph | `{ "dir": string?, "format": "json"\|"ascii"? }` |
+| `bmd/debug_component_context` | Get aggregated documentation for troubleshooting a component | `{ "component": string, "query": string?, "dir": string?, "depth": number?, "root_dir": string? }` |
 
 ### Integration with Claude Desktop
 

@@ -24,6 +24,8 @@ Complete reference for all BMD commands, organized by category.
 | Command | Purpose |
 |---------|---------|
 | `bmd components` | List detected components |
+| `bmd components graph` | Visualize component dependency graph |
+| `bmd debug --component SERVICE` | Get aggregated context for troubleshooting |
 | `bmd depends SERVICE` | Find dependencies |
 | `bmd depends SERVICE --reverse` | Find what depends on this |
 | `bmd depends SERVICE --transitive` | Show full dependency chain |
@@ -200,6 +202,73 @@ bmd components --dir ./docs --format json
 # Filter with jq
 bmd components --format json | jq '.components[] | select(.confidence > 0.8)'
 ```
+
+### `bmd components graph`
+
+Visualize the dependency graph between components in ASCII or JSON format.
+
+**Syntax:**
+```bash
+bmd components graph [--dir DIR] [--format ascii|json]
+```
+
+**Arguments:**
+- `--dir` — Directory containing components (default: current directory)
+- `--format` — Output format: `ascii` (human-readable edges), `json` (full graph structure)
+
+**Examples:**
+```bash
+# Show dependency graph as ASCII art
+bmd components graph --dir ./services
+
+# JSON for agents (includes confidence scores)
+bmd components graph --format json | jq '.edges[] | select(.confidence > 0.7)'
+```
+
+**Output (ASCII):**
+```
+payment → auth (0.95)
+payment → user (0.82)
+auth → user (1.0)
+api-gateway → payment (0.88)
+```
+
+### `bmd debug`
+
+Get aggregated documentation and relationships for troubleshooting a specific component.
+
+Automatically discovers related components, traverses dependencies, and assembles all relevant documentation into a single debugging context.
+
+**Syntax:**
+```bash
+bmd debug --component NAME [--query DESCRIPTION] [--dir DIR] [--depth N] [--format json|text]
+```
+
+**Arguments:**
+- `--component` (required) — Component name to debug
+- `--query` — What are you debugging? (optional, for context)
+- `--dir` — Documentation root (default: current directory)
+- `--depth` — How many hops to traverse (1-5, default: 2)
+- `--format` — Output format: `json` (for agents), `text` (human-readable)
+
+**Examples:**
+```bash
+# Get full context for debugging payment failures
+bmd debug --component payment --query "Why are refunds failing?" --depth 2
+
+# JSON output for agent analysis
+bmd debug --component auth-service --format json | jq '.components[] | .role'
+
+# Show what depends on this component
+bmd debug --component database --depth 3 --query "Where is the DB referenced?"
+```
+
+**Output includes:**
+- All related components (dependencies and dependents)
+- Distance from target component
+- Complete documentation for each related component
+- Relationship strength (confidence scores)
+- Role classification (target, dependency, dependent)
 
 ### `bmd depends`
 
