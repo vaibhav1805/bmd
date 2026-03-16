@@ -1,0 +1,3829 @@
+version: "1.0"
+generated: "2026-03-08T16:03:10Z"
+algorithm_versions:
+    cooccurrence: "1.0"
+    structural: "1.0"
+    semantic: "1.0"
+    ner: "1.0"
+relationships:
+    - source: CONTRIBUTING.md
+      target: ARCHITECTURE.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: ARCHITECTURE.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: CONTRIBUTING.md
+      target: README.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: README.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: ARCHITECTURE.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: A powerful, beautiful terminal-based markdown editor with integrated knowledge graph capabilities, full-text search, ...
+        - type: structural
+          value: 1
+          evidence: ARCHITECTURE.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: docs/agents.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: BMD — Beautiful Markdowns A powerful, beautiful terminal-based markdown editor with integrated knowledge graph capa...
+        - type: structural
+          value: 1
+          evidence: Agents Guide
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: docs/commands.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Commands
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: docs/deployment.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Deployment
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: docs/examples.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Examples
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: docs/getting-started.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Getting Started
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: docs/commands.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- [Commands](#commands) — Full agent command reference'
+        - type: structural
+          value: 0.75
+          evidence: '(configured in your agent framework) depends-on What depends on this service (context: | bmd depends <SERVICE> --reverse | Find what depends on thi...)'
+        - type: structural
+          value: 1
+          evidence: commands.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: docs/component-registry.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: component-registry.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: docs/deployment.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Deployment
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/commands.md
+      target: README.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Main README
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/commands.md
+      target: docs/agents.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Agents Guide
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/commands.md
+      target: docs/deployment.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Deployment
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/commands.md
+      target: docs/getting-started.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Getting Started
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/deployment.md
+      target: docs/agents.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '2. Deploy to fleet: openclaw fleet deploy bmd-documentation-service --replicas 3 3. Query from agents:'
+        - type: structural
+          value: 1
+          evidence: Agents Guide
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/deployment.md
+      target: docs/commands.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Commands
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/deployment.md
+      target: docs/getting-started.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Getting Started
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: README.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: README.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: docs/commands.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Commands
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: docs/getting-started.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Getting Started
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/getting-started.md
+      target: ARCHITECTURE.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Architecture
+        - type: structural
+          value: 0.7
+          evidence: BMD provides a complete knowledge system for AI agents
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/getting-started.md
+      target: docs/agents.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: agents.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/getting-started.md
+      target: docs/commands.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Commands
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/getting-started.md
+      target: docs/deployment.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Deployment
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/getting-started.md
+      target: docs/examples.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Examples
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/alerts.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- System design documented in [architecture.md](architecture.md)'
+        - type: structural
+          value: 1
+          evidence: architecture.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/alerts.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Triggered by [User Authentication](auth.md) for login alerts'
+        - type: structural
+          value: 1
+          evidence: User Authentication
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/alerts.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Events tracked in [Analytics](metrics.md)'
+        - type: structural
+          value: 1
+          evidence: Analytics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/alerts.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Notification System (Alerts) Overview Manages all notifications across the platform.
+        - type: structural
+          value: 1
+          evidence: overview.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/alerts.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Triggered by [Payment Processing](payments.md) for transaction confirmations'
+        - type: structural
+          value: 1
+          evidence: Payment Processing
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/architecture.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: overview.md - High level view auth.md - Authentication module payments.md - Payment processing alerts.md - Notificati...
+        - type: structural
+          value: 1
+          evidence: alerts.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/architecture.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: PageIndex Semantic Search Architecture PageIndex adds LLM-powered semantic search on top of BM25, enabling intent-bas...
+        - type: structural
+          value: 1
+          evidence: auth.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/architecture.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: metrics.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/architecture.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: overview.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/architecture.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'This document describes the overall architecture. See specific component docs: overview.md - High level view auth.md ...'
+        - type: structural
+          value: 1
+          evidence: payments.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/auth.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Security alerts sent via [Notifications](alerts.md)'
+        - type: structural
+          value: 1
+          evidence: Notification System
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/auth.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Login events are logged to [Analytics](metrics.md)'
+        - type: structural
+          value: 1
+          evidence: Analytics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/auth.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- See [overview.md](overview.md) for system context'
+        - type: structural
+          value: 1
+          evidence: overview.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/auth.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Payment Processing
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/metrics.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: Notifications
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/metrics.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: architecture.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/metrics.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: User Authentication
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/metrics.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Analytics and Metrics Overview Collects metrics from all system components.
+        - type: structural
+          value: 1
+          evidence: overview.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/metrics.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Data Sources User Authentication - Login/logout events Payment Processing - Transaction events
+        - type: structural
+          value: 1
+          evidence: Payment Processing
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/overview.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Inventory Service Overview Stock and inventory management. Tracks product availability, handles stock reservations fo...
+        - type: structural
+          value: 1
+          evidence: Notifications
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/overview.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: architecture.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/overview.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: references
+      confidence: 1
+      signals:
+        - type: structural
+          value: 1
+          evidence: User Authentication
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/overview.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Analytics Service Overview Business intelligence and analytics platform. Processes event streams from all services to...
+        - type: structural
+          value: 1
+          evidence: Analytics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/overview.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Payment Service Overview Payment processing and financial transaction management. Handles credit card processing, pay...
+        - type: structural
+          value: 1
+          evidence: Payment Processing
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/payments.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Payment confirmations sent via [Notifications](alerts.md)'
+        - type: structural
+          value: 1
+          evidence: Notifications
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/payments.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Detailed system design in [architecture.md](architecture.md)'
+        - type: structural
+          value: 1
+          evidence: architecture.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/payments.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- User validation happens in [User Authentication](auth.md)'
+        - type: structural
+          value: 1
+          evidence: User Authentication
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/payments.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: references
+      confidence: 1
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Transaction data tracked in [Analytics](metrics.md)'
+        - type: structural
+          value: 1
+          evidence: Analytics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: structural
+          value: 0.85
+          evidence: bmd depends api-gateway --transitive --format json
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/commands.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: structural
+          value: 0.85
+          evidence: bmd depends auth-service --dir ./docs
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/component-registry.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Signal Sources | Source | Confidence | How Detected | Example Evidence | |--------|-----------|--------------|-------...
+        - type: structural
+          value: 0.85
+          evidence: bmd relationships --from auth-service --dir ./docs
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Users API (user authentication)'
+        - type: structural
+          value: 0.85
+          evidence: bmd depends api-gateway
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Users API (user authentication)'
+        - type: structural
+          value: 0.85
+          evidence: bmd depends auth-service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/api-gateway-service/README.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: API Gateway Service Overview Central request router and load balancer for all microservices. Routes incoming API requ...
+        - type: structural
+          value: 0.85
+          evidence: 'The API Gateway routes requests to:'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/api-gateway-service/README.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: API Gateway Service Overview Central request router and load balancer for all microservices. Routes incoming API requ...
+        - type: structural
+          value: 0.85
+          evidence: '- **auth-service**: Validates JWT tokens for secured endpoints'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/api-gateway-service/README.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: structural
+          value: 0.85
+          evidence: '- **payment-service**: Payment processing'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/api-gateway-service/README.md
+      target: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: structural
+          value: 0.85
+          evidence: '- **payment-service**: Payment processing'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/auth-service/README.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: 'The auth-service is called by:'
+        - type: structural
+          value: 0.85
+          evidence: '- **logging-service**: Audit logs for all authentication events'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/cache-service/README.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Eviction policies (LRU) Key Dependencies logging-service: Cache hit/miss metrics'
+        - type: structural
+          value: 0.85
+          evidence: '- **logging-service**: Cache hit/miss metrics'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/database-service/README.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Key Dependencies logging-service: Query logs and slow query tracking monitoring-service: Connection pool metrics, que...'
+        - type: structural
+          value: 0.85
+          evidence: '- **monitoring-service**: Connection pool metrics, query latency'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/deployment-service/README.md
+      target: docs/deployment.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Deployment Service Overview Infrastructure and deployment automation service. Manages Kubernetes deployments, blue-gr...
+        - type: structural
+          value: 0.85
+          evidence: '- **monitoring-service**: Health checks and alerts during deployments'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/deployment-service/README.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Scaling policy automation Key Dependencies api-gateway-service: Service registration and discovery'
+        - type: structural
+          value: 0.85
+          evidence: '- **api-gateway-service**: Service registration and discovery'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/deployment-service/README.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Key Dependencies api-gateway-service: Service registration and discovery monitoring-service: Health checks and alerts...'
+        - type: structural
+          value: 0.85
+          evidence: '- **monitoring-service**: Health checks and alerts during deployments'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/documentation-service/README.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Python SDK (via OpenAPI Generator)'
+        - type: structural
+          value: 0.85
+          evidence: '- **api-gateway-service**: Serves /api/docs endpoint'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/email-service/README.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Email Service Overview Email delivery provider integration. Handles SMTP communication, bounce tracking, unsubscribe ...
+        - type: structural
+          value: 0.85
+          evidence: '- **monitoring-service**: Email queue depth and latency metrics'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/README.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Inventory Service Overview Stock and inventory management. Tracks product availability, handles stock reservations fo...
+        - type: structural
+          value: 0.85
+          evidence: '- **notification-service**: Sends low stock alerts to operations team'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/monitoring-service/README.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Monitoring Service Overview System and application monitoring using Prometheus and Grafana. Collects metrics from all...
+        - type: structural
+          value: 0.85
+          evidence: '- All other services: Prometheus `/metrics` endpoints'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/README.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Key Dependencies user-service: Customer lookup and validation payment-service: Payment authorization and capture'
+        - type: structural
+          value: 0.85
+          evidence: '- **payment-service**: Payment authorization and capture'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/README.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Payment Service Overview Payment processing and financial transaction management. Handles credit card processing, pay...
+        - type: structural
+          value: 0.85
+          evidence: '- **cache-service**: Distributed locks for idempotent payments; payment cache (5-minute TTL)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/search-service/README.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: structural
+          value: 0.85
+          evidence: '- **logging-service**: Search query logs and performance metrics'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/security-service/README.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Penetration testing coordination Key Dependencies auth-service: Permission validation and policy enforcement'
+        - type: structural
+          value: 0.85
+          evidence: '- **auth-service**: Permission validation and policy enforcement'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/README.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: depends-on
+      confidence: 0.85
+      signals:
+        - type: structural
+          value: 0.85
+          evidence: '- **auth-service**: Validates user credentials during signup; used for permission checks'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/database-service/README.md
+      type: depends-on
+      confidence: 0.8
+      signals:
+        - type: structural
+          value: 0.8
+          evidence: All services depends on database-service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Users API (user authentication)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/auth-service/README.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- **api-gateway-service**: On every request for JWT validation'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/README.md
+      target: docs/deployment.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: Integrates with warehouse management system via **deployment-service** webhooks for restock orders.
+        - type: structural
+          value: 0.65
+          evidence: 'inventory-service depends-on Start BMD + example agent service (context: Integrates with warehouse management system via deployment-s...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/monitoring-service/README.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- PagerDuty for critical alerts'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/README.md
+      target: docs/deployment.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: Orders trigger fulfillment via **deployment-service** webhooks to warehouse systems.
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/recommendation-service/README.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: 'Services call recommendation-service via REST API:'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/sms-service/README.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: Integrates with Twilio API. Webhooks from Twilio notify of delivery status changes.
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/README.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- **api-gateway-service**: User profile endpoint'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/alerts.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- System design documented in [architecture.md](architecture.md)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/alerts.md
+      target: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Triggered by [Payment Processing](payments.md) for transaction confirmations'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/alerts.md
+      target: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Triggered by [User Authentication](auth.md) for login alerts'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/payments.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- Detailed system design in [architecture.md](architecture.md)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/payments.md
+      target: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      type: mentions
+      confidence: 0.8
+      signals:
+        - type: mention
+          value: 0.8
+          evidence: '- User validation happens in [User Authentication](auth.md)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: ARCHITECTURE.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: depends-on
+      confidence: 0.75
+      signals:
+        - type: structural
+          value: 0.75
+          evidence: 'X depends-on Service API (context: 0.75: "depends on X", "calls X service", "uses the X")'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: ARCHITECTURE.md
+      target: test-data/monorepo-unreferenced-docs/documentation-service/README.md
+      type: depends-on
+      confidence: 0.75
+      signals:
+        - type: structural
+          value: 0.75
+          evidence: 'X depends-on Documentation Service (context: | NER+SVO | Captures prose relationships, directional | Depe...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: ARCHITECTURE.md
+      type: depends-on
+      confidence: 0.75
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: A powerful, beautiful terminal-based markdown editor with integrated knowledge graph capabilities, full-text search, ...
+        - type: structural
+          value: 0.75
+          evidence: '(configured in your agent framework) depends-on Y (context: Impact Analysis — Who Depends on This Service?)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: docs/examples.md
+      type: depends-on
+      confidence: 0.75
+      signals:
+        - type: structural
+          value: 0.75
+          evidence: '(configured in your agent framework) depends-on Auth Service (context: | bmd depends <SERVICE> --reverse | Find what depends on thi...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: depends-on
+      confidence: 0.75
+      signals:
+        - type: structural
+          value: 0.75
+          evidence: '(configured in your agent framework) depends-on Service API (context: | bmd depends <SERVICE> --reverse | Find what depends on thi...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/commands.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: depends-on
+      confidence: 0.75
+      signals:
+        - type: structural
+          value: 0.75
+          evidence: 'Crawl what depends on auth-service depends-on Service API (context: | bmd depends SERVICE --reverse | Find what depends on this ...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/component-registry.md
+      target: ARCHITECTURE.md
+      type: depends-on
+      confidence: 0.75
+      signals:
+        - type: structural
+          value: 0.75
+          evidence: 'Component Registry depends-on X (context: | LLM | 0.65 | PageIndex semantic analysis | "depends on" re...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/recommendation-service/README.md
+      type: calls
+      confidence: 0.75
+      signals:
+        - type: structural
+          value: 0.75
+          evidence: Services calls recommendation-service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/database-service/README.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: depends-on
+      confidence: 0.75
+      signals:
+        - type: structural
+          value: 0.75
+          evidence: 'database-service depends-on Service API (context: All services depend on database-service:)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/README.md
+      target: test-data/monorepo-unreferenced-docs/payment-service/README.md
+      type: calls
+      confidence: 0.75
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'File: internal/knowledge/semantic.go 4. NER + SVO Pattern Extraction Named Entity Recognition identifies component na...'
+        - type: structural
+          value: 0.75
+          evidence: Order Service calls Payment
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: ARCHITECTURE.md
+      target: docs/examples.md
+      type: depends-on
+      confidence: 0.7
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: │ - Validates JWT tokens │ │ - Caches tokens in redis │ │ - Exposes /auth/validate endpoint │ │ │ │...
+        - type: structural
+          value: 0.7
+          evidence: 'X depends-on Auth Service (context: | 0.9 | CodeExtractor | Import/require statements, code is a...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: test-data/monorepo-unreferenced-docs/search-service/README.md
+      type: depends-on
+      confidence: 0.7
+      signals:
+        - type: structural
+          value: 0.7
+          evidence: '(configured in your agent framework) depends-on search-service (context: LLM-powered reasoning-based search. Understands intent and f...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/component-registry.md
+      target: docs/examples.md
+      type: calls
+      confidence: 0.7
+      signals:
+        - type: structural
+          value: 0.7
+          evidence: 'Component Registry calls Auth Service (context: | Mention | 0.60-0.75 | Pattern match (prose text) | "calls ...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/cache-service/README.md
+      type: mentions
+      confidence: 0.7
+      signals:
+        - type: mention
+          value: 0.7
+          evidence: All services uses cache-service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/documentation-service/README.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: implements
+      confidence: 0.7
+      signals:
+        - type: structural
+          value: 0.7
+          evidence: and provides interactive API testing via Swagger UI
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/README.md
+      target: test-data/monorepo-unreferenced-docs/database-service/README.md
+      type: mentions
+      confidence: 0.7
+      signals:
+        - type: mention
+          value: 0.7
+          evidence: Notifications uses Handlebars templates stored in database-service and cached in cache-service
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/recommendation-service/README.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: calls
+      confidence: 0.7
+      signals:
+        - type: structural
+          value: 0.7
+          evidence: 'Recommendation Service calls Service API (context: Services call recommendation-service via REST API:)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: .continue-here.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Work Completed This Session 1. Removed Phase References from User Docs ARCHITECTURE.md: Removed all "Phase X" metadat...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: .continue-here.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Work Completed This Session 1. Removed Phase References from User Docs ARCHITECTURE.md: Removed all "Phase X" metadat...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: ARCHITECTURE.md
+      target: docs/agents.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: CLI Query Interface Graph Traversal Algorithm The crawl command performs multi-start BFS traversal of the knowledge g...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: ARCHITECTURE.md
+      target: test-data/monorepo-unreferenced-docs/user-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '│ Content: "request routing, middleware..." │ └── user-service.md (ID: user-service.md) RelPath: "services/...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: ARCHITECTURE.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '│ ├── auth-service.md │ Content: "OAuth2, JWT, token validation" │ ├── api-gateway.md'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: ARCHITECTURE.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Work Completed This Session 1. Removed Phase References from User Docs ARCHITECTURE.md: Removed all "Phase X" metadat...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: ARCHITECTURE.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: !!binary |
+            VGhlIEJNMjUgaW5kZXggaXMgYnVpbHQgZHVyaW5nIGJtZCBpbmRleCBhbmQgZW5hYmxlcy
+            BmYXN0IGtleXdvcmQtYmFzZWQgc2VhcmNoIGFjcm9zcyBhbGwgZG9jdW1lbnRzLiBNYXJr
+            ZG93biBGaWxlcyDiLi4u
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: ARCHITECTURE.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'This document describes the overall architecture. See specific component docs: overview.md - High level view auth.md ...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: ARCHITECTURE.md
+      target: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'This document describes the overall architecture. See specific component docs: overview.md - High level view auth.md ...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: CONTRIBUTING.md
+      target: docs/examples.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Feature Requests 1. Describe the feature and why it's useful 2. Provide examples of how you'd use it
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: CONTRIBUTING.md
+      target: docs/getting-started.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Code of Conduct Please be respectful and constructive. We welcome all contributions that improve BMD. Getting Started
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: CONTRIBUTING.md
+      target: test-data/monorepo-unreferenced-docs/user-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Build go build -o bmd ./cmd/bmd Verify build ./bmd README.md
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: docs/component-registry.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: "Agent Tools: \U0001F916 Knowledge graphs (dependency analysis, crawling) \U0001F4CA Full-text indexing (BM25 search) \U0001F9E0 Semanti..."
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: test-data/monorepo-unreferenced-docs/user-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'First Steps View a markdown file bmd README.md # Press ''e'' to edit, ''/'' to search, ''q'' to quit'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: README.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: A powerful, beautiful terminal-based markdown editor with integrated knowledge graph capabilities, full-text search, ...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: docs/getting-started.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Installation & Setup Agent Prerequisites 1. Install bmd (as per Getting Started guide)
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: test-data/monorepo-unreferenced-docs/cache-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '(configured in your agent framework) mentions cache-service (context: A: Index once with bmd index ./docs, then all queries use th...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: test-data/monorepo-unreferenced-docs/documentation-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '--- MCP Server Mode Run bmd as a persistent documentation service for agent fleets:'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/agents.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '| bmd index <DIR> --strategy pageindex | Index with semantic trees | bmd index ./docs --strategy pageindex | | bmd qu...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/component-registry.md
+      target: docs/commands.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Key benefits: Finds implicit dependencies that markdown links don''t capture (prose mentions, semantic reasoning) Ever...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/component-registry.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Component Registry Overview The Component Registry is BMD's hybrid graph discovery system — a confidence-weighted r...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/deployment.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Start BMD + example agent service mentions X (context: BMD uses portable tar.gz archives to ship documentation with...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/deployment.md
+      target: test-data/monorepo-unreferenced-docs/documentation-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Start BMD + example agent service mentions Documentation Service (context: BMD uses portable tar.gz archives to ship documentation with...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/deployment.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '2. Deploy to fleet: openclaw fleet deploy bmd-documentation-service --replicas 3 3. Query from agents: result = await...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions X (context: This directory contains example markdown files and knowledge...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions Analytics Service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions Service API (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/api-gateway-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions API Gateway Service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/deployment-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions Deployment Service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/documentation-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions Documentation Service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/email-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions Email Service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/inventory-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions inventory-service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/logging-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions logging-service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/monitoring-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions monitoring-service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/notification-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions notification-service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/order-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions order-service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/payment-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions payment-service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/search-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions search-service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/security-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions security-service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/sms-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Auth Service mentions sms-service (context: Use consistent naming: service-name.md or services/service-n...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/examples.md
+      target: test-data/monorepo-unreferenced-docs/user-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Multiple Linked Files Create a structure: docs/ ├── README.md (main document)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/relationship-discovery.md
+      target: test-data/monorepo-unreferenced-docs/order-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'File: internal/knowledge/semantic.go 4. NER + SVO Pattern Extraction Named Entity Recognition identifies component na...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/relationship-discovery.md
+      target: test-data/monorepo-unreferenced-docs/payment-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'File: internal/knowledge/semantic.go 4. NER + SVO Pattern Extraction Named Entity Recognition identifies component na...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: docs/relationship-discovery.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Relationship Discovery Automatic detection of component relationships from markdown documentation. Overview
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/analytics-service/README.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Analytics Service Overview Business intelligence and analytics platform. Processes event streams from all services to...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/analytics-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Analytics Service Overview Business intelligence and analytics platform. Processes event streams from all services to...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/analytics-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/analytics-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/analytics-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/api-gateway-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: API Gateway Service Overview Central request router and load balancer for all microservices. Routes incoming API requ...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/api-gateway-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/api-gateway-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/api-gateway-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/api-gateway-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/api-gateway-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/auth-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/auth-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/auth-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/auth-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/auth-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/cache-service/README.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'cache-service mentions Service API (context: All services use the cache-service:)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/cache-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Cache Service Overview Distributed caching layer using Redis. Provides sub-millisecond data access for frequently nee...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/cache-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/cache-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/cache-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/cache-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/cache-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/database-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Database Service Overview Centralized database abstraction layer. Manages PostgreSQL connections, connection pooling,...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/database-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/database-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/database-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/database-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/database-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/deployment-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Deployment Service Overview Infrastructure and deployment automation service. Manages Kubernetes deployments, blue-gr...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/deployment-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/deployment-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/deployment-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/deployment-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/deployment-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/documentation-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Documentation Service Overview API documentation and developer portal. Maintains OpenAPI/Swagger specs for all servic...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/documentation-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/documentation-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/documentation-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/documentation-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/documentation-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/email-service/README.md
+      target: ARCHITECTURE.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'Email Service depends-on Y (context: Email delivery provider integration. Handles SMTP communicat...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/email-service/README.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Email delivery provider integration. Handles SMTP communication, bounce tracking, unsubscribe management, and deliver...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/email-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Email Service Overview Email delivery provider integration. Handles SMTP communication, bounce tracking, unsubscribe ...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/email-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/email-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/email-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/email-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/email-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/README.md
+      target: ARCHITECTURE.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'inventory-service depends-on Y (context: Integrates with warehouse management system via deployment-s...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/README.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'inventory-service depends-on Service API (context: Integrates with warehouse management system via deployment-s...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/README.md
+      target: test-data/monorepo-unreferenced-docs/deployment-service/README.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'inventory-service depends-on Deployment Service (context: Integrates with warehouse management system via deployment-s...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/README.md
+      target: test-data/monorepo-unreferenced-docs/order-service/README.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'inventory-service depends-on order-service (context: Integrates with warehouse management system via deployment-s...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Inventory Service Overview Stock and inventory management. Tracks product availability, handles stock reservations fo...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/inventory-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/logging-service/README.md
+      target: ARCHITECTURE.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'logging-service depends-on X (context: Centralized logging and log aggregation platform. Collects l...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/logging-service/README.md
+      target: docs/agents.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Centralized logging and log aggregation platform. Collects logs from all services, provides indexing, searching, and ...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/logging-service/README.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'logging-service depends-on Service API (context: Centralized logging and log aggregation platform. Collects l...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/logging-service/README.md
+      target: test-data/monorepo-unreferenced-docs/search-service/README.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'logging-service depends-on search-service (context: Centralized logging and log aggregation platform. Collects l...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/logging-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Logging Service Overview Centralized logging and log aggregation platform. Collects logs from all services, provides ...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/logging-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/logging-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/logging-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/logging-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/logging-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/monitoring-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Monitoring Service Overview System and application monitoring using Prometheus and Grafana. Collects metrics from all...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/monitoring-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/monitoring-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/monitoring-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/monitoring-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/monitoring-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/README.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'notification-service mentions Y (context: Notifications use Handlebars templates stored in database-se...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/README.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'notification-service mentions Service API (context: Notifications use Handlebars templates stored in database-se...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/README.md
+      target: test-data/monorepo-unreferenced-docs/cache-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'notification-service mentions cache-service (context: Notifications use Handlebars templates stored in database-se...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/README.md
+      target: test-data/monorepo-unreferenced-docs/order-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'notification-service mentions order-service (context: Notifications use Handlebars templates stored in database-se...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/README.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Responsibilities Email notifications (welcome, confirmations, receipts) SMS notifications (order updates, alerts)
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Notification Service Overview Centralized notification platform. Handles sending emails, SMS, and push notifications ...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/notification-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/README.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'order-service depends-on Service API (context: Create order record in database-service)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/README.md
+      target: test-data/monorepo-unreferenced-docs/database-service/README.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'order-service depends-on database-service (context: Create order record in database-service)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Order Service Overview Order management and fulfillment service. Handles order creation, tracking, status updates, an...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/order-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/README.md
+      target: ARCHITECTURE.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'payment-service depends-on X (context: Payment processing and financial transaction management. Han...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/README.md
+      target: docs/examples.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'payment-service depends-on Auth Service (context: Payment processing and financial transaction management. Han...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/README.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Payment Service Overview Payment processing and financial transaction management. Handles credit card processing, pay...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Payment Service Overview Payment processing and financial transaction management. Handles credit card processing, pay...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/README.md
+      target: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Payment Service Overview Payment processing and financial transaction management. Handles credit card processing, pay...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/payment-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/recommendation-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Recommendation Service Overview ML-powered recommendation engine. Generates personalized product recommendations for ...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/recommendation-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/recommendation-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/recommendation-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/recommendation-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/recommendation-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/search-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Search Service Overview Full-text search engine for orders, products, and users. Provides fast, faceted search across...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/search-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/search-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/search-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/search-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/search-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/security-service/README.md
+      target: ARCHITECTURE.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'security-service depends-on Y (context: Security scanning, vulnerability detection, and policy enfor...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/security-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Security Service Overview Security scanning, vulnerability detection, and policy enforcement. Performs continuous sca...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/security-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/security-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/security-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/security-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/security-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/sms-service/README.md
+      target: ARCHITECTURE.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'sms-service depends-on Y (context: SMS delivery and carrier integration. Handles SMS sending, d...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/sms-service/README.md
+      target: test-data/monorepo-unreferenced-docs/analytics-service/api.md
+      type: depends-on
+      confidence: 0.65
+      signals:
+        - type: structural
+          value: 0.65
+          evidence: 'sms-service depends-on Service API (context: Integrates with Twilio API. Webhooks from Twilio notify of d...)'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/sms-service/README.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: SMS Service Overview SMS delivery and carrier integration. Handles SMS sending, delivery tracking, and two-way messag...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/sms-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service API Endpoints Health Check
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/sms-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Health Check GET /health Returns service status Metrics
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/sms-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/sms-service/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/sms-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/api.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: bmd depends auth-service bmd depends api-gateway Export dependency graph bmd graph --format dot > architecture.dot
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/api.md
+      target: docs/deployment.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Key Dependencies api-gateway-service: Service registration and discovery monitoring-service: Health checks and alerts...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/api.md
+      target: test-data/monorepo-unreferenced-docs/user-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: bm25documents ├── docid | filepath | title | hash ├── 1 | services/auth-service.md | OAuth2 Service | abc...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/api.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Key Dependencies api-gateway-service: Service registration and discovery monitoring-service: Health checks and alerts...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/api.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: bmd depends auth-service bmd depends api-gateway Export dependency graph bmd graph --format dot > architecture.dot
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/api.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '│ ├── api-gateway.md │ Content: "request routing, middleware, authentication" │ └── user-service.md'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/api.md
+      target: test-data/singlerepo-referenced-docs/metrics.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Email sending via SMTP or provider API Bounce and complaint tracking Unsubscribe list management Email templates and ...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/api.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: API Gateway Service Overview Central request router and load balancer for all microservices. Routes incoming API requ...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/monorepo-unreferenced-docs/user-service/architecture.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Service Architecture Components Handler
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/alerts.md
+      target: docs/deployment.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'Key Dependencies api-gateway-service: Service registration and discovery monitoring-service: Health checks and alerts...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/alerts.md
+      target: test-data/singlerepo-unreferenced-docs/notification-system.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Notification System (Alerts) Overview Manages all notifications across the platform.
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/architecture.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'For each tree section: ├── Compute cosine similarity(queryembedding, sectionembedding) │ auth-service.md § A...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/architecture.md
+      target: test-data/singlerepo-unreferenced-docs/notification-system.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: overview.md - High level view auth.md - Authentication module payments.md - Payment processing alerts.md - Notificati...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/architecture.md
+      target: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'This document describes the overall architecture. See specific component docs: overview.md - High level view auth.md ...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/auth.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '3. Query from agents: result = await agent.calltool("bmd/query", query="authentication flow", strategy="pageindex") A...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/auth.md
+      target: docs/examples.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: │ - Validates JWT tokens │ │ - Caches tokens in redis │ │ - Exposes /auth/validate endpoint │ │ │ │...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/auth.md
+      target: test-data/monorepo-unreferenced-docs/user-service/README.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: bm25documents ├── docid | filepath | title | hash ├── 1 | services/auth-service.md | OAuth2 Service | abc...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/auth.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '│ ├── auth-service.md │ Content: "OAuth2, JWT, token validation" │ ├── api-gateway.md'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/auth.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: '│ # OAuth2 Service │ │ │ │ Handles token validation and JWT signing. │ │ │ │ ## Architecture │'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/auth.md
+      target: test-data/singlerepo-unreferenced-docs/notification-system.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: overview.md - High level view auth.md - Authentication module payments.md - Payment processing alerts.md - Notificati...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/metrics.md
+      target: test-data/monorepo-unreferenced-docs/user-service/api.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Email delivery provider integration. Handles SMTP communication, bounce tracking, unsubscribe management, and deliver...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/metrics.md
+      target: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Data Sources User Authentication - Login/logout events Payment Processing - Transaction events
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/metrics.md
+      target: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Collects metrics from all system components. Data Sources User Authentication - Login/logout events
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/overview.md
+      target: docs/deployment.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Overview Infrastructure and deployment automation service. Manages Kubernetes deployments, blue-green deployments, ro...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/overview.md
+      target: test-data/singlerepo-unreferenced-docs/notification-system.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: overview.md - High level view auth.md - Authentication module payments.md - Payment processing alerts.md - Notificati...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/overview.md
+      target: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Payment Service Overview Payment processing and financial transaction management. Handles credit card processing, pay...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/overview.md
+      target: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: 'System Overview Welcome to our platform documentation. This system is built from several key components: User Authent...'
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-referenced-docs/payments.md
+      target: test-data/singlerepo-unreferenced-docs/notification-system.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: overview.md - High level view auth.md - Authentication module payments.md - Payment processing alerts.md - Notificati...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/analytics-tracking.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Analytics and Tracking Overview Collects and processes user behavior analytics.
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/logging-infrastructure.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Logging Infrastructure Overview Centralized logging system for all application components.
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/notification-system.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: User Authentication Overview This module handles all authentication concerns. It integrates with the Notification Sys...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/notification-system.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Notification System (Alerts) Overview Manages all notifications across the platform.
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/notification-system.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: This module handles all authentication concerns. It integrates with the Notification System to send login alerts. Imp...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/notification-system.md
+      target: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: This module handles all authentication concerns. It integrates with the Notification System to send login alerts. Imp...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Triggered by User Authentication for login alerts Triggered by Payment Processing for transaction confirmations Event...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: overview.md - High level view auth.md - Authentication module payments.md - Payment processing alerts.md - Notificati...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Triggered by User Authentication for login alerts Triggered by Payment Processing for transaction confirmations Event...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      target: test-data/singlerepo-referenced-docs/auth.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Payment Service Overview Payment processing and financial transaction management. Handles credit card processing, pay...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Payment Processing Module Overview Handles all payment transactions and billing operations.
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      target: test-data/singlerepo-unreferenced-docs/notification-system.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: overview.md - High level view auth.md - Authentication module payments.md - Payment processing alerts.md - Notificati...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      target: ARCHITECTURE.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Triggered by User Authentication for login alerts Triggered by Payment Processing for transaction confirmations Event...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      target: test-data/singlerepo-referenced-docs/alerts.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: User Authentication Overview This module handles all authentication concerns. It integrates with the Notification Sys...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      target: test-data/singlerepo-referenced-docs/architecture.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Triggered by User Authentication for login alerts Triggered by Payment Processing for transaction confirmations Event...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      target: test-data/singlerepo-referenced-docs/overview.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: User Authentication Overview This module handles all authentication concerns. It integrates with the Notification Sys...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      target: test-data/singlerepo-referenced-docs/payments.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Integration Points Triggered by User Authentication for login alerts Triggered by Payment Processing for transaction ...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      target: test-data/singlerepo-unreferenced-docs/notification-system.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: User Authentication Overview This module handles all authentication concerns. It integrates with the Notification Sys...
+      reviewed: false
+      status: pending
+      user_notes: ""
+    - source: test-data/singlerepo-unreferenced-docs/user-authentication.md
+      target: test-data/singlerepo-unreferenced-docs/payment-processing.md
+      type: mentions
+      confidence: 0.65
+      signals:
+        - type: mention
+          value: 0.65
+          evidence: Integration Points Triggered by User Authentication for login alerts Triggered by Payment Processing for transaction ...
+      reviewed: false
+      status: pending
+      user_notes: ""

@@ -1,0 +1,59 @@
+# BMD Sidecar Pattern — Docker Compose
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs bmd
+#
+# Architecture:
+#   agent-service connects to bmd sidecar via MCP over stdio.
+#   BMD loads pre-built knowledge at startup (no index rebuild needed).
+
+services:
+  # ─── BMD Documentation Sidecar ──────────────────────────────────────────────
+  bmd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Headless MCP server with pre-built knowledge from Dockerfile.
+    command: ["serve", "--mcp", "--headless", "--knowledge-tar", "/knowledge.tar.gz"]
+    volumes:
+      # Mount custom docs at runtime (overrides built-in knowledge).
+      # Uncomment to use live docs instead of pre-built tar:
+      # - ./docs:/docs:ro
+      - bmd-data:/data
+    environment:
+      - BMD_STRATEGY=bm25
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    healthcheck:
+      test: ["/usr/local/bin/bmd", "--help"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # ─── Example Agent Service ──────────────────────────────────────────────────
+  # Replace this with your actual agent service.
+  # The agent communicates with BMD via MCP protocol over stdio.
+  agent:
+    image: python:3.12-slim
+    depends_on:
+      bmd:
+        condition: service_healthy
+    volumes:
+      - bmd-data:/data:ro
+    environment:
+      - BMD_MCP_COMMAND=/usr/local/bin/bmd
+      - BMD_KNOWLEDGE_DIR=/data
+    # Example: agent that queries BMD for documentation context.
+    # In production, replace with your agent's entrypoint.
+    command: >
+      sh -c "echo 'Agent service ready. BMD sidecar is available.' && sleep infinity"
+
+volumes:
+  bmd-data:
+    driver: local
