@@ -1,0 +1,18 @@
+{
+  "entries": [
+    {
+      "doc_id": "api.md",
+      "content_hash": "b0d67a4666b3952ae73dfbd2f0ebf13789a6270d02b5b24066cf7eb53a5943de",
+      "results": [
+        {
+          "target": "auth",
+          "relationship": "integrates-with",
+          "confidence": 0.85,
+          "evidence": "API service typically requires authentication; 'auth' is listed as a known service in the codebase"
+        }
+      ],
+      "generated_at": "2026-03-09T20:50:26.982143+05:30"
+    }
+  ],
+  "generated_at": "2026-03-09T20:50:24.532909+05:30"
+}

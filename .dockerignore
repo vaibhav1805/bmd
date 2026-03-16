@@ -1,0 +1,11 @@
+.git
+.planning
+.github
+*.db
+knowledge.db
+*.tar.gz
+bmd
+bmd-final
+bmd-test
+test-data
+docs/screenshots
