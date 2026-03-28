@@ -79,6 +79,130 @@ func (s *SearchState) CurrentMatch() (search.Match, bool) {
 	return s.Matches[s.Current], true
 }
 
+// ApplyHighlightsViewport returns a copy of displayLines with match highlighting
+// injected, but only processes lines in the visible viewport range [offset, offset+height).
+// This is a performance optimization for large documents: only highlight what's visible.
+// All matches get a yellow background highlight; the current match gets an orange background.
+//
+// If offset or height are invalid (e.g., height=0), falls back to ApplyHighlights for full processing.
+func ApplyHighlightsViewport(lines []string, state *SearchState, th theme.Theme, offset, height int) []string {
+	if height <= 0 || offset < 0 {
+		// Invalid range; fall back to full highlighting
+		return ApplyHighlights(lines, state, th)
+	}
+
+	// Clamp the viewport to valid range
+	if offset >= len(lines) {
+		offset = len(lines) - 1
+		if offset < 0 {
+			offset = 0
+		}
+	}
+	end := offset + height
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	// If viewport is outside document, return full copy
+	if offset >= end {
+		out := make([]string, len(lines))
+		copy(out, lines)
+		return out
+	}
+
+	if state == nil || !state.Active || len(state.Matches) == 0 {
+		// No search active; return unchanged copy
+		out := make([]string, len(lines))
+		copy(out, lines)
+		return out
+	}
+
+	// Group matches by line for efficient lookup
+	matchesByLine := make(map[int][]indexedMatch)
+	for i, m := range state.Matches {
+		matchesByLine[m.LineIndex] = append(matchesByLine[m.LineIndex], indexedMatch{
+			Match:      m,
+			MatchIndex: i,
+		})
+	}
+
+	// Pre-allocate output with full size (same as input)
+	out := make([]string, len(lines))
+
+	// Copy lines outside viewport unchanged
+	for i := 0; i < offset; i++ {
+		out[i] = lines[i]
+	}
+	for i := end; i < len(lines); i++ {
+		out[i] = lines[i]
+	}
+
+	// Process only viewport lines with highlighting
+	for lineIdx := offset; lineIdx < end; lineIdx++ {
+		line := lines[lineIdx]
+		lineMatches, hasMatches := matchesByLine[lineIdx]
+		if !hasMatches {
+			out[lineIdx] = line
+			continue
+		}
+
+		// Strip ANSI and apply highlights (same logic as ApplyHighlights)
+		plain := search.StripANSI(line)
+		plainRunes := []rune(plain)
+
+		var sb []byte
+		prevEnd := 0
+
+		for _, im := range lineMatches {
+			start := im.PlainStart
+			end := im.PlainEnd
+
+			// Clamp to valid range
+			if start > len(plainRunes) {
+				start = len(plainRunes)
+			}
+			if end > len(plainRunes) {
+				end = len(plainRunes)
+			}
+			if start < prevEnd {
+				start = prevEnd
+			}
+			if end <= start {
+				continue
+			}
+
+			// Copy plain text before this match
+			sb = append(sb, []byte(string(plainRunes[prevEnd:start]))...)
+
+			// Choose highlight colors
+			var bgCode, fgCode string
+			if im.MatchIndex == state.Current {
+				bgCode = theme.BgCode(SearchCurrentBg)
+				fgCode = theme.FgCode(SearchCurrentFg)
+			} else {
+				bgCode = theme.BgCode(SearchMatchBg)
+				fgCode = theme.FgCode(SearchMatchFg)
+			}
+
+			// Inject highlight
+			sb = append(sb, []byte(bgCode+fgCode)...)
+			sb = append(sb, []byte(string(plainRunes[start:end]))...)
+			sb = append(sb, []byte(theme.Reset)...)
+
+			prevEnd = end
+		}
+
+		// Append remaining text
+		if prevEnd < len(plainRunes) {
+			sb = append(sb, []byte(string(plainRunes[prevEnd:]))...)
+		}
+
+		out[lineIdx] = string(sb)
+	}
+
+	return out
+}
+
 // ApplyHighlights returns a copy of displayLines with match highlighting
 // injected. All matches get a yellow background highlight; the current match
 // (state.Current) gets an orange background to distinguish it as focused.

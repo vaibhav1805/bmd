@@ -2343,9 +2343,10 @@ func (v Viewer) View() string {
 	}
 
 	// Apply search highlights to display lines if a search is active.
+	// Use viewport-only highlighting for performance (only highlight visible lines).
 	displayLines := v.Lines
 	if v.searchState.Active && len(v.searchState.Matches) > 0 {
-		displayLines = ApplyHighlights(v.Lines, v.searchState, v.Theme)
+		displayLines = ApplyHighlightsViewport(v.Lines, v.searchState, v.Theme, v.Offset, contentHeight)
 	}
 
 	visible := displayLines[v.Offset:end]
