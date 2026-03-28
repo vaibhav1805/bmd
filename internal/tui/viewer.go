@@ -21,6 +21,7 @@ import (
 	"github.com/bmd/bmd/internal/nav"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/renderer"
+	"github.com/bmd/bmd/internal/search"
 	"github.com/bmd/bmd/internal/theme"
 )
 
@@ -110,6 +111,10 @@ type Viewer struct {
 	// Double-tap detection for vim 'gg' (go to top)
 	lastGKeyTime time.Time // time of last 'g' keypress for double-tap detection
 	lastWasG     bool      // true if previous key was 'g' (for vim 'gg' detection)
+
+	// Contextual hints rotation (for status bar)
+	lastHintTime  time.Time // time of last hint rotation
+	currentHintIdx int       // index of current hint to display
 
 	// Cross-document search state (DIR-03): search across all markdown files in the directory.
 	// This is distinct from searchState which searches within the current document.
@@ -2200,6 +2205,48 @@ func (v Viewer) renderMarkdownSyntax() string {
 // filename, parent folder, and context-sensitive right-side info (search
 // state, navigation back indicator, or error message).
 // Enhanced with colors, better visual hierarchy, and decorative elements.
+// getContextualHint returns a rotating keybinding hint based on the current mode.
+// Hints rotate every 5 seconds for discoverability without clutter.
+func (v *Viewer) getContextualHint() string {
+	// Define hint sets per mode
+	var hints []string
+
+	if v.editMode {
+		hints = []string{
+			"\x1b[38;5;117mEsc: exit edit  •  Ctrl+S: save\x1b[0m",
+			"\x1b[38;5;117mCtrl+Z: undo  •  Ctrl+Y: redo\x1b[0m",
+			"\x1b[38;5;117m?:help  •  q:quit\x1b[0m",
+		}
+	} else if v.directoryMode {
+		hints = []string{
+			"\x1b[38;5;117m↑↓:navigate  •  Enter:open  •  s:split\x1b[0m",
+			"\x1b[38;5;117m/:search  •  e:edit  •  ?:help\x1b[0m",
+			"\x1b[38;5;117mCtrl+P:fuzzy find (coming soon)\x1b[0m",
+		}
+	} else {
+		// View mode hints
+		hints = []string{
+			"\x1b[38;5;117me:edit  •  /:search  •  Ctrl+G:graph\x1b[0m",
+			"\x1b[38;5;117mj/k:scroll  •  gg:top  •  G:bottom\x1b[0m",
+			"\x1b[38;5;117mCtrl+D/U:half-page  •  ?:help  •  q:quit\x1b[0m",
+			"\x1b[38;5;117mt:theme  •  Tab:links  •  Ctrl+C:copy\x1b[0m",
+		}
+	}
+
+	if len(hints) == 0 {
+		return ""
+	}
+
+	// Rotate hints every 5 seconds
+	now := time.Now()
+	if now.Sub(v.lastHintTime) > 5*time.Second {
+		v.lastHintTime = now
+		v.currentHintIdx = (v.currentHintIdx + 1) % len(hints)
+	}
+
+	return hints[v.currentHintIdx]
+}
+
 func (v Viewer) renderHeader() string {
 	// Left side: breadcrumb when opened from directory, or "filename  (parent/)" normally.
 	var left string
@@ -2245,6 +2292,9 @@ func (v Viewer) renderHeader() string {
 	} else if v.history.CanGoBack() {
 		// Navigation hint in subtle color
 		right = "\x1b[38;5;117m← Back (Ctrl+B)\x1b[0m"
+	} else {
+		// No urgent message: show contextual keybinding hints
+		right = v.getContextualHint()
 	}
 
 	// Measure visible widths (strip ANSI for right side since it may contain color codes)
@@ -2262,6 +2312,10 @@ func (v Viewer) renderHeader() string {
 		rightLen = len([]rune("← h/Backspace: back to directory"))
 	} else if v.history.CanGoBack() {
 		rightLen = len([]rune("← Back (Ctrl+B)"))
+	} else {
+		// Strip ANSI codes from contextual hint for width calculation
+		stripped := search.StripANSI(right)
+		rightLen = len([]rune(stripped))
 	}
 
 	padding := v.Width - leftLen - rightLen
