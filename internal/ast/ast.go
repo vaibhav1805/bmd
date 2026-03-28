@@ -145,6 +145,7 @@ func (l *List) Type() NodeType { return NodeList }
 // ListItem is a single item in a List.
 type ListItem struct {
 	baseNode
+	Checkbox *bool // nil = no checkbox, true = checked, false = unchecked
 }
 
 func NewListItem() *ListItem {

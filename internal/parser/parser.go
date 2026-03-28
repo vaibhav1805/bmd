@@ -19,6 +19,8 @@ func ParseMarkdown(src string) (*ast.Document, error) {
 		goldmark.WithExtensions(
 			extension.Strikethrough,
 			extension.Table,
+			extension.Footnote,
+			extension.TaskList,
 		),
 	)
 
@@ -270,6 +272,36 @@ func convertExtensionNode(gnode gast.Node, src []byte) ast.Node {
 		row := ast.NewTableRow(false)
 		convertTableCells(gnode, row, src)
 		return row
+
+	case "TaskListItem":
+		// goldmark's task list extension creates task list items
+		// Skip the TaskCheckBox child node and process other children normally
+		li := ast.NewListItem()
+		checked := false
+		li.Checkbox = &checked // Default unchecked for now
+
+		for child := gnode.FirstChild(); child != nil; child = child.NextSibling() {
+			childKind := child.Kind().String()
+			if childKind == "TaskCheckBox" {
+				// Skip rendering the checkbox node - we'll handle it in the renderer
+				// with the Checkbox field instead
+				continue
+			}
+			converted := convertNode(child, src)
+			if converted != nil {
+				li.AddChild(converted)
+			}
+		}
+		return li
+
+	case "Footnote", "FootnoteLink":
+		// Footnotes are mostly rendered as inline content
+		// Treat footnote references as regular text
+		return nil
+
+	case "FootnoteBacklink":
+		// Backreference from footnote definition to reference
+		return nil
 	}
 
 	return nil

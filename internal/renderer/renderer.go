@@ -304,6 +304,16 @@ func (r *Renderer) renderListItem(li *ast.ListItem, ordered bool, num int) strin
 		bullet = listBullet
 	}
 	content := r.renderListItemContent(li, 0)
+
+	// Add checkbox if this is a task list item
+	if li.Checkbox != nil {
+		checkbox := "☐ "
+		if *li.Checkbox {
+			checkbox = "☑ "
+		}
+		return bullet + checkbox + content + "\n"
+	}
+
 	return bullet + content + "\n"
 }
 

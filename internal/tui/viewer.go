@@ -107,6 +107,10 @@ type Viewer struct {
 	graphMode  bool           // true when graph view is active
 	graphState GraphViewState // state for graph visualization
 
+	// Double-tap detection for vim 'gg' (go to top)
+	lastGKeyTime time.Time // time of last 'g' keypress for double-tap detection
+	lastWasG     bool      // true if previous key was 'g' (for vim 'gg' detection)
+
 	// Cross-document search state (DIR-03): search across all markdown files in the directory.
 	// This is distinct from searchState which searches within the current document.
 	crossSearchMode     bool                     // true when cross-document search input prompt is open
@@ -676,19 +680,23 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "h":
-			// 'h' returns to search results when file was opened from search (DIR-04).
+			// 'h': back navigation (vim-style)
+			// Return to search results when file was opened from search (DIR-04)
 			if v.openedFromSearch {
 				return v.BackToSearchResults()
 			}
-			// 'h' returns to directory when file was opened from directory mode (DIR-02).
+			// Return to directory when file was opened from directory mode (DIR-02)
 			if v.openedFromDirectory {
 				return v.BackToDirectory()
 			}
-			v.helpOpen = !v.helpOpen
+			// Otherwise, no action (not back navigation in root view)
+			v.lastWasG = false
 			return v, nil
 
 		case "?":
+			// '?': toggle help (sole help trigger, more intuitive than 'h')
 			v.helpOpen = !v.helpOpen
+			v.lastWasG = false
 			return v, nil
 
 		case "backspace":
@@ -765,27 +773,60 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// ... other escape handling can go here
 
 		case "up", "k":
+			v.lastWasG = false
 			v.ClearSelection()
 			v.Offset = clamp(v.Offset-1, 0, v.maxOffset())
 
 		case "down", "j":
+			v.lastWasG = false
 			v.ClearSelection()
 			v.Offset = clamp(v.Offset+1, 0, v.maxOffset())
 
 		case "pgup":
+			v.lastWasG = false
 			v.ClearSelection()
 			v.Offset = clamp(v.Offset-v.Height, 0, v.maxOffset())
 
 		case "pgdown":
+			v.lastWasG = false
 			v.ClearSelection()
 			v.Offset = clamp(v.Offset+v.Height, 0, v.maxOffset())
+
+		case "ctrl+d":
+			// Ctrl+D: scroll down half-page (vim-style)
+			v.lastWasG = false
+			v.ClearSelection()
+			halfPage := v.Height / 2
+			v.Offset = clamp(v.Offset+halfPage, 0, v.maxOffset())
+
+		case "ctrl+u":
+			// Ctrl+U: scroll up half-page (vim-style)
+			v.lastWasG = false
+			v.ClearSelection()
+			halfPage := v.Height / 2
+			v.Offset = clamp(v.Offset-halfPage, 0, v.maxOffset())
 
 		case "home":
 			v.ClearSelection()
 			v.Offset = 0
 
 		case "g":
-			// Open graph view: load graph from startDir and enter graph mode.
+			// Vim-style 'gg' for go to top: check if this is a double-tap within 500ms
+			if v.lastWasG && time.Since(v.lastGKeyTime) < 500*time.Millisecond {
+				// Double-tap: go to top
+				v.ClearSelection()
+				v.Offset = 0
+				v.lastWasG = false
+			} else {
+				// First tap: record this as a 'g' press
+				v.lastWasG = true
+				v.lastGKeyTime = time.Now()
+			}
+			return v, nil
+
+		case "ctrl+g":
+			// Ctrl+G: Open graph view
+			v.lastWasG = false // Reset double-tap state when using Ctrl+G
 			v.graphMode = true
 			if !v.graphState.Loaded {
 				if err := v.LoadGraph(v.startDir); err != nil {
@@ -798,6 +839,7 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "end", "G":
 			v.ClearSelection()
+			v.lastWasG = false // Reset double-tap state
 			v.Offset = v.maxOffset()
 
 		case "tab":
