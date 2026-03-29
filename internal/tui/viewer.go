@@ -1193,10 +1193,12 @@ func (v *Viewer) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.searchInput = ""
 		caseSensitive := v.searchState.CaseSensitive
 		wholeWord := v.searchState.WholeWord
+		regex := v.searchState.Regex
 		v.searchState = NewSearchState()
 		// Preserve toggle states across cancel so user doesn't lose them
 		v.searchState.CaseSensitive = caseSensitive
 		v.searchState.WholeWord = wholeWord
+		v.searchState.Regex = regex
 		v.searchMode = false
 
 	case "up":
@@ -1226,6 +1228,10 @@ func (v *Viewer) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "alt+w":
 		// Toggle whole-word search
 		v.searchState.WholeWord = !v.searchState.WholeWord
+
+	case "alt+r":
+		// Toggle regex search
+		v.searchState.Regex = !v.searchState.Regex
 
 	case "backspace":
 		if len(v.searchInput) > 0 {
@@ -1301,6 +1307,9 @@ func (v Viewer) searchToggleIndicators() string {
 	}
 	if v.searchState.WholeWord {
 		s += " [W]"
+	}
+	if v.searchState.Regex {
+		s += " [.*]"
 	}
 	return s
 }
@@ -2892,7 +2901,10 @@ func (v Viewer) renderStatusBar() string {
 		if v.searchState.WholeWord {
 			toggles += " [W]"
 		}
-		hints := " (Alt+C:case Alt+W:word)"
+		if v.searchState.Regex {
+			toggles += " [.*]"
+		}
+		hints := " (Alt+C:case Alt+W:word Alt+R:regex)"
 		bar := "🔍 Search: " + v.searchInput + "_" + toggles + hints
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("226")).

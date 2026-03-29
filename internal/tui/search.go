@@ -24,6 +24,7 @@ type SearchState struct {
 	Current       int            // index of focused match (-1 = none)
 	CaseSensitive bool           // when true, search is case-sensitive
 	WholeWord     bool           // when true, match only whole words
+	Regex         bool           // when true, query is treated as a regex pattern
 }
 
 // NewSearchState returns a zeroed SearchState with Current = -1.
@@ -35,7 +36,7 @@ func NewSearchState() *SearchState {
 // Updates Matches, sets Active to true, resets Current to 0 if matches are
 // found, or -1 if none. Respects CaseSensitive and WholeWord toggles.
 func (s *SearchState) Run(displayLines []string) {
-	s.Matches = search.FindMatches(displayLines, s.Query, s.CaseSensitive, s.WholeWord)
+	s.Matches = search.FindMatches(displayLines, s.Query, s.CaseSensitive, s.WholeWord, s.Regex)
 	s.Active = true
 	if len(s.Matches) > 0 {
 		s.Current = 0
