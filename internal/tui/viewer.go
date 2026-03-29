@@ -114,6 +114,7 @@ type Viewer struct {
 	editMode              bool                 // true when in edit mode, false when in read-only view mode
 	editBuffer            *editor.TextBuffer   // text buffer for editing
 	markdownSyntaxOpen    bool                 // true when markdown syntax help is displayed in edit mode
+	savedScrollOffset     int                  // scroll position saved when entering edit mode (restored on exit)
 
 	// Graph view state
 	graphMode  bool           // true when graph view is active
@@ -661,7 +662,16 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Exit edit mode and reload file to show saved changes
 				v.editMode = false
 				v.markdownSyntaxOpen = false
-				return v.loadFileNoHistory(v.FilePath)
+				result, cmd := v.loadFileNoHistory(v.FilePath)
+				// Restore the saved scroll position from when we entered edit mode
+				if v.savedScrollOffset > 0 {
+					result.Offset = v.savedScrollOffset
+					// Clamp to valid range
+					if result.Offset > result.maxOffset() {
+						result.Offset = result.maxOffset()
+					}
+				}
+				return result, cmd
 			case tea.KeyCtrlH:
 				// Toggle markdown syntax help in edit mode
 				v.markdownSyntaxOpen = !v.markdownSyntaxOpen
@@ -741,7 +751,10 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Toggle edit mode
 			v.editMode = !v.editMode
 			if v.editMode {
-				// Entering edit mode: read raw file bytes so the buffer contains plain
+				// Entering edit mode: save current scroll position to restore on exit
+				v.savedScrollOffset = v.Offset
+
+				// Read raw file bytes so the buffer contains plain
 				// markdown, not the rendered output (which has decorative ━━━ borders,
 				// prefix markers, ANSI codes, etc.). Using v.Lines here would corrupt
 				// saves because rendering transforms headings and other elements into
