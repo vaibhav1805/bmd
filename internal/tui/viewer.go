@@ -78,6 +78,11 @@ type Viewer struct {
 	fuzzyFiltered  []string // filtered file list matching fuzzyInput
 	fuzzySelection int    // index in fuzzyFiltered list
 
+	// Heading outline / TOC (Ctrl+O)
+	outlineMode    bool          // true when outline view is open
+	outlineHeadings []HeadingInfo // list of headings in current document
+	outlineSelection int          // index of selected heading
+
 	// Help overlay
 	helpOpen bool // true when the help overlay is visible
 
@@ -161,6 +166,13 @@ type FileMetadata struct {
 	LineCount int       // number of lines in the file
 	ModTime   time.Time // last modification time
 	Preview   string    // first 100 chars of file content (for tooltips)
+}
+
+// HeadingInfo represents a heading in the document for TOC navigation.
+type HeadingInfo struct {
+	Level   int    // 1-6 (H1 through H6)
+	Text    string // heading text content
+	LineIdx int    // line index in the document (for jumping)
 }
 
 // DirectoryState holds all state for the directory listing view (DIR-01).
@@ -540,6 +552,11 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v.updateGraph(msg)
 		}
 
+		// When outline view is open, route keys to outline handling
+		if v.outlineMode {
+			return v.updateOutline(msg)
+		}
+
 		// When jump-to-line prompt is open, route all input to jump handling.
 		if v.jumpMode {
 			return v.updateJump(msg)
@@ -900,6 +917,13 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.fuzzySelection = 0
 			v.lastWasG = false
 
+		case "ctrl+o":
+			// Ctrl+O: open outline/TOC
+			v.outlineMode = true
+			v.outlineHeadings = v.extractHeadings()
+			v.outlineSelection = 0
+			v.lastWasG = false
+
 		// Ctrl+F = in-document search (not forward nav; forward nav uses Ctrl+Right/Alt+Right per design decision)
 		case "ctrl+f":
 			if v.searchState.Active {
@@ -1238,6 +1262,42 @@ func (v *Viewer) updateFuzzyFinder(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			v.fuzzyInput += string(msg.Runes)
 			v.updateFuzzyFilter()
 		}
+	}
+	return v, nil
+}
+
+// updateOutline handles keyboard input when the outline/TOC view is open.
+// Arrow keys navigate; Enter jumps to heading; Esc closes outline.
+func (v *Viewer) updateOutline(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	switch key {
+	case "up", "k":
+		if v.outlineSelection > 0 {
+			v.outlineSelection--
+		}
+
+	case "down", "j":
+		if v.outlineSelection < len(v.outlineHeadings)-1 {
+			v.outlineSelection++
+		}
+
+	case "enter":
+		// Jump to the selected heading
+		if len(v.outlineHeadings) > 0 && v.outlineSelection < len(v.outlineHeadings) {
+			heading := v.outlineHeadings[v.outlineSelection]
+			v.Offset = heading.LineIdx
+			if v.Offset > v.maxOffset() {
+				v.Offset = v.maxOffset()
+			}
+		}
+		v.outlineMode = false
+		v.outlineHeadings = nil
+		v.outlineSelection = 0
+
+	case "esc":
+		v.outlineMode = false
+		v.outlineHeadings = nil
+		v.outlineSelection = 0
 	}
 	return v, nil
 }
@@ -2316,6 +2376,80 @@ func (v *Viewer) getContextualHint() string {
 	return hints[v.currentHintIdx]
 }
 
+// renderOutline returns a modal view of the document outline (table of contents).
+// Shows all headings with indentation based on level, with the selected heading highlighted.
+// User can navigate with arrow keys, press Enter to jump to heading, or Esc to close.
+func (v Viewer) renderOutline() string {
+	if len(v.outlineHeadings) == 0 {
+		return "\nNo headings found in document"
+	}
+
+	// Style definitions
+	selectedBg := lipgloss.Color("4")  // blue background
+	headerFg := lipgloss.Color("51")   // bright cyan
+	textFg := lipgloss.Color("252")    // light gray
+
+	selectedStyle := lipgloss.NewStyle().Background(selectedBg).Foreground(lipgloss.Color("15"))
+	normalStyle := lipgloss.NewStyle().Foreground(textFg)
+	headerStyle := lipgloss.NewStyle().Foreground(headerFg).Bold(true)
+
+	var sb strings.Builder
+	sb.WriteString("\n")
+	sb.WriteString(headerStyle.Render("  Table of Contents") + "\n")
+	sb.WriteString(strings.Repeat("─", 40) + "\n\n")
+
+	// Calculate content height (leave room for header, instructions, and padding)
+	contentHeight := v.Height - 6 // header + toc header + instructions
+	visibleStart := 0
+	visibleEnd := len(v.outlineHeadings)
+
+	// Scroll outline view if there are too many headings
+	if len(v.outlineHeadings) > contentHeight {
+		// Keep selection centered in viewport when possible
+		halfHeight := contentHeight / 2
+		if v.outlineSelection > halfHeight {
+			visibleStart = v.outlineSelection - halfHeight
+		}
+		if visibleStart+contentHeight > len(v.outlineHeadings) {
+			visibleStart = len(v.outlineHeadings) - contentHeight
+		}
+		visibleEnd = visibleStart + contentHeight
+	}
+
+	// Render visible headings
+	for i := visibleStart; i < visibleEnd && i < len(v.outlineHeadings); i++ {
+		heading := v.outlineHeadings[i]
+
+		// Indent based on heading level (2 spaces per level)
+		indent := strings.Repeat("  ", heading.Level)
+
+		// Prefix with heading marker
+		prefix := fmt.Sprintf("%s%d. ", indent, i+1)
+
+		// Truncate text if too long
+		maxLen := v.Width - len([]rune(prefix)) - 4
+		text := heading.Text
+		if len([]rune(text)) > maxLen {
+			text = string([]rune(text)[:maxLen]) + "…"
+		}
+
+		line := prefix + text
+
+		// Highlight selected item
+		if i == v.outlineSelection {
+			sb.WriteString("  " + selectedStyle.Render(line) + "\n")
+		} else {
+			sb.WriteString("  " + normalStyle.Render(line) + "\n")
+		}
+	}
+
+	// Instructions
+	sb.WriteString("\n")
+	sb.WriteString(normalStyle.Render("  ↑/k: up  •  ↓/j: down  •  Enter: jump  •  Esc: close"))
+
+	return sb.String()
+}
+
 func (v Viewer) renderHeader() string {
 	// Left side: breadcrumb when opened from directory, or "filename  (parent/)" normally.
 	var left string
@@ -2408,6 +2542,11 @@ func (v Viewer) View() string {
 	// If the help overlay is open, render it as the full view.
 	if v.helpOpen {
 		return v.renderHelp()
+	}
+
+	// If the outline view is open, render it as the full view.
+	if v.outlineMode {
+		return v.renderHeader() + "\n" + v.renderOutline()
 	}
 
 	// Reserve 1 line at top for header and 1 line at bottom for status bar.
@@ -2978,6 +3117,43 @@ func (v *Viewer) updateFuzzyFilter() {
 	if v.fuzzySelection >= len(v.fuzzyFiltered) {
 		v.fuzzySelection = max(0, len(v.fuzzyFiltered)-1)
 	}
+}
+
+// extractHeadings extracts all headings from the document for TOC.
+func (v *Viewer) extractHeadings() []HeadingInfo {
+	if v.Doc == nil {
+		return nil
+	}
+
+	var headings []HeadingInfo
+	lineIdx := 0
+
+	var walkNodes func(node ast.Node)
+	walkNodes = func(node ast.Node) {
+		// Count lines in this node to track line index
+		if heading, ok := node.(*ast.Heading); ok {
+			// Extract heading text from children
+			var text strings.Builder
+			for _, child := range heading.Children() {
+				if t, ok := child.(*ast.Text); ok {
+					text.WriteString(t.Content)
+				}
+			}
+			headings = append(headings, HeadingInfo{
+				Level:   heading.Level,
+				Text:    text.String(),
+				LineIdx: lineIdx,
+			})
+		}
+
+		// Recurse into children
+		for _, child := range node.Children() {
+			walkNodes(child)
+		}
+	}
+
+	walkNodes(v.Doc)
+	return headings
 }
 
 // maxOffset returns the maximum valid scroll offset.
