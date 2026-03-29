@@ -72,6 +72,12 @@ type Viewer struct {
 	browserFiles []string // sorted .md file paths in startDir tree
 	browserSel   int      // currently selected index in browser list
 
+	// Fuzzy file finder (Ctrl+P)
+	fuzzyMode      bool   // true when fuzzy finder is active
+	fuzzyInput     string // filter string being typed
+	fuzzyFiltered  []string // filtered file list matching fuzzyInput
+	fuzzySelection int    // index in fuzzyFiltered list
+
 	// Help overlay
 	helpOpen bool // true when the help overlay is visible
 
@@ -881,6 +887,18 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.browserOpen = true
 			v.browserFiles = scanMdFiles(v.startDir)
 			v.browserSel = 0
+			v.fuzzyMode = false
+			v.fuzzyInput = ""
+
+		case "ctrl+p":
+			// Ctrl+P: fuzzy file finder
+			v.browserOpen = true
+			v.browserFiles = scanMdFiles(v.startDir)
+			v.fuzzyMode = true
+			v.fuzzyInput = ""
+			v.fuzzyFiltered = v.browserFiles
+			v.fuzzySelection = 0
+			v.lastWasG = false
 
 		// Ctrl+F = in-document search (not forward nav; forward nav uses Ctrl+Right/Alt+Right per design decision)
 		case "ctrl+f":
@@ -1148,6 +1166,11 @@ func (v *Viewer) scrollToMatch() {
 
 // updateBrowser handles keyboard input when the file browser panel is open.
 func (v *Viewer) updateBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// If fuzzy mode is active, route to fuzzy handler
+	if v.fuzzyMode {
+		return v.updateFuzzyFinder(msg)
+	}
+
 	switch msg.String() {
 	case "up", "k":
 		if v.browserSel > 0 {
@@ -1168,6 +1191,52 @@ func (v *Viewer) updateBrowser(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.browserOpen = false
 		if msg.String() == "ctrl+c" {
 			return v, tea.Quit
+		}
+	}
+	return v, nil
+}
+
+// updateFuzzyFinder handles keyboard input when fuzzy file finder (Ctrl+P) is active.
+func (v *Viewer) updateFuzzyFinder(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	switch key {
+	case "backspace":
+		if len(v.fuzzyInput) > 0 {
+			runes := []rune(v.fuzzyInput)
+			v.fuzzyInput = string(runes[:len(runes)-1])
+			v.updateFuzzyFilter()
+		}
+
+	case "esc":
+		v.fuzzyMode = false
+		v.fuzzyInput = ""
+		v.fuzzyFiltered = nil
+		v.fuzzySelection = 0
+
+	case "up", "k":
+		if v.fuzzySelection > 0 {
+			v.fuzzySelection--
+		}
+
+	case "down", "j":
+		if v.fuzzySelection < len(v.fuzzyFiltered)-1 {
+			v.fuzzySelection++
+		}
+
+	case "enter":
+		if len(v.fuzzyFiltered) > 0 {
+			selected := v.fuzzyFiltered[v.fuzzySelection]
+			v.browserOpen = false
+			v.fuzzyMode = false
+			v.fuzzyInput = ""
+			return v.loadFile(selected)
+		}
+
+	default:
+		// Append printable character to filter
+		if len(msg.Runes) > 0 {
+			v.fuzzyInput += string(msg.Runes)
+			v.updateFuzzyFilter()
 		}
 	}
 	return v, nil
@@ -2507,12 +2576,20 @@ func (v Viewer) viewWithBrowser(contentHeight int) string {
 			browserLine = strings.Repeat("─", browserWidth)
 		} else {
 			fileIdx := i - 2
-			if fileIdx < len(v.browserFiles) {
-				name := filepath.Base(v.browserFiles[fileIdx])
+			// Use filtered list if in fuzzy mode, otherwise use full list
+			fileList := v.browserFiles
+			selIndex := v.browserSel
+			if v.fuzzyMode {
+				fileList = v.fuzzyFiltered
+				selIndex = v.fuzzySelection
+			}
+
+			if fileIdx < len(fileList) {
+				name := filepath.Base(fileList[fileIdx])
 				if len(name) > browserWidth-2 {
 					name = name[:browserWidth-3] + "…"
 				}
-				if fileIdx == v.browserSel {
+				if fileIdx == selIndex {
 					browserLine = lipgloss.NewStyle().
 						Reverse(true).
 						Width(browserWidth).
@@ -2551,6 +2628,17 @@ func (v Viewer) renderStatusBar() string {
 	// Search input prompt: show the typing prompt with enhanced colors and return early.
 	if v.searchMode {
 		bar := "🔍 Search: " + v.searchInput + "_"
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("226")).
+			Bold(true).
+			Width(v.Width).
+			Render(bar)
+	}
+
+	// Fuzzy file finder input prompt.
+	if v.fuzzyMode {
+		matchCount := len(v.fuzzyFiltered)
+		bar := fmt.Sprintf("📁 Find: %s_ (%d matches)", v.fuzzyInput, matchCount)
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("226")).
 			Bold(true).
@@ -2854,6 +2942,42 @@ func clearErrorAfter(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(_ time.Time) tea.Msg {
 		return clearErrorMsg{}
 	})
+}
+
+// fuzzyMatch returns true if all characters in pattern appear in order in text (case-insensitive).
+// Used for Ctrl+P file finder fuzzy matching.
+func fuzzyMatch(pattern, text string) bool {
+	patternLower := strings.ToLower(pattern)
+	textLower := strings.ToLower(text)
+	pi := 0 // pattern index
+	for _, ch := range textLower {
+		if pi < len(patternLower) && ch == rune(patternLower[pi]) {
+			pi++
+		}
+	}
+	return pi == len(patternLower)
+}
+
+// updateFuzzyFilter updates the fuzzy-filtered file list based on current input.
+func (v *Viewer) updateFuzzyFilter() {
+	if !v.fuzzyMode {
+		return
+	}
+	if v.fuzzyInput == "" {
+		v.fuzzyFiltered = v.browserFiles
+		v.fuzzySelection = 0
+		return
+	}
+	v.fuzzyFiltered = []string{}
+	for _, file := range v.browserFiles {
+		if fuzzyMatch(v.fuzzyInput, filepath.Base(file)) {
+			v.fuzzyFiltered = append(v.fuzzyFiltered, file)
+		}
+	}
+	// Keep selection in bounds
+	if v.fuzzySelection >= len(v.fuzzyFiltered) {
+		v.fuzzySelection = max(0, len(v.fuzzyFiltered)-1)
+	}
 }
 
 // maxOffset returns the maximum valid scroll offset.
