@@ -18,10 +18,12 @@ const (
 
 // SearchState manages the active search query and match navigation.
 type SearchState struct {
-	Active  bool           // true when a search has been committed (Enter pressed)
-	Query   string         // current committed query
-	Matches []search.Match // all matches in current document
-	Current int            // index of focused match (-1 = none)
+	Active        bool           // true when a search has been committed (Enter pressed)
+	Query         string         // current committed query
+	Matches       []search.Match // all matches in current document
+	Current       int            // index of focused match (-1 = none)
+	CaseSensitive bool           // when true, search is case-sensitive
+	WholeWord     bool           // when true, match only whole words
 }
 
 // NewSearchState returns a zeroed SearchState with Current = -1.
@@ -31,9 +33,9 @@ func NewSearchState() *SearchState {
 
 // Run executes search.FindMatches against displayLines for the current Query.
 // Updates Matches, sets Active to true, resets Current to 0 if matches are
-// found, or -1 if none.
+// found, or -1 if none. Respects CaseSensitive and WholeWord toggles.
 func (s *SearchState) Run(displayLines []string) {
-	s.Matches = search.FindMatches(displayLines, s.Query)
+	s.Matches = search.FindMatches(displayLines, s.Query, s.CaseSensitive, s.WholeWord)
 	s.Active = true
 	if len(s.Matches) > 0 {
 		s.Current = 0

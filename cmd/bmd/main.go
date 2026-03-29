@@ -58,8 +58,16 @@ func main() {
 		}
 	}
 
-	// No arguments: check if current directory has markdown files → directory mode.
+	// No arguments: try to restore a saved session, or fall back to directory mode.
 	if len(args) == 0 {
+		// Check for a saved session with a file that still exists.
+		if sess, err := config.LoadSession(); err == nil && sess != nil {
+			if _, statErr := os.Stat(sess.LastFilePath); statErr == nil {
+				runViewerWithSession(sess)
+				return
+			}
+		}
+
 		cwd, err := os.Getwd()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "bmd: cannot get current directory:", err)
@@ -120,9 +128,53 @@ func runDirectoryViewer(dir string) {
 	}
 
 	p := tea.NewProgram(v, tea.WithAltScreen(), tea.WithMouseCellMotion())
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "bmd: error running TUI:", err)
 		os.Exit(1)
+	}
+
+	// Save session state on exit for restore on next launch.
+	if fv, ok := finalModel.(*tui.Viewer); ok {
+		if s := fv.SessionState(); s != nil {
+			_ = config.SaveSession(s)
+		}
+	}
+}
+
+// runViewerWithSession launches the viewer restoring a saved session state.
+func runViewerWithSession(sess *config.SessionState) {
+	data, err := os.ReadFile(sess.LastFilePath)
+	if err != nil {
+		// File disappeared between check and read — fall back to normal behavior.
+		fmt.Fprintf(os.Stderr, "bmd: cannot read session file %s: %v\n", sess.LastFilePath, err)
+		os.Exit(1)
+	}
+
+	doc, err := parser.ParseMarkdown(string(data))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bmd: error parsing markdown: %v\n", err)
+		os.Exit(1)
+	}
+
+	termWidth := terminal.DetectTerminalWidth()
+	cfg, _ := config.Load()
+	th := theme.NewThemeByName(theme.ThemeName(cfg.Theme))
+
+	v := tui.New(doc, sess.LastFilePath, th, termWidth)
+	v.RestoreSession(sess)
+
+	p := tea.NewProgram(v, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	finalModel, err := p.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bmd: error running TUI: %v\n", err)
+		os.Exit(1)
+	}
+
+	if fv, ok := finalModel.(*tui.Viewer); ok {
+		if s := fv.SessionState(); s != nil {
+			_ = config.SaveSession(s)
+		}
 	}
 }
 
@@ -157,9 +209,17 @@ func runViewer(filePath string) {
 
 	// Step 6: Launch bubbletea TUI in alt screen with mouse support.
 	p := tea.NewProgram(v, tea.WithAltScreen(), tea.WithMouseCellMotion())
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "bmd: error running TUI: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Save session state on exit for restore on next launch.
+	if fv, ok := finalModel.(*tui.Viewer); ok {
+		if s := fv.SessionState(); s != nil {
+			_ = config.SaveSession(s)
+		}
 	}
 }
 

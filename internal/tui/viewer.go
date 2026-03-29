@@ -66,6 +66,7 @@ type Viewer struct {
 	searchState *SearchState // committed search state (matches, current index)
 	searchInput string        // query being typed (before Enter commits it)
 	searchMode  bool          // true when Ctrl+F was pressed and the input prompt is open
+	searchHistory *search.SearchHistory // persistent query recall (up/down arrows)
 
 	// File browser panel
 	browserOpen  bool
@@ -115,6 +116,10 @@ type Viewer struct {
 	editBuffer            *editor.TextBuffer   // text buffer for editing
 	markdownSyntaxOpen    bool                 // true when markdown syntax help is displayed in edit mode
 	savedScrollOffset     int                  // scroll position saved when entering edit mode (restored on exit)
+
+	// Find & Replace state (Ctrl+H in edit mode)
+	replaceMode   bool         // true when find/replace prompt is open
+	replaceState  ReplaceState // find/replace query, options, and match state
 
 	// Graph view state
 	graphMode  bool           // true when graph view is active
@@ -246,6 +251,9 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer 
 	lines := stripAllSentinels(rawLines)
 	reg := BuildRegistry(rawLines)
 
+	sh := search.NewSearchHistory(search.DefaultHistoryPath())
+	_ = sh.Load()
+
 	return &Viewer{
 		Doc:              doc,
 		rendered:         strings.Join(lines, "\n"),
@@ -260,6 +268,7 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer 
 		history:          h,
 		startDir:         startDir,
 		searchState:      NewSearchState(),
+		searchHistory:    sh,
 		themeDialog:      NewThemeDialog(theme.ThemeDefault),
 		currentThemeName: theme.ThemeDefault,
 		virtualMode:      len(lines) > virtualThreshold,
@@ -272,6 +281,9 @@ func NewDirectoryViewer(dirPath string, th theme.Theme, width int) *Viewer {
 	h := nav.New()
 	doc := &ast.Document{}
 
+	sh := search.NewSearchHistory(search.DefaultHistoryPath())
+	_ = sh.Load()
+
 	return &Viewer{
 		Doc:              doc,
 		Height:           24,
@@ -282,6 +294,7 @@ func NewDirectoryViewer(dirPath string, th theme.Theme, width int) *Viewer {
 		history:          h,
 		startDir:         dirPath,
 		searchState:      NewSearchState(),
+		searchHistory:    sh,
 		themeDialog:      NewThemeDialog(theme.ThemeDefault),
 		currentThemeName: theme.ThemeDefault,
 		directoryMode:    true,
@@ -504,6 +517,38 @@ func (v *Viewer) getCurrentThemeName() theme.ThemeName {
 	return v.currentThemeName
 }
 
+// SessionState returns the current viewer state for session persistence.
+// Returns nil if the viewer is in directory mode (no file to restore).
+func (v *Viewer) SessionState() *config.SessionState {
+	if v.directoryMode || v.FilePath == "" {
+		return nil
+	}
+	s := &config.SessionState{
+		LastFilePath: v.FilePath,
+		ScrollOffset: v.Offset,
+		EditMode:     v.editMode,
+	}
+	if v.editBuffer != nil {
+		s.CursorLine = v.editBuffer.CursorLine()
+		s.CursorCol = v.editBuffer.CursorCol()
+	}
+	return s
+}
+
+// RestoreSession applies a saved session state to the viewer.
+func (v *Viewer) RestoreSession(s *config.SessionState) {
+	if s == nil {
+		return
+	}
+	v.Offset = s.ScrollOffset
+	if v.Offset < 0 {
+		v.Offset = 0
+	}
+	if v.Offset >= len(v.Lines) {
+		v.Offset = 0
+	}
+}
+
 // Init satisfies bubbletea.Model — no I/O on startup.
 func (v Viewer) Init() tea.Cmd {
 	return nil
@@ -585,6 +630,10 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Edit mode key handlers (only when editMode is true)
 		if v.editMode {
+			// Route to find/replace handler when replace prompt is open
+			if v.replaceMode {
+				return v.updateReplace(msg)
+			}
 			switch msg.Type {
 			case tea.KeyUp:
 				v.editBuffer.CursorUp()
@@ -673,8 +722,9 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return result, cmd
 			case tea.KeyCtrlH:
-				// Toggle markdown syntax help in edit mode
-				v.markdownSyntaxOpen = !v.markdownSyntaxOpen
+				// Open Find & Replace prompt in edit mode
+				v.replaceMode = true
+				v.replaceState = ReplaceState{CurrentMatch: -1}
 				return v, nil
 			}
 			// Handle Page Up/Down by string matching
@@ -946,6 +996,9 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open the search input prompt.
 			v.searchMode = true
 			v.searchInput = ""
+			if v.searchHistory != nil {
+				v.searchHistory.Reset()
+			}
 
 		// "/" = cross-document search across all markdown files in the directory (DIR-03).
 		case "/":
@@ -1127,14 +1180,52 @@ func (v *Viewer) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.searchState.Query = v.searchInput
 		v.searchState.Run(v.Lines)
 		v.searchMode = false
+		// Save to history and persist.
+		if v.searchHistory != nil && v.searchInput != "" {
+			v.searchHistory.Push(v.searchInput)
+			_ = v.searchHistory.Save()
+		}
 		// Scroll to the first match if one was found.
 		v.scrollToMatch()
 
 	case "esc", "ctrl+f":
 		// Cancel search: clear everything and close the prompt.
 		v.searchInput = ""
+		caseSensitive := v.searchState.CaseSensitive
+		wholeWord := v.searchState.WholeWord
 		v.searchState = NewSearchState()
+		// Preserve toggle states across cancel so user doesn't lose them
+		v.searchState.CaseSensitive = caseSensitive
+		v.searchState.WholeWord = wholeWord
 		v.searchMode = false
+
+	case "up":
+		// Recall previous (older) search query from history.
+		if v.searchHistory != nil {
+			if q := v.searchHistory.Prev(); q != "" {
+				v.searchInput = q
+			}
+		}
+
+	case "down":
+		// Recall next (newer) search query from history.
+		if v.searchHistory != nil {
+			v.searchInput = v.searchHistory.Next()
+		}
+
+	case "ctrl+l":
+		// Clear search history.
+		if v.searchHistory != nil {
+			_ = v.searchHistory.Clear()
+		}
+
+	case "alt+c":
+		// Toggle case-sensitive search
+		v.searchState.CaseSensitive = !v.searchState.CaseSensitive
+
+	case "alt+w":
+		// Toggle whole-word search
+		v.searchState.WholeWord = !v.searchState.WholeWord
 
 	case "backspace":
 		if len(v.searchInput) > 0 {
@@ -1199,6 +1290,19 @@ func (v *Viewer) scrollToMatch() {
 			v.Offset = 0
 		}
 	}
+}
+
+// searchToggleIndicators returns a string with [Aa] and/or [W] indicators
+// when case-sensitive or whole-word search toggles are enabled.
+func (v Viewer) searchToggleIndicators() string {
+	s := ""
+	if v.searchState.CaseSensitive {
+		s += " [Aa]"
+	}
+	if v.searchState.WholeWord {
+		s += " [W]"
+	}
+	return s
 }
 
 // updateBrowser handles keyboard input when the file browser panel is open.
@@ -2208,7 +2312,7 @@ func (v Viewer) renderHelp() string {
 		line(padRight("  Ctrl+C        Copy line at cursor", boxWidth)),
 		sectionSep(),
 		sectionLine("Edit Mode (e)"),
-		line(padRight("  Ctrl+H        Show markdown syntax help", boxWidth)),
+		line(padRight("  Ctrl+H        Find & Replace", boxWidth)),
 		line(padRight("  Ctrl+S        Save file", boxWidth)),
 		line(padRight("  Ctrl+Z/Y      Undo / Redo", boxWidth)),
 		sectionSep(),
@@ -2314,7 +2418,7 @@ func (v Viewer) renderMarkdownSyntax() string {
 		codeLine("| table | data |"),
 		codeLine("---"),
 		sectionSep(),
-		line(padRight("  Ctrl+H to close this help", boxWidth)),
+		line(padRight("  Esc to close this help", boxWidth)),
 		footer,
 	}
 
@@ -2357,7 +2461,7 @@ func (v *Viewer) getContextualHint() string {
 		hints = []string{
 			"\x1b[38;5;117mEsc: exit edit  •  Ctrl+S: save\x1b[0m",
 			"\x1b[38;5;117mCtrl+Z: undo  •  Ctrl+Y: redo\x1b[0m",
-			"\x1b[38;5;117m?:help  •  q:quit\x1b[0m",
+			"\x1b[38;5;117mCtrl+H: find/replace  •  ?:help\x1b[0m",
 		}
 	} else if v.directoryMode {
 		hints = []string{
@@ -2495,10 +2599,12 @@ func (v Viewer) renderHeader() string {
 		// Search with highlights in bright colors
 		current := v.searchState.Current + 1
 		total := len(v.searchState.Matches)
-		right = fmt.Sprintf("\x1b[1;33m🔍 %s\x1b[0m (%d/%d)", v.searchState.Query, current, total)
+		toggles := v.searchToggleIndicators()
+		right = fmt.Sprintf("\x1b[1;33m🔍 %s\x1b[0m%s (%d/%d)", v.searchState.Query, toggles, current, total)
 	} else if v.searchState.Active && v.searchState.Query != "" {
 		// No matches in muted color
-		right = "\x1b[33m🔍 " + v.searchState.Query + " (no matches)\x1b[0m"
+		toggles := v.searchToggleIndicators()
+		right = "\x1b[33m🔍 " + v.searchState.Query + toggles + " (no matches)\x1b[0m"
 	} else if v.openedFromSearch {
 		// DIR-04: back-to-search hint when file was opened from search results
 		right = "\x1b[38;5;117m← h/Backspace: back to search\x1b[0m"
@@ -2777,9 +2883,17 @@ func (v Viewer) renderStatusBar() string {
 			Render(bar)
 	}
 
-	// Search input prompt: show the typing prompt with enhanced colors and return early.
+	// Search input prompt: show the typing prompt with toggle indicators and return early.
 	if v.searchMode {
-		bar := "🔍 Search: " + v.searchInput + "_"
+		toggles := ""
+		if v.searchState.CaseSensitive {
+			toggles += " [Aa]"
+		}
+		if v.searchState.WholeWord {
+			toggles += " [W]"
+		}
+		hints := " (Alt+C:case Alt+W:word)"
+		bar := "🔍 Search: " + v.searchInput + "_" + toggles + hints
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("226")).
 			Bold(true).
@@ -2814,10 +2928,11 @@ func (v Viewer) renderStatusBar() string {
 	// If search is active with results, show match counter with colors.
 	if v.searchState.Active {
 		var matchInfo string
+		toggles := v.searchToggleIndicators()
 		if len(v.searchState.Matches) > 0 && v.searchState.Current >= 0 {
-			matchInfo = fmt.Sprintf("\x1b[1;33m🔍 Match %d of %d\x1b[0m", v.searchState.Current+1, len(v.searchState.Matches))
+			matchInfo = fmt.Sprintf("\x1b[1;33m🔍 Match %d of %d%s\x1b[0m", v.searchState.Current+1, len(v.searchState.Matches), toggles)
 		} else if v.searchState.Query != "" {
-			matchInfo = fmt.Sprintf("\x1b[33m🔍 No matches for %q\x1b[0m", v.searchState.Query)
+			matchInfo = fmt.Sprintf("\x1b[33m🔍 No matches for %q%s\x1b[0m", v.searchState.Query, toggles)
 		}
 		if matchInfo != "" {
 			bar := matchInfo + "  |  " + name
@@ -3217,6 +3332,9 @@ func (v *Viewer) renderEditMode() string {
 
 	// Render each visible line with line number + raw text
 	contentHeight := v.Height - 2 // header + status bar
+	if v.replaceMode {
+		contentHeight -= 2 // extra lines for find/replace prompt
+	}
 	end := v.Offset + contentHeight
 
 	// Get total lines from editBuffer
@@ -3245,6 +3363,11 @@ func (v *Viewer) renderEditMode() string {
 		// Apply markdown syntax highlighting to the line
 		highlightedLine := v.highlightMarkdownLine(contentLine)
 
+		// Apply find/replace match highlighting
+		if v.replaceMode && len(v.replaceState.Matches) > 0 {
+			highlightedLine = v.applyReplaceHighlights(contentLine, highlightedLine, i)
+		}
+
 		displayLine := lineNumStr + highlightedLine
 
 		// Add cursor rendering if this is the cursor line
@@ -3271,23 +3394,30 @@ func (v *Viewer) renderEditMode() string {
 		}
 	}
 
-	// Status bar: show edit hints and status message
-	statusHint := "[e] exit | [Ctrl+S] save"
-	var statusLine string
-	if v.errorMsg != "" {
-		// Show error or success message
-		statusLine = fmt.Sprintf(" %s | %s", statusHint, v.errorMsg)
+	// Status bar or replace prompt
+	if v.replaceMode {
+		// Show the find/replace prompt instead of the normal status bar
+		lines = append(lines, "") // separator line
+		promptLines := strings.Split(v.renderReplacePrompt(), "\n")
+		lines = append(lines, promptLines...)
 	} else {
-		// Show cursor position normally
-		cursorLine := 1
-		cursorCol := 1
-		if v.editBuffer != nil {
-			cursorLine = v.editBuffer.CursorLine() + 1
-			cursorCol = v.editBuffer.CursorCol() + 1
+		statusHint := "[e] exit | [Ctrl+S] save"
+		var statusLine string
+		if v.errorMsg != "" {
+			// Show error or success message
+			statusLine = fmt.Sprintf(" %s | %s", statusHint, v.errorMsg)
+		} else {
+			// Show cursor position normally
+			cursorLine := 1
+			cursorCol := 1
+			if v.editBuffer != nil {
+				cursorLine = v.editBuffer.CursorLine() + 1
+				cursorCol = v.editBuffer.CursorCol() + 1
+			}
+			statusLine = fmt.Sprintf(" %s | Line %d, Col %d", statusHint, cursorLine, cursorCol)
 		}
-		statusLine = fmt.Sprintf(" %s | Line %d, Col %d", statusHint, cursorLine, cursorCol)
+		lines = append(lines, statusLine[:min(len(statusLine), v.Width)])
 	}
-	lines = append(lines, statusLine[:min(len(statusLine), v.Width)])
 
 	return strings.Join(lines, "\n")
 }

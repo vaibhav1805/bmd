@@ -8,9 +8,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/bmd/bmd/internal/theme"
 )
+
+// sessionMaxAge is the maximum age of a saved session before it is ignored.
+const sessionMaxAge = 30 * 24 * time.Hour // 30 days
+
+// SessionState holds the last editor state for session restoration.
+type SessionState struct {
+	LastFilePath string `json:"last_file_path"`
+	CursorLine   int    `json:"cursor_line"`
+	CursorCol    int    `json:"cursor_col"`
+	ScrollOffset int    `json:"scroll_offset"`
+	EditMode     bool   `json:"edit_mode"`
+	Timestamp    int64  `json:"timestamp"` // Unix timestamp
+}
 
 // Config holds bmd configuration settings.
 type Config struct {
@@ -24,28 +38,37 @@ func DefaultConfig() Config {
 	}
 }
 
-// configPath returns the path to the bmd config file, creating directories as needed.
-// On Unix/macOS: ~/.config/bmd/config.json
-// On Windows: %APPDATA%\bmd\config.json
-func configPath() (string, error) {
-	var configDir string
+// configDir returns the bmd config directory, creating it if needed.
+func configDir() (string, error) {
+	var dir string
 
 	// Try to use XDG config dir on Unix (respects $XDG_CONFIG_HOME)
 	if xdgHome := os.Getenv("XDG_CONFIG_HOME"); xdgHome != "" {
-		configDir = filepath.Join(xdgHome, "bmd")
+		dir = filepath.Join(xdgHome, "bmd")
 	} else if home, err := os.UserHomeDir(); err == nil {
 		// Standard location: ~/.config/bmd/
-		configDir = filepath.Join(home, ".config", "bmd")
+		dir = filepath.Join(home, ".config", "bmd")
 	} else {
 		return "", fmt.Errorf("cannot determine config directory: %w", err)
 	}
 
 	// Ensure the directory exists
-	if err := os.MkdirAll(configDir, 0o700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("cannot create config directory: %w", err)
 	}
 
-	return filepath.Join(configDir, "config.json"), nil
+	return dir, nil
+}
+
+// configPath returns the path to the bmd config file, creating directories as needed.
+// On Unix/macOS: ~/.config/bmd/config.json
+// On Windows: %APPDATA%\bmd\config.json
+func configPath() (string, error) {
+	dir, err := configDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.json"), nil
 }
 
 // Load reads the config file from disk. If the file doesn't exist,
@@ -104,4 +127,68 @@ func (c Config) Save() error {
 	}
 
 	return nil
+}
+
+// sessionPath returns the path to the session state file.
+func sessionPath() (string, error) {
+	dir, err := configDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "session.json"), nil
+}
+
+// LoadSession reads session state from disk. Returns nil, nil if no session
+// file exists or the session is older than 30 days.
+func LoadSession() (*SessionState, error) {
+	path, err := sessionPath()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("cannot read session: %w", err)
+	}
+
+	var s SessionState
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, nil // corrupt session file — treat as missing
+	}
+
+	// Invalidate sessions older than 30 days.
+	if time.Since(time.Unix(s.Timestamp, 0)) > sessionMaxAge {
+		return nil, nil
+	}
+
+	return &s, nil
+}
+
+// SaveSession writes session state to disk.
+func SaveSession(s *SessionState) error {
+	path, err := sessionPath()
+	if err != nil {
+		return err
+	}
+
+	s.Timestamp = time.Now().Unix()
+
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cannot marshal session: %w", err)
+	}
+
+	return os.WriteFile(path, data, 0o600)
+}
+
+// ClearSession removes the session file.
+func ClearSession() {
+	path, err := sessionPath()
+	if err != nil {
+		return
+	}
+	os.Remove(path)
 }

@@ -55,21 +55,21 @@ func TestStripANSI_OnlyEscape(t *testing.T) {
 // FindMatches tests
 
 func TestFindMatches_EmptyLines(t *testing.T) {
-	got := search.FindMatches([]string{}, "foo")
+	got := search.FindMatches([]string{}, "foo", false, false)
 	if len(got) != 0 {
 		t.Errorf("FindMatches([], %q) = %v; want []", "foo", got)
 	}
 }
 
 func TestFindMatches_EmptyQuery(t *testing.T) {
-	got := search.FindMatches([]string{"hello"}, "")
+	got := search.FindMatches([]string{"hello"}, "", false, false)
 	if len(got) != 0 {
 		t.Errorf("FindMatches([%q], %q) = %v; want []", "hello", "", got)
 	}
 }
 
 func TestFindMatches_SimpleMatch(t *testing.T) {
-	got := search.FindMatches([]string{"hello world"}, "hello")
+	got := search.FindMatches([]string{"hello world"}, "hello", false, false)
 	want := []search.Match{{LineIndex: 0, PlainStart: 0, PlainEnd: 5}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("FindMatches([%q], %q) = %v; want %v", "hello world", "hello", got, want)
@@ -77,7 +77,7 @@ func TestFindMatches_SimpleMatch(t *testing.T) {
 }
 
 func TestFindMatches_CaseInsensitive(t *testing.T) {
-	got := search.FindMatches([]string{"Hello World"}, "hello")
+	got := search.FindMatches([]string{"Hello World"}, "hello", false, false)
 	want := []search.Match{{LineIndex: 0, PlainStart: 0, PlainEnd: 5}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("FindMatches([%q], %q) = %v; want %v", "Hello World", "hello", got, want)
@@ -85,7 +85,7 @@ func TestFindMatches_CaseInsensitive(t *testing.T) {
 }
 
 func TestFindMatches_MultipleMatchesSameLine(t *testing.T) {
-	got := search.FindMatches([]string{"foo foo foo"}, "foo")
+	got := search.FindMatches([]string{"foo foo foo"}, "foo", false, false)
 	want := []search.Match{
 		{LineIndex: 0, PlainStart: 0, PlainEnd: 3},
 		{LineIndex: 0, PlainStart: 4, PlainEnd: 7},
@@ -98,7 +98,7 @@ func TestFindMatches_MultipleMatchesSameLine(t *testing.T) {
 
 func TestFindMatches_ANSIStrippedForSearch(t *testing.T) {
 	input := "\x1b[39mfoo\x1b[0m bar"
-	got := search.FindMatches([]string{input}, "foo")
+	got := search.FindMatches([]string{input}, "foo", false, false)
 	want := []search.Match{{LineIndex: 0, PlainStart: 0, PlainEnd: 3}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("FindMatches([%q], %q) = %v; want %v", input, "foo", got, want)
@@ -107,7 +107,7 @@ func TestFindMatches_ANSIStrippedForSearch(t *testing.T) {
 
 func TestFindMatches_MultipleLines(t *testing.T) {
 	lines := []string{"line1 foo", "line2", "line3 Foo"}
-	got := search.FindMatches(lines, "foo")
+	got := search.FindMatches(lines, "foo", false, false)
 	want := []search.Match{
 		{LineIndex: 0, PlainStart: 6, PlainEnd: 9},
 		{LineIndex: 2, PlainStart: 6, PlainEnd: 9},
@@ -118,7 +118,7 @@ func TestFindMatches_MultipleLines(t *testing.T) {
 }
 
 func TestFindMatches_NonOverlappingAdjacent(t *testing.T) {
-	got := search.FindMatches([]string{"abcabc"}, "abc")
+	got := search.FindMatches([]string{"abcabc"}, "abc", false, false)
 	want := []search.Match{
 		{LineIndex: 0, PlainStart: 0, PlainEnd: 3},
 		{LineIndex: 0, PlainStart: 3, PlainEnd: 6},
@@ -129,7 +129,7 @@ func TestFindMatches_NonOverlappingAdjacent(t *testing.T) {
 }
 
 func TestFindMatches_NonOverlappingConsumes(t *testing.T) {
-	got := search.FindMatches([]string{"aaa"}, "aa")
+	got := search.FindMatches([]string{"aaa"}, "aa", false, false)
 	want := []search.Match{
 		{LineIndex: 0, PlainStart: 0, PlainEnd: 2},
 	}
@@ -139,7 +139,7 @@ func TestFindMatches_NonOverlappingConsumes(t *testing.T) {
 }
 
 func TestFindMatches_NoMatch(t *testing.T) {
-	got := search.FindMatches([]string{"hello"}, "xyz")
+	got := search.FindMatches([]string{"hello"}, "xyz", false, false)
 	if len(got) != 0 {
 		t.Errorf("FindMatches([%q], %q) = %v; want []", "hello", "xyz", got)
 	}

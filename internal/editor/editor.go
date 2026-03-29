@@ -402,3 +402,144 @@ func (tb *TextBuffer) SaveToFile(filePath string) error {
 
 	return nil
 }
+
+// FindAll returns the (line, col) positions of all non-overlapping occurrences of
+// oldText in the buffer. If caseSensitive is false, matching is case-insensitive.
+// If wholeWord is true, matches must be bounded by non-alphanumeric characters or
+// string boundaries.
+func (tb *TextBuffer) FindAll(oldText string, caseSensitive, wholeWord bool) [][2]int {
+	if oldText == "" {
+		return nil
+	}
+
+	query := oldText
+	if !caseSensitive {
+		query = strings.ToLower(query)
+	}
+	queryRunes := []rune(query)
+	queryLen := len(queryRunes)
+
+	var results [][2]int
+	for lineIdx, line := range tb.lines {
+		lineText := line
+		if !caseSensitive {
+			lineText = strings.ToLower(lineText)
+		}
+		lineRunes := []rune(lineText)
+		n := len(lineRunes)
+
+		for i := 0; i <= n-queryLen; i++ {
+			if !runesEq(lineRunes[i:i+queryLen], queryRunes) {
+				continue
+			}
+			if wholeWord {
+				if i > 0 && isWordChar(lineRunes[i-1]) {
+					continue
+				}
+				if i+queryLen < n && isWordChar(lineRunes[i+queryLen]) {
+					continue
+				}
+			}
+			results = append(results, [2]int{lineIdx, i})
+			i += queryLen - 1 // non-overlapping
+		}
+	}
+	return results
+}
+
+// Replace replaces all occurrences of oldText with newText in the buffer.
+// The entire operation is pushed as a single undo snapshot.
+// Returns the number of replacements made.
+func (tb *TextBuffer) Replace(oldText, newText string, caseSensitive, wholeWord bool) int {
+	if oldText == "" {
+		return 0
+	}
+
+	matches := tb.FindAll(oldText, caseSensitive, wholeWord)
+	if len(matches) == 0 {
+		return 0
+	}
+
+	// Push current state to undo stack as a single operation
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	// Replace in reverse order (bottom-right to top-left) so earlier positions stay valid
+	oldRunes := []rune(oldText)
+	newRuneStr := newText
+
+	for i := len(matches) - 1; i >= 0; i-- {
+		lineIdx := matches[i][0]
+		col := matches[i][1]
+		line := tb.lines[lineIdx]
+		lineRunes := []rune(line)
+
+		// Use the original text case from the line (not the lowered version)
+		before := string(lineRunes[:col])
+		after := string(lineRunes[col+len(oldRunes):])
+		tb.lines[lineIdx] = before + newRuneStr + after
+	}
+
+	// Clamp cursor
+	if tb.cursorLine >= len(tb.lines) {
+		tb.cursorLine = max(0, len(tb.lines)-1)
+	}
+	tb.clampCursorCol()
+
+	return len(matches)
+}
+
+// ReplaceOne replaces the match at the given (line, col) position.
+// Returns true if a replacement was made.
+func (tb *TextBuffer) ReplaceOne(lineIdx, col int, oldText, newText string, caseSensitive bool) bool {
+	if lineIdx < 0 || lineIdx >= len(tb.lines) || oldText == "" {
+		return false
+	}
+
+	line := tb.lines[lineIdx]
+	lineRunes := []rune(line)
+
+	oldRunes := []rune(oldText)
+	if col < 0 || col+len(oldRunes) > len(lineRunes) {
+		return false
+	}
+
+	// Verify the text at this position actually matches
+	candidate := string(lineRunes[col : col+len(oldRunes)])
+	if caseSensitive {
+		if candidate != oldText {
+			return false
+		}
+	} else {
+		if strings.ToLower(candidate) != strings.ToLower(oldText) {
+			return false
+		}
+	}
+
+	// Push undo
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	before := string(lineRunes[:col])
+	after := string(lineRunes[col+len(oldRunes):])
+	tb.lines[lineIdx] = before + newText + after
+
+	tb.clampCursorCol()
+	return true
+}
+
+// runesEq reports whether two rune slices are identical.
+func runesEq(a, b []rune) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// isWordChar returns true if r is a letter, digit, or underscore.
+func isWordChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+}
