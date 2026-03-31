@@ -28,7 +28,7 @@ func makeEdge(src, tgt string) *knowledge.Edge {
 	return e
 }
 
-func newViewerForGraph(width, height int) Viewer {
+func newViewerForGraph(width, height int) *Viewer {
 	v := New(&ast.Document{}, "test.md", theme.NewTheme(), width)
 	v.Height = height
 	return v
@@ -313,7 +313,7 @@ func TestGraphIndexOfNode_Empty(t *testing.T) {
 
 // --- Task 3: updateGraph navigation tests ------------------------------------
 
-func buildViewerWithGraph(nodes []knowledge.Node, edges []knowledge.Edge) Viewer {
+func buildViewerWithGraph(nodes []knowledge.Node, edges []knowledge.Edge) *Viewer {
 	v := newViewerForGraph(120, 40)
 	g := newTestGraph(nodes, edges)
 	v.graphState = GraphViewState{
@@ -339,7 +339,7 @@ func TestUpdateGraph_EscClosesGraph(t *testing.T) {
 		nil,
 	)
 	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyEsc})
-	viewer := result.(Viewer)
+	viewer := result.(*Viewer)
 	if viewer.graphMode {
 		t.Error("expected graphMode=false after Esc")
 	}
@@ -356,7 +356,7 @@ func TestUpdateGraph_HClosesGraph(t *testing.T) {
 		nil,
 	)
 	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
-	viewer := result.(Viewer)
+	viewer := result.(*Viewer)
 	if viewer.graphMode {
 		t.Error("expected graphMode=false after 'h'")
 	}
@@ -374,7 +374,7 @@ func TestUpdateGraph_DownNavigates(t *testing.T) {
 	)
 	v.graphState.SelectedNodeID = "a.md"
 	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyDown})
-	viewer := result.(Viewer)
+	viewer := result.(*Viewer)
 	if viewer.graphState.SelectedNodeID != "b.md" {
 		t.Errorf("expected b.md selected after Down, got %q", viewer.graphState.SelectedNodeID)
 	}
@@ -392,7 +392,7 @@ func TestUpdateGraph_UpNavigates(t *testing.T) {
 	)
 	v.graphState.SelectedNodeID = "b.md"
 	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyUp})
-	viewer := result.(Viewer)
+	viewer := result.(*Viewer)
 	if viewer.graphState.SelectedNodeID != "a.md" {
 		t.Errorf("expected a.md selected after Up, got %q", viewer.graphState.SelectedNodeID)
 	}
@@ -410,7 +410,7 @@ func TestUpdateGraph_DownWraps(t *testing.T) {
 	)
 	v.graphState.SelectedNodeID = "c.md" // last
 	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyDown})
-	viewer := result.(Viewer)
+	viewer := result.(*Viewer)
 	if viewer.graphState.SelectedNodeID != "a.md" {
 		t.Errorf("expected wrap to a.md, got %q", viewer.graphState.SelectedNodeID)
 	}
@@ -428,7 +428,7 @@ func TestUpdateGraph_UpWraps(t *testing.T) {
 	)
 	v.graphState.SelectedNodeID = "a.md" // first
 	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyUp})
-	viewer := result.(Viewer)
+	viewer := result.(*Viewer)
 	if viewer.graphState.SelectedNodeID != "c.md" {
 		t.Errorf("expected wrap to c.md, got %q", viewer.graphState.SelectedNodeID)
 	}
@@ -453,7 +453,7 @@ func TestUpdateGraph_RightNavigatesChild(t *testing.T) {
 	v.graphMode = true
 
 	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyRight})
-	viewer := result.(Viewer)
+	viewer := result.(*Viewer)
 	if viewer.graphState.SelectedNodeID != "b.md" {
 		t.Errorf("expected b.md selected after Right, got %q", viewer.graphState.SelectedNodeID)
 	}
@@ -478,7 +478,7 @@ func TestUpdateGraph_LeftNavigatesParent(t *testing.T) {
 	v.graphMode = true
 
 	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyLeft})
-	viewer := result.(Viewer)
+	viewer := result.(*Viewer)
 	if viewer.graphState.SelectedNodeID != "a.md" {
 		t.Errorf("expected a.md selected after Left, got %q", viewer.graphState.SelectedNodeID)
 	}

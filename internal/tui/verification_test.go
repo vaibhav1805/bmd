@@ -37,7 +37,7 @@ func mkTmpDir(t *testing.T, files map[string]string) string {
 }
 
 // newDirViewer creates a Viewer in directory mode for the given dir.
-func newDirViewer(t *testing.T, dir string) Viewer {
+func newDirViewer(t *testing.T, dir string) *Viewer {
 	t.Helper()
 	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
 	v.Height = 24
@@ -71,10 +71,10 @@ func sendKey(keyStr string) tea.KeyMsg {
 }
 
 // pressKeys sends a sequence of key events to a viewer, returning the final state.
-func pressKeys(v Viewer, keys ...string) Viewer {
+func pressKeys(v *Viewer, keys ...string) *Viewer {
 	for _, k := range keys {
 		model, _ := v.Update(sendKey(k))
-		v = model.(Viewer)
+		v = model.(*Viewer)
 	}
 	return v
 }
@@ -433,7 +433,7 @@ func TestCrossSearch_CtrlFFromDirectory(t *testing.T) {
 	// Simulate ctrl+f
 	msg := tea.KeyMsg{Type: tea.KeyCtrlF}
 	model, _ := v.Update(msg)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if !result.crossSearchMode {
 		t.Error("Expected crossSearchMode=true after Ctrl+F from directory")
@@ -455,7 +455,7 @@ func TestCrossSearch_ExecuteAndShowResults(t *testing.T) {
 
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
 	model, _ := v.Update(enter)
-	v = model.(Viewer)
+	v = model.(*Viewer)
 
 	if !v.crossSearchActive {
 		t.Error("Expected crossSearchActive=true after search")
@@ -653,7 +653,7 @@ func TestGraphView_NodeSelectionNavigation(t *testing.T) {
 
 	// Down: a -> b
 	model, _ := v.updateGraph(sendKey("down"))
-	result := model.(Viewer)
+	result := model.(*Viewer)
 	if result.graphState.SelectedNodeID != "b.md" {
 		t.Errorf("Expected b.md after down, got %q", result.graphState.SelectedNodeID)
 	}
@@ -661,7 +661,7 @@ func TestGraphView_NodeSelectionNavigation(t *testing.T) {
 	// Right: a -> b (via edge)
 	v.graphState.SelectedNodeID = "a.md"
 	model, _ = v.updateGraph(sendKey("right"))
-	result = model.(Viewer)
+	result = model.(*Viewer)
 	if result.graphState.SelectedNodeID != "b.md" {
 		t.Errorf("Expected b.md after right, got %q", result.graphState.SelectedNodeID)
 	}
@@ -669,7 +669,7 @@ func TestGraphView_NodeSelectionNavigation(t *testing.T) {
 	// Left: b -> a (via incoming edge)
 	v.graphState.SelectedNodeID = "b.md"
 	model, _ = v.updateGraph(sendKey("left"))
-	result = model.(Viewer)
+	result = model.(*Viewer)
 	if result.graphState.SelectedNodeID != "a.md" {
 		t.Errorf("Expected a.md after left, got %q", result.graphState.SelectedNodeID)
 	}
@@ -1260,7 +1260,7 @@ func TestRegression_SearchInFileMode(t *testing.T) {
 	// Ctrl+F should enter search mode
 	msg := tea.KeyMsg{Type: tea.KeyCtrlF}
 	model, _ := v.Update(msg)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if !result.searchMode {
 		t.Error("Expected searchMode=true after Ctrl+F in file mode")

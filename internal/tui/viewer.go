@@ -1131,8 +1131,8 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.outlineSelection = 0
 			v.lastWasG = false
 
-		case "ctrl+i":
-			// Ctrl+I: open word count modal
+		case "ctrl+w":
+			// Ctrl+W: open word count modal
 			v.wordCountVisible = true
 			v.lastWasG = false
 
@@ -1627,7 +1627,7 @@ func (v *Viewer) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // Pressing Esc or Ctrl+I closes the modal. All other keys are absorbed.
 func (v *Viewer) updateWordCount(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "ctrl+i":
+	case "esc", "ctrl+w":
 		v.wordCountVisible = false
 	}
 	return v, nil

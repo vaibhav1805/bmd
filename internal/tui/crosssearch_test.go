@@ -14,7 +14,7 @@ import (
 )
 
 // newTestViewerWithDir creates a Viewer with startDir set for cross-search tests.
-func newTestViewerWithDir(t *testing.T, startDir string) Viewer {
+func newTestViewerWithDir(t *testing.T, startDir string) *Viewer {
 	t.Helper()
 	doc := &ast.Document{}
 	v := New(doc, filepath.Join(startDir, "test.md"), theme.NewTheme(), 80)
@@ -69,7 +69,7 @@ func TestCrossSearchModeActivation(t *testing.T) {
 
 	slashKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
 	model, _ := v.Update(slashKey)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if !result.crossSearchMode {
 		t.Error("Expected crossSearchMode=true after pressing '/'")
@@ -89,7 +89,7 @@ func TestCrossSearchInputAccumulatesCharacters(t *testing.T) {
 	for _, ch := range "hello" {
 		key := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}}
 		model, _ := v.Update(key)
-		v = model.(Viewer)
+		v = model.(*Viewer)
 	}
 
 	if v.crossSearchInput != "hello" {
@@ -106,7 +106,7 @@ func TestCrossSearchInputBackspace(t *testing.T) {
 
 	backspace := tea.KeyMsg{Type: tea.KeyBackspace}
 	model, _ := v.Update(backspace)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if result.crossSearchInput != "AP" {
 		t.Errorf("Expected crossSearchInput=%q after backspace, got %q", "AP", result.crossSearchInput)
@@ -122,7 +122,7 @@ func TestCrossSearchInputBackspaceEmpty(t *testing.T) {
 
 	backspace := tea.KeyMsg{Type: tea.KeyBackspace}
 	model, _ := v.Update(backspace)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if result.crossSearchInput != "" {
 		t.Errorf("Expected empty crossSearchInput after backspace on empty, got %q", result.crossSearchInput)
@@ -138,7 +138,7 @@ func TestCrossSearchEscCancels(t *testing.T) {
 
 	esc := tea.KeyMsg{Type: tea.KeyEsc}
 	model, _ := v.Update(esc)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if result.crossSearchMode {
 		t.Error("Expected crossSearchMode=false after Esc")
@@ -160,7 +160,7 @@ func TestCrossSearchEmptyQueryDoesNotActivate(t *testing.T) {
 
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
 	model, _ := v.Update(enter)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if result.crossSearchMode {
 		t.Error("Expected crossSearchMode=false after Enter")
@@ -326,7 +326,7 @@ func TestCrossSearchNavMoveDown(t *testing.T) {
 
 	downKey := tea.KeyMsg{Type: tea.KeyDown}
 	model, _ := v.Update(downKey)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if result.crossSearchSelected != 1 {
 		t.Errorf("Expected crossSearchSelected=1 after ↓, got %d", result.crossSearchSelected)
@@ -348,7 +348,7 @@ func TestCrossSearchNavMoveUp(t *testing.T) {
 
 	upKey := tea.KeyMsg{Type: tea.KeyUp}
 	model, _ := v.Update(upKey)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if result.crossSearchSelected != 1 {
 		t.Errorf("Expected crossSearchSelected=1 after ↑, got %d", result.crossSearchSelected)
@@ -370,7 +370,7 @@ func TestCrossSearchNavClampBottom(t *testing.T) {
 
 	downKey := tea.KeyMsg{Type: tea.KeyDown}
 	model, _ := v.Update(downKey)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if result.crossSearchSelected != 2 {
 		t.Errorf("Expected crossSearchSelected=2 (clamped), got %d", result.crossSearchSelected)
@@ -390,7 +390,7 @@ func TestCrossSearchNavClampTop(t *testing.T) {
 
 	upKey := tea.KeyMsg{Type: tea.KeyUp}
 	model, _ := v.Update(upKey)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if result.crossSearchSelected != 0 {
 		t.Errorf("Expected crossSearchSelected=0 (clamped), got %d", result.crossSearchSelected)
@@ -411,14 +411,14 @@ func TestCrossSearchNavVimKeys(t *testing.T) {
 
 	jKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	model, _ := v.Update(jKey)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 	if result.crossSearchSelected != 1 {
 		t.Errorf("Expected crossSearchSelected=1 after 'j', got %d", result.crossSearchSelected)
 	}
 
 	kKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
 	model, _ = result.Update(kKey)
-	result = model.(Viewer)
+	result = model.(*Viewer)
 	if result.crossSearchSelected != 0 {
 		t.Errorf("Expected crossSearchSelected=0 after 'k', got %d", result.crossSearchSelected)
 	}
@@ -437,7 +437,7 @@ func TestCrossSearchNavEscExits(t *testing.T) {
 
 	esc := tea.KeyMsg{Type: tea.KeyEsc}
 	model, _ := v.Update(esc)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if result.crossSearchActive {
 		t.Error("Expected crossSearchActive=false after Esc from results")
@@ -459,7 +459,7 @@ func TestCrossSearchNavHKeyExits(t *testing.T) {
 
 	hKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}
 	model, _ := v.Update(hKey)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if result.crossSearchActive {
 		t.Error("Expected crossSearchActive=false after 'h'")
@@ -479,7 +479,7 @@ func TestCrossSearchNavSlashReopensSearch(t *testing.T) {
 
 	slash := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
 	model, _ := v.Update(slash)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if !result.crossSearchMode {
 		t.Error("Expected crossSearchMode=true after '/' from results")
@@ -935,7 +935,7 @@ func TestOpenFileFromSearchSetsState(t *testing.T) {
 	// Simulate pressing 'l' to open.
 	lKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
 	model, _ := v.Update(lKey)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if !result.openedFromSearch {
 		t.Error("Expected openedFromSearch=true after opening file from search")
@@ -1000,7 +1000,7 @@ func TestHKeyReturnsToSearchFromFile(t *testing.T) {
 
 	hKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}
 	model, _ := v.Update(hKey)
-	result := model.(Viewer)
+	result := model.(*Viewer)
 
 	if !result.crossSearchActive {
 		t.Error("Expected crossSearchActive=true after 'h' from file opened from search")

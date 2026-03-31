@@ -819,7 +819,7 @@ func TestNavigationMoveDown(t *testing.T) {
 	// Simulate pressing "down"
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}
 	result, _ := v.updateDirectory(msg)
-	vv := result.(Viewer)
+	vv := result.(*Viewer)
 
 	if vv.directoryState.SelectedIndex != 1 {
 		t.Errorf("Expected SelectedIndex=1 after down, got %d", vv.directoryState.SelectedIndex)
@@ -844,7 +844,7 @@ func TestNavigationMoveUp(t *testing.T) {
 	// Simulate pressing "up"
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}
 	result, _ := v.updateDirectory(msg)
-	vv := result.(Viewer)
+	vv := result.(*Viewer)
 
 	if vv.directoryState.SelectedIndex != 0 {
 		t.Errorf("Expected SelectedIndex=0 after up, got %d", vv.directoryState.SelectedIndex)
@@ -870,7 +870,7 @@ func TestNavigationWrapBottom(t *testing.T) {
 	// Press down: should wrap to 0
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}
 	result, _ := v.updateDirectory(msg)
-	vv := result.(Viewer)
+	vv := result.(*Viewer)
 
 	if vv.directoryState.SelectedIndex != 0 {
 		t.Errorf("Expected wraparound to 0, got %d", vv.directoryState.SelectedIndex)
@@ -896,7 +896,7 @@ func TestNavigationWrapTop(t *testing.T) {
 	// Press up: should wrap to last (index 2)
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}
 	result, _ := v.updateDirectory(msg)
-	vv := result.(Viewer)
+	vv := result.(*Viewer)
 
 	if vv.directoryState.SelectedIndex != 2 {
 		t.Errorf("Expected wraparound to 2 (last), got %d", vv.directoryState.SelectedIndex)
@@ -918,7 +918,7 @@ func TestNavigationEmptyDirNocrash(t *testing.T) {
 	for _, key := range []string{"j", "k"} {
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
 		result, _ := v.updateDirectory(msg)
-		vv := result.(Viewer)
+		vv := result.(*Viewer)
 		if vv.directoryState.SelectedIndex != 0 {
 			t.Errorf("Empty dir: expected SelectedIndex=0 after %q, got %d", key, vv.directoryState.SelectedIndex)
 		}
@@ -957,7 +957,7 @@ func TestStressLoadDirectory(t *testing.T) {
 	for i := 0; i < 60; i++ {
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}
 		result, _ := v.updateDirectory(msg)
-		v = result.(Viewer)
+		v = result.(*Viewer)
 	}
 	if v.directoryState.SelectedIndex < 0 || v.directoryState.SelectedIndex >= 55 {
 		t.Errorf("SelectedIndex %d out of range after stress navigation", v.directoryState.SelectedIndex)
@@ -1006,7 +1006,7 @@ func TestDirectoryModeSelectedIndexStaysInBounds(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}
 		result, _ := v.updateDirectory(msg)
-		v = result.(Viewer)
+		v = result.(*Viewer)
 		if v.directoryState.SelectedIndex < 0 || v.directoryState.SelectedIndex >= 2 {
 			t.Errorf("SelectedIndex %d out of bounds at iteration %d (down)", v.directoryState.SelectedIndex, i)
 		}
@@ -1014,7 +1014,7 @@ func TestDirectoryModeSelectedIndexStaysInBounds(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}
 		result, _ := v.updateDirectory(msg)
-		v = result.(Viewer)
+		v = result.(*Viewer)
 		if v.directoryState.SelectedIndex < 0 || v.directoryState.SelectedIndex >= 2 {
 			t.Errorf("SelectedIndex %d out of bounds at iteration %d (up)", v.directoryState.SelectedIndex, i)
 		}
@@ -1468,7 +1468,7 @@ func TestUpdateDirectoryLKeyCallsOpenFileFromDirectory(t *testing.T) {
 
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")}
 	result, _ := v.updateDirectory(msg)
-	vv := result.(Viewer)
+	vv := result.(*Viewer)
 
 	// Should leave directory mode
 	if vv.directoryMode {
@@ -1496,7 +1496,7 @@ func TestUpdateDirectoryEnterKeyCallsOpenFileFromDirectory(t *testing.T) {
 
 	msg := tea.KeyMsg{Type: tea.KeyEnter}
 	result, _ := v.updateDirectory(msg)
-	vv := result.(Viewer)
+	vv := result.(*Viewer)
 
 	if vv.directoryMode {
 		t.Error("Expected directoryMode=false after Enter in directory mode")
@@ -2003,14 +2003,14 @@ func TestToggleSplitMode_KeyS(t *testing.T) {
 
 	// Press 's' to toggle off
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if v.splitMode {
 		t.Error("Expected splitMode=false after pressing 's'")
 	}
 
 	// Press 's' again to toggle back on
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if !v.splitMode {
 		t.Error("Expected splitMode=true after pressing 's' again")
 	}
@@ -2029,7 +2029,7 @@ func TestToggleSplitMode_MultipleTimes(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-		v = m.(Viewer)
+		v = m.(*Viewer)
 		expected := (i%2 == 1) // starts true: 0->false, 1->true, 2->false, ...
 		if v.splitMode != expected {
 			t.Errorf("Toggle %d: splitMode=%v, want %v", i, v.splitMode, expected)
@@ -2059,7 +2059,7 @@ func TestNavigationInSplitMode_UpArrow(t *testing.T) {
 
 	// Press up
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyUp})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if v.directoryState.SelectedIndex != 0 {
 		t.Errorf("Expected SelectedIndex=0 after up, got %d", v.directoryState.SelectedIndex)
 	}
@@ -2087,7 +2087,7 @@ func TestNavigationInSplitMode_DownArrow(t *testing.T) {
 
 	// Press down
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if v.directoryState.SelectedIndex != 1 {
 		t.Errorf("Expected SelectedIndex=1 after down, got %d", v.directoryState.SelectedIndex)
 	}
@@ -2113,7 +2113,7 @@ func TestOpenFileInSplitMode_EnterKey(t *testing.T) {
 
 	// Press Enter to open
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if v.splitMode {
 		t.Error("Expected splitMode=false after opening file with Enter")
 	}
@@ -2139,7 +2139,7 @@ func TestOpenFileInSplitMode_LKey(t *testing.T) {
 
 	// Press 'l' to open
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if v.splitMode {
 		t.Error("Expected splitMode=false after opening file with 'l'")
 	}
@@ -2161,7 +2161,7 @@ func TestSplitModeExitToFullScreen(t *testing.T) {
 	v.splitMode = true
 
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	// Should be in file view now, not directory or split
 	if v.splitMode || v.directoryMode {
 		t.Error("Expected full-screen file view after Enter in split mode")
@@ -2204,7 +2204,7 @@ func TestSplitModeWarningNarrowTerminal(t *testing.T) {
 
 	// Try to press 's' to enable split on narrow terminal (should show warning)
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if v.splitMode {
 		t.Error("Expected splitMode to remain false when trying to enable on narrow terminal")
 	}
@@ -2232,14 +2232,14 @@ func TestSplitModeNavigationBoundary(t *testing.T) {
 
 	// Press up at top — should wrap to bottom
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyUp})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if v.directoryState.SelectedIndex != 1 {
 		t.Errorf("Expected wrap to index 1, got %d", v.directoryState.SelectedIndex)
 	}
 
 	// Press down at bottom — should wrap to top
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyDown})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if v.directoryState.SelectedIndex != 0 {
 		t.Errorf("Expected wrap to index 0, got %d", v.directoryState.SelectedIndex)
 	}
@@ -2278,7 +2278,7 @@ func TestSplitMode_SpecialCharactersInFilenames(t *testing.T) {
 	// Navigate to each file
 	for i := 0; i < 4; i++ {
 		m, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
-		v = m.(Viewer)
+		v = m.(*Viewer)
 	}
 	if v.directoryState.SelectedIndex != 0 {
 		t.Errorf("Expected index 0 after cycling, got %d", v.directoryState.SelectedIndex)
@@ -2316,7 +2316,7 @@ func TestSplitMode_LargeDirectory(t *testing.T) {
 	// Navigate to middle of list
 	for i := 0; i < 30; i++ {
 		m, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
-		v = m.(Viewer)
+		v = m.(*Viewer)
 	}
 	if v.directoryState.SelectedIndex != 30 {
 		t.Errorf("Expected index 30, got %d", v.directoryState.SelectedIndex)
@@ -2377,7 +2377,7 @@ func TestSplitMode_VeryLongFileContent(t *testing.T) {
 
 	// Navigate to long content file
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 
 	output = v.View()
 	if output == "" {
@@ -2404,7 +2404,7 @@ func TestSplitMode_StressTest_RapidToggle(t *testing.T) {
 	// Starts as true, after even number of toggles should return to true
 	for i := 0; i < 20; i++ {
 		m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-		v = m.(Viewer)
+		v = m.(*Viewer)
 	}
 
 	// Should end in original state (even number of toggles)
@@ -2442,7 +2442,7 @@ func TestSplitMode_FileNavigationPreservesSplitState(t *testing.T) {
 	// Navigate down
 	var m tea.Model
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyDown})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 
 	// Split mode should still be active
 	if !v.splitMode {
@@ -2451,7 +2451,7 @@ func TestSplitMode_FileNavigationPreservesSplitState(t *testing.T) {
 
 	// Navigate again
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyUp})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 
 	if !v.splitMode {
 		t.Error("Expected splitMode to persist after multiple navigations")
@@ -2474,11 +2474,11 @@ func TestSplitMode_BackFromSplitPane(t *testing.T) {
 
 	// Enable split mode
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 
 	// Simulate opening a file (Enter key)
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 
 	// Should no longer be in directory mode
 	if v.directoryMode {
@@ -2487,7 +2487,7 @@ func TestSplitMode_BackFromSplitPane(t *testing.T) {
 
 	// Going back should restore directory and split state
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if !v.directoryMode {
 		t.Error("Expected directoryMode to be true after back (h key)")
 	}
@@ -2511,7 +2511,7 @@ func TestSplitMode_WithSearchResults(t *testing.T) {
 
 	// Start search
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 
 	// Split mode should still be true
 	if !v.splitMode {
@@ -2615,32 +2615,32 @@ func TestSplitMode_AllKeyboardShortcuts(t *testing.T) {
 
 	// Toggle split mode with 's' (should turn it off)
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if v.splitMode {
 		t.Fatal("Expected splitMode to be disabled after 's' key toggle")
 	}
 
 	// Toggle again (should turn it back on)
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if !v.splitMode {
 		t.Fatal("Expected splitMode to be re-enabled after second 's' key toggle")
 	}
 
 	// Up arrow navigation
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyUp})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	if v.directoryState.SelectedIndex == 0 {
 		// Wrapped or moved
 	}
 
 	// Down arrow navigation
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyDown})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 
 	// Help should show split section
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	output := v.View()
 	if !strings.Contains(output, "split") {
 		t.Error("Expected 'split' in help output")
@@ -2648,7 +2648,7 @@ func TestSplitMode_AllKeyboardShortcuts(t *testing.T) {
 
 	// Close help with Escape
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 }
 
 // TestSplitMode_CursorPosition tests cursor position in split view
@@ -2674,7 +2674,7 @@ func TestSplitMode_CursorPosition(t *testing.T) {
 
 	// Move to second
 	m, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	output2 := v.View()
 
 	// Outputs should differ (different file selected)
@@ -2684,7 +2684,7 @@ func TestSplitMode_CursorPosition(t *testing.T) {
 
 	// Move to third
 	m, _ = v.Update(tea.KeyMsg{Type: tea.KeyDown})
-	v = m.(Viewer)
+	v = m.(*Viewer)
 	output3 := v.View()
 
 	if output2 == output3 {
@@ -2713,7 +2713,7 @@ func TestPerf_SplitPane_RenderingLargeDirectory(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		_ = v.View()
 		m, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
-		v = m.(Viewer)
+		v = m.(*Viewer)
 	}
 	duration := time.Since(start)
 
@@ -2743,7 +2743,7 @@ func TestPerf_SplitPane_TogglePerfomance(t *testing.T) {
 	start := time.Now()
 	for i := 0; i < 100; i++ {
 		m, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-		v = m.(Viewer)
+		v = m.(*Viewer)
 	}
 	duration := time.Since(start)
 
@@ -2776,7 +2776,7 @@ func TestMemory_SplitPane_Navigation(t *testing.T) {
 	for cycle := 0; cycle < 3; cycle++ {
 		for i := 0; i < len(v.directoryState.Files); i++ {
 			m, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
-			v = m.(Viewer)
+			v = m.(*Viewer)
 			// Render each time to ensure no accumulating memory
 			_ = v.View()
 		}
@@ -2785,5 +2785,191 @@ func TestMemory_SplitPane_Navigation(t *testing.T) {
 	// If we got here without panic/crash, memory is stable
 	if v.directoryState.SelectedIndex != 50 {
 		t.Logf("INFO: Navigation completed, cursor at index %d", v.directoryState.SelectedIndex)
+	}
+}
+
+// ============================================================================
+// Phase 30.4: Cursor Position in Status Bar & Word Count Modal Tests
+// ============================================================================
+
+// TestCursorPositionInStatusBar verifies that when hasCursor=true, the status
+// bar shows "Ln N, Col C" instead of the default line counter.
+func TestCursorPositionInStatusBar(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Width = 80
+	v.Lines = []string{"# Hello World", "This is a test line.", "Third line here."}
+
+	// Without cursor: should show line counter, not Ln/Col
+	status := v.renderStatusBar()
+	if strings.Contains(status, "Ln ") && strings.Contains(status, ", Col ") {
+		t.Error("Expected no Ln/Col display when hasCursor=false")
+	}
+
+	// With cursor set: should show Ln N, Col C
+	v.hasCursor = true
+	v.cursorRow = 1 // 0-based → displays as Ln 2
+	v.cursorCol = 4 // 0-based → displays as Col 5
+	status = v.renderStatusBar()
+	if !strings.Contains(status, "Ln 2") {
+		t.Errorf("Expected 'Ln 2' in status bar, got: %s", status)
+	}
+	if !strings.Contains(status, "Col 5") {
+		t.Errorf("Expected 'Col 5' in status bar, got: %s", status)
+	}
+}
+
+// TestCursorPositionFirstRow verifies cursor at (0,0) shows Ln 1, Col 1.
+func TestCursorPositionFirstRow(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Width = 80
+	v.Lines = []string{"Hello"}
+	v.hasCursor = true
+	v.cursorRow = 0
+	v.cursorCol = 0
+	status := v.renderStatusBar()
+	if !strings.Contains(status, "Ln 1") {
+		t.Errorf("Expected 'Ln 1' in status bar for row 0, got: %s", status)
+	}
+	if !strings.Contains(status, "Col 1") {
+		t.Errorf("Expected 'Col 1' in status bar for col 0, got: %s", status)
+	}
+}
+
+// TestCountDocumentStats verifies word/char/line counting.
+func TestCountDocumentStats(t *testing.T) {
+	lines := []string{
+		"Hello world",
+		"This is a test",
+		"Three words here",
+	}
+	stats := CountDocumentStats(lines)
+	if stats.Words != 9 {
+		t.Errorf("Expected 9 words, got %d", stats.Words)
+	}
+	if stats.Lines != 3 {
+		t.Errorf("Expected 3 lines, got %d", stats.Lines)
+	}
+	// Characters = sum non-whitespace runes
+	// "Helloworld" (10) + "Thisisatest" (11) + "Threewordshere" (14) = 35
+	if stats.Characters != 35 {
+		t.Errorf("Expected 35 characters (no whitespace), got %d", stats.Characters)
+	}
+}
+
+// TestCountDocumentStatsEmpty verifies empty document returns zero stats.
+func TestCountDocumentStatsEmpty(t *testing.T) {
+	stats := CountDocumentStats([]string{})
+	if stats.Words != 0 || stats.Characters != 0 || stats.Lines != 0 || stats.ReadingMins != 0 {
+		t.Errorf("Expected all zeros for empty doc, got %+v", stats)
+	}
+}
+
+// TestCountDocumentStatsReadingTime verifies reading time calculation.
+func TestCountDocumentStatsReadingTime(t *testing.T) {
+	// 200 words → 1 min (200/200 = 1)
+	words200 := make([]string, 200)
+	for i := range words200 {
+		words200[i] = "word"
+	}
+	stats := CountDocumentStats(words200)
+	if stats.ReadingMins != 1 {
+		t.Errorf("Expected 1 min for 200 words, got %d", stats.ReadingMins)
+	}
+	// 400 words → 2 min
+	words400 := make([]string, 400)
+	for i := range words400 {
+		words400[i] = "word"
+	}
+	stats2 := CountDocumentStats(words400)
+	if stats2.ReadingMins != 2 {
+		t.Errorf("Expected 2 min for 400 words, got %d", stats2.ReadingMins)
+	}
+}
+
+// TestWordCountModalOpensWithCtrlI verifies Ctrl+I opens the word count modal.
+func TestWordCountModalOpensWithCtrlI(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Width = 80
+	v.Height = 24
+	v.Lines = []string{"Hello world", "Second line"}
+
+	if v.wordCountVisible {
+		t.Error("Expected wordCountVisible=false initially")
+	}
+
+	// Send Ctrl+I
+	model, _ := v.Update(tea.KeyMsg{Type: tea.KeyCtrlW})
+	result := model.(*Viewer)
+	if !result.wordCountVisible {
+		t.Error("Expected wordCountVisible=true after Ctrl+I")
+	}
+}
+
+// TestWordCountModalClosesWithEsc verifies Esc closes the word count modal.
+func TestWordCountModalClosesWithEsc(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Width = 80
+	v.Height = 24
+	v.wordCountVisible = true
+
+	model, _ := v.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	result := model.(*Viewer)
+	if result.wordCountVisible {
+		t.Error("Expected wordCountVisible=false after Esc")
+	}
+}
+
+// TestWordCountModalRendersStats verifies the modal contains stat labels.
+func TestWordCountModalRendersStats(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Width = 80
+	v.Height = 24
+	v.Lines = []string{"Hello world", "This is a test line."}
+
+	output := v.renderWordCount()
+	if !strings.Contains(output, "Word Count") {
+		t.Error("Expected 'Word Count' heading in modal")
+	}
+	if !strings.Contains(output, "Words:") {
+		t.Error("Expected 'Words:' label in modal")
+	}
+	if !strings.Contains(output, "Characters:") {
+		t.Error("Expected 'Characters:' label in modal")
+	}
+	if !strings.Contains(output, "Lines:") {
+		t.Error("Expected 'Lines:' label in modal")
+	}
+	if !strings.Contains(output, "Reading time:") {
+		t.Error("Expected 'Reading time:' label in modal")
+	}
+	if !strings.Contains(output, "Esc: close") {
+		t.Error("Expected 'Esc: close' instruction in modal")
+	}
+}
+
+// TestWordCountModalRoutedInView verifies View() shows modal when wordCountVisible=true.
+func TestWordCountModalRoutedInView(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Width = 80
+	v.Height = 24
+	v.Lines = []string{"Hello world"}
+
+	// Without modal: should not contain word count content
+	view := v.View()
+	if strings.Contains(view, "Word Count") {
+		t.Error("Expected no 'Word Count' in view when modal is closed")
+	}
+
+	// With modal: should contain word count content
+	v.wordCountVisible = true
+	view = v.View()
+	if !strings.Contains(view, "Word Count") {
+		t.Error("Expected 'Word Count' in view when modal is open")
 	}
 }
