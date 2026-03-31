@@ -712,6 +712,76 @@ func (tb *TextBuffer) InsertText(text string) {
 	tb.cursorCol = len([]rune(lastPart))
 }
 
+// DuplicateLine inserts a copy of the current line below it and keeps the
+// cursor on the original line. The operation is a single undo step.
+func (tb *TextBuffer) DuplicateLine() {
+	if len(tb.lines) == 0 {
+		return
+	}
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	lineContent := tb.lines[tb.cursorLine]
+	newLines := make([]string, 0, len(tb.lines)+1)
+	newLines = append(newLines, tb.lines[:tb.cursorLine+1]...)
+	newLines = append(newLines, lineContent)
+	newLines = append(newLines, tb.lines[tb.cursorLine+1:]...)
+	tb.lines = newLines
+	// Cursor stays on the original line.
+}
+
+// DeleteLine removes the current line from the buffer. Cursor moves to the
+// next line (or stays on the last line when deleting at the end). If the
+// buffer has only one line, the line is cleared rather than removed.
+// The operation is a single undo step.
+func (tb *TextBuffer) DeleteLine() {
+	if len(tb.lines) == 0 {
+		return
+	}
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	if len(tb.lines) == 1 {
+		tb.lines[0] = ""
+		tb.cursorCol = 0
+		return
+	}
+
+	tb.lines = append(tb.lines[:tb.cursorLine], tb.lines[tb.cursorLine+1:]...)
+	if tb.cursorLine >= len(tb.lines) {
+		tb.cursorLine = len(tb.lines) - 1
+	}
+	tb.clampCursorCol()
+}
+
+// MoveLineUp swaps the current line with the line above and moves the cursor
+// up so it follows the same content. No-op when on the first line.
+// The operation is a single undo step.
+func (tb *TextBuffer) MoveLineUp() {
+	if tb.cursorLine == 0 {
+		return
+	}
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	above := tb.cursorLine - 1
+	tb.lines[above], tb.lines[tb.cursorLine] = tb.lines[tb.cursorLine], tb.lines[above]
+	tb.cursorLine--
+	tb.clampCursorCol()
+}
+
+// MoveLineDown swaps the current line with the line below and moves the cursor
+// down so it follows the same content. No-op when on the last line.
+// The operation is a single undo step.
+func (tb *TextBuffer) MoveLineDown() {
+	if tb.cursorLine >= len(tb.lines)-1 {
+		return
+	}
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	below := tb.cursorLine + 1
+	tb.lines[tb.cursorLine], tb.lines[below] = tb.lines[below], tb.lines[tb.cursorLine]
+	tb.cursorLine++
+	tb.clampCursorCol()
+}
+
 // clampCursorCol ensures the cursor column is within valid bounds for the current line.
 func (tb *TextBuffer) clampCursorCol() {
 	if tb.cursorLine >= len(tb.lines) {

@@ -116,6 +116,7 @@ type Viewer struct {
 	editBuffer            *editor.TextBuffer   // text buffer for editing
 	markdownSyntaxOpen    bool                 // true when markdown syntax help is displayed in edit mode
 	savedScrollOffset     int                  // scroll position saved when entering edit mode (restored on exit)
+	editEditClipboard     string               // internal clipboard for edit mode copy/cut/paste
 
 	// Find & Replace state (Ctrl+H in edit mode)
 	replaceMode   bool         // true when find/replace prompt is open
@@ -636,25 +637,114 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			switch msg.Type {
 			case tea.KeyUp:
+				v.editBuffer.ClearSelection()
 				v.editBuffer.CursorUp()
 				return v, nil
 			case tea.KeyDown:
+				v.editBuffer.ClearSelection()
 				v.editBuffer.CursorDown()
 				return v, nil
 			case tea.KeyLeft:
+				v.editBuffer.ClearSelection()
 				v.editBuffer.CursorLeft()
 				return v, nil
 			case tea.KeyRight:
+				v.editBuffer.ClearSelection()
 				v.editBuffer.CursorRight()
 				return v, nil
+			case tea.KeyShiftUp:
+				if !v.editBuffer.HasSelection() {
+					v.editBuffer.StartSelection()
+				}
+				v.editBuffer.CursorUp()
+				v.editBuffer.EndSelection()
+				return v, nil
+			case tea.KeyShiftDown:
+				if !v.editBuffer.HasSelection() {
+					v.editBuffer.StartSelection()
+				}
+				v.editBuffer.CursorDown()
+				v.editBuffer.EndSelection()
+				return v, nil
+			case tea.KeyShiftLeft:
+				if !v.editBuffer.HasSelection() {
+					v.editBuffer.StartSelection()
+				}
+				v.editBuffer.CursorLeft()
+				v.editBuffer.EndSelection()
+				return v, nil
+			case tea.KeyShiftRight:
+				if !v.editBuffer.HasSelection() {
+					v.editBuffer.StartSelection()
+				}
+				v.editBuffer.CursorRight()
+				v.editBuffer.EndSelection()
+				return v, nil
 			case tea.KeyBackspace:
-				v.editBuffer.Backspace()
+				if v.editBuffer.HasSelection() {
+					v.editBuffer.DeleteSelection()
+				} else {
+					v.editBuffer.Backspace()
+				}
 				return v, nil
 			case tea.KeyDelete:
-				v.editBuffer.Delete()
+				if v.editBuffer.HasSelection() {
+					v.editBuffer.DeleteSelection()
+				} else {
+					v.editBuffer.Delete()
+				}
 				return v, nil
 			case tea.KeyEnter:
+				if v.editBuffer.HasSelection() {
+					v.editBuffer.DeleteSelection()
+				}
 				v.editBuffer.EnterNewLine()
+				return v, nil
+			case tea.KeyCtrlC:
+				// Copy selected text or current line; do not quit in edit mode
+				if v.editBuffer.HasSelection() {
+					text := v.editBuffer.GetSelectedText()
+					_, _ = osc52.New(text).WriteTo(os.Stderr)
+					v.editEditClipboard = text
+					v.errorMsg = fmt.Sprintf("Copied %d chars", len([]rune(text)))
+				} else {
+					lines := v.editBuffer.GetLines()
+					line := ""
+					if v.editBuffer.CursorLine() < len(lines) {
+						line = lines[v.editBuffer.CursorLine()]
+					}
+					_, _ = osc52.New(line).WriteTo(os.Stderr)
+					v.editEditClipboard = line
+					v.errorMsg = fmt.Sprintf("Copied line (%d chars)", len([]rune(line)))
+				}
+				return v, clearErrorAfter(statusTimeout)
+			case tea.KeyCtrlX:
+				// Cut selected text (or current line if no selection)
+				if v.editBuffer.HasSelection() {
+					text := v.editBuffer.GetSelectedText()
+					_, _ = osc52.New(text).WriteTo(os.Stderr)
+					v.editEditClipboard = text
+					v.editBuffer.DeleteSelection()
+					v.errorMsg = fmt.Sprintf("Cut %d chars", len([]rune(text)))
+				} else {
+					lines := v.editBuffer.GetLines()
+					line := ""
+					if v.editBuffer.CursorLine() < len(lines) {
+						line = lines[v.editBuffer.CursorLine()]
+					}
+					_, _ = osc52.New(line).WriteTo(os.Stderr)
+					v.editEditClipboard = line
+					v.errorMsg = "Cut line"
+				}
+				return v, clearErrorAfter(statusTimeout)
+			case tea.KeyCtrlV:
+				// Paste from internal clipboard (text copied via Ctrl+C/X in this session)
+				if v.editEditClipboard != "" {
+					v.editBuffer.InsertText(v.editEditClipboard)
+					v.errorMsg = fmt.Sprintf("Pasted %d chars", len([]rune(v.editEditClipboard)))
+					return v, clearErrorAfter(statusTimeout)
+				}
+				// Also handle bracketed paste (Paste: true on KeyRunes)
 				return v, nil
 			case tea.KeyCtrlS:
 				// Save the file
@@ -742,6 +832,26 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "shift+tab":
 				v.editBuffer.DedentLine()
 				return v, nil
+			case "ctrl+d":
+				// Ctrl+D: duplicate current line
+				v.editBuffer.DuplicateLine()
+				v.errorMsg = "Duplicated line"
+				return v, clearErrorAfter(statusTimeout)
+			case "ctrl+shift+k":
+				// Ctrl+Shift+K: delete current line
+				v.editBuffer.DeleteLine()
+				v.errorMsg = "Deleted line"
+				return v, clearErrorAfter(statusTimeout)
+			case "alt+up":
+				// Alt+Up: move line up
+				v.editBuffer.MoveLineUp()
+				v.errorMsg = "Moved line up"
+				return v, clearErrorAfter(statusTimeout)
+			case "alt+down":
+				// Alt+Down: move line down
+				v.editBuffer.MoveLineDown()
+				v.errorMsg = "Moved line down"
+				return v, clearErrorAfter(statusTimeout)
 			case "pgup":
 				// Scroll up one page (Height - 2 for header/status)
 				pageSize := v.Height - 2
@@ -770,8 +880,19 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return v, nil
 			}
+			// Bracketed paste: msg.Paste is true and Runes contains pasted content
+			if msg.Paste && len(msg.Runes) > 0 {
+				text := string(msg.Runes)
+				v.editEditClipboard = text
+				v.editBuffer.InsertText(text)
+				v.errorMsg = fmt.Sprintf("Pasted %d chars", len(msg.Runes))
+				return v, clearErrorAfter(statusTimeout)
+			}
 			// Character input (letter, number, symbol, space)
 			if len(msg.Runes) > 0 {
+				if v.editBuffer.HasSelection() {
+					v.editBuffer.DeleteSelection()
+				}
 				v.editBuffer.Insert(msg.Runes[0])
 				return v, nil
 			}
