@@ -639,3 +639,370 @@ func TestBackspaceAtLineStart(t *testing.T) {
 		t.Errorf("Expected 'line1line2', got '%s'", resultLines[0])
 	}
 }
+
+// ----------- Selection tests -----------
+
+// TestSelectionStartEnd tests StartSelection/EndSelection on a single line.
+func TestSelectionStartEnd(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello world"})
+	tb.SetCursorCol(0)
+	tb.StartSelection()
+	tb.SetCursorCol(5)
+	tb.EndSelection()
+
+	if !tb.HasSelection() {
+		t.Fatal("Expected HasSelection() == true after Start/End")
+	}
+	got := tb.GetSelectedText()
+	if got != "hello" {
+		t.Errorf("Expected 'hello', got %q", got)
+	}
+}
+
+// TestSelectionClear verifies ClearSelection removes the selection.
+func TestSelectionClear(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello"})
+	tb.StartSelection()
+	tb.SetCursorCol(3)
+	tb.EndSelection()
+	tb.ClearSelection()
+
+	if tb.HasSelection() {
+		t.Error("Expected HasSelection() == false after ClearSelection()")
+	}
+	if tb.GetSelectedText() != "" {
+		t.Error("Expected empty text after ClearSelection()")
+	}
+}
+
+// TestSelectionMultiLine tests GetSelectedText across two lines.
+func TestSelectionMultiLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello", "world"})
+	tb.SetCursorLine(0)
+	tb.SetCursorCol(3)
+	tb.StartSelection()
+	tb.SetCursorLine(1)
+	tb.SetCursorCol(3)
+	tb.EndSelection()
+
+	got := tb.GetSelectedText()
+	if got != "lo\nwor" {
+		t.Errorf("Expected %q, got %q", "lo\nwor", got)
+	}
+}
+
+// TestDeleteSelectionSingleLine verifies DeleteSelection removes selected text on one line.
+func TestDeleteSelectionSingleLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello world"})
+	tb.SetCursorCol(6)
+	tb.StartSelection()
+	tb.SetCursorCol(11)
+	tb.EndSelection()
+	tb.DeleteSelection()
+
+	lines := tb.GetLines()
+	if lines[0] != "hello " {
+		t.Errorf("Expected 'hello ', got %q", lines[0])
+	}
+	if tb.HasSelection() {
+		t.Error("Expected selection cleared after DeleteSelection()")
+	}
+	if tb.CursorCol() != 6 {
+		t.Errorf("Expected cursor col 6, got %d", tb.CursorCol())
+	}
+}
+
+// TestDeleteSelectionMultiLine verifies DeleteSelection across lines merges correctly.
+func TestDeleteSelectionMultiLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello", "world"})
+	tb.SetCursorLine(0)
+	tb.SetCursorCol(3)
+	tb.StartSelection()
+	tb.SetCursorLine(1)
+	tb.SetCursorCol(2)
+	tb.EndSelection()
+	tb.DeleteSelection()
+
+	lines := tb.GetLines()
+	if len(lines) != 1 {
+		t.Fatalf("Expected 1 line after multi-line delete, got %d", len(lines))
+	}
+	if lines[0] != "helrld" {
+		t.Errorf("Expected 'helrld', got %q", lines[0])
+	}
+}
+
+// TestDeleteSelectionUndo verifies DeleteSelection is undoable.
+func TestDeleteSelectionUndo(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello world"})
+	tb.SetCursorCol(0)
+	tb.StartSelection()
+	tb.SetCursorCol(5)
+	tb.EndSelection()
+	tb.DeleteSelection()
+	tb.Undo()
+
+	lines := tb.GetLines()
+	if lines[0] != "hello world" {
+		t.Errorf("Expected 'hello world' after undo, got %q", lines[0])
+	}
+}
+
+// TestInsertTextSimple verifies InsertText inserts a plain string.
+func TestInsertTextSimple(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello"})
+	tb.SetCursorCol(5)
+	tb.InsertText(" world")
+
+	lines := tb.GetLines()
+	if lines[0] != "hello world" {
+		t.Errorf("Expected 'hello world', got %q", lines[0])
+	}
+	if tb.CursorCol() != 11 {
+		t.Errorf("Expected cursor col 11, got %d", tb.CursorCol())
+	}
+}
+
+// TestInsertTextMultiLine verifies InsertText with embedded newlines splits lines correctly.
+func TestInsertTextMultiLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"ab"})
+	tb.SetCursorCol(1)
+	tb.InsertText("X\nY")
+
+	lines := tb.GetLines()
+	if len(lines) != 2 {
+		t.Fatalf("Expected 2 lines, got %d: %v", len(lines), lines)
+	}
+	if lines[0] != "aX" {
+		t.Errorf("Expected 'aX', got %q", lines[0])
+	}
+	if lines[1] != "Yb" {
+		t.Errorf("Expected 'Yb', got %q", lines[1])
+	}
+	if tb.CursorLine() != 1 || tb.CursorCol() != 1 {
+		t.Errorf("Expected cursor at (1,1), got (%d,%d)", tb.CursorLine(), tb.CursorCol())
+	}
+}
+
+// TestInsertTextReplacesSelection verifies InsertText replaces active selection.
+func TestInsertTextReplacesSelection(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello world"})
+	tb.SetCursorCol(6)
+	tb.StartSelection()
+	tb.SetCursorCol(11)
+	tb.EndSelection()
+	tb.InsertText("Go")
+
+	lines := tb.GetLines()
+	if lines[0] != "hello Go" {
+		t.Errorf("Expected 'hello Go', got %q", lines[0])
+	}
+}
+
+// TestNormalizeSelectionReversed verifies normalizeSelection handles anchor > end.
+func TestNormalizeSelectionReversed(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello"})
+	// Anchor at col 5, end at col 2 (selection made leftward)
+	tb.SetCursorCol(5)
+	tb.StartSelection()
+	tb.SetCursorCol(2)
+	tb.EndSelection()
+
+	// GetSelectedText should still return the correct text regardless of direction
+	got := tb.GetSelectedText()
+	if got != "llo" {
+		t.Errorf("Expected 'llo' from reversed selection, got %q", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Line operations: DuplicateLine, DeleteLine, MoveLineUp, MoveLineDown
+// ---------------------------------------------------------------------------
+
+func TestDuplicateLineBasic(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta", "gamma"})
+	tb.CursorDown() // Move to "beta"
+	tb.DuplicateLine()
+
+	lines := tb.GetLines()
+	if len(lines) != 4 {
+		t.Fatalf("Expected 4 lines after DuplicateLine, got %d", len(lines))
+	}
+	if lines[1] != "beta" || lines[2] != "beta" {
+		t.Errorf("Expected lines[1] and lines[2] to both be 'beta', got '%s' and '%s'", lines[1], lines[2])
+	}
+	if tb.CursorLine() != 1 {
+		t.Errorf("Expected cursor to stay at line 1, got %d", tb.CursorLine())
+	}
+}
+
+func TestDuplicateLineLastLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"first", "last"})
+	tb.CursorDown()
+	tb.DuplicateLine()
+
+	lines := tb.GetLines()
+	if len(lines) != 3 {
+		t.Fatalf("Expected 3 lines, got %d", len(lines))
+	}
+	if lines[1] != "last" || lines[2] != "last" {
+		t.Errorf("Expected duplicate of 'last' at lines 1 and 2, got '%s' and '%s'", lines[1], lines[2])
+	}
+}
+
+func TestDuplicateLineUndo(t *testing.T) {
+	tb := NewTextBuffer([]string{"one", "two"})
+	tb.DuplicateLine()
+	if len(tb.GetLines()) != 3 {
+		t.Fatal("Expected 3 lines after DuplicateLine")
+	}
+	tb.Undo()
+	lines := tb.GetLines()
+	if len(lines) != 2 {
+		t.Fatalf("Expected 2 lines after Undo, got %d", len(lines))
+	}
+	if lines[0] != "one" || lines[1] != "two" {
+		t.Errorf("Expected ['one','two'] after Undo, got %v", lines)
+	}
+}
+
+func TestDeleteLineMiddle(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta", "gamma"})
+	tb.CursorDown()
+	tb.DeleteLine()
+
+	lines := tb.GetLines()
+	if len(lines) != 2 {
+		t.Fatalf("Expected 2 lines after DeleteLine, got %d", len(lines))
+	}
+	if lines[0] != "alpha" || lines[1] != "gamma" {
+		t.Errorf("Expected ['alpha','gamma'], got %v", lines)
+	}
+	if tb.CursorLine() != 1 {
+		t.Errorf("Expected cursor at line 1, got %d", tb.CursorLine())
+	}
+}
+
+func TestDeleteLineAtEnd(t *testing.T) {
+	tb := NewTextBuffer([]string{"first", "second", "third"})
+	tb.JumpToEnd()
+	tb.DeleteLine()
+
+	lines := tb.GetLines()
+	if len(lines) != 2 {
+		t.Fatalf("Expected 2 lines, got %d", len(lines))
+	}
+	if lines[1] != "second" {
+		t.Errorf("Expected 'second' as last line, got '%s'", lines[1])
+	}
+	if tb.CursorLine() != 1 {
+		t.Errorf("Expected cursor at line 1, got %d", tb.CursorLine())
+	}
+}
+
+func TestDeleteLineSingleLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"only line"})
+	tb.DeleteLine()
+
+	lines := tb.GetLines()
+	if len(lines) != 1 {
+		t.Fatalf("Expected 1 line (buffer never empty), got %d", len(lines))
+	}
+	if lines[0] != "" {
+		t.Errorf("Expected empty line, got '%s'", lines[0])
+	}
+}
+
+func TestDeleteLineUndo(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta", "gamma"})
+	tb.CursorDown()
+	tb.DeleteLine()
+	tb.Undo()
+
+	lines := tb.GetLines()
+	if len(lines) != 3 {
+		t.Fatalf("Expected 3 lines after Undo, got %d", len(lines))
+	}
+	if lines[1] != "beta" {
+		t.Errorf("Expected 'beta' at lines[1] after Undo, got '%s'", lines[1])
+	}
+}
+
+func TestMoveLineUpBasic(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta", "gamma"})
+	tb.CursorDown() // Move to "beta"
+	tb.MoveLineUp()
+
+	lines := tb.GetLines()
+	if lines[0] != "beta" || lines[1] != "alpha" || lines[2] != "gamma" {
+		t.Errorf("Expected ['beta','alpha','gamma'], got %v", lines)
+	}
+	if tb.CursorLine() != 0 {
+		t.Errorf("Expected cursor at line 0, got %d", tb.CursorLine())
+	}
+}
+
+func TestMoveLineUpAtFirstLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta"})
+	tb.MoveLineUp()
+
+	lines := tb.GetLines()
+	if lines[0] != "alpha" || lines[1] != "beta" {
+		t.Errorf("Expected no change, got %v", lines)
+	}
+	if tb.CursorLine() != 0 {
+		t.Errorf("Expected cursor to remain at 0, got %d", tb.CursorLine())
+	}
+}
+
+func TestMoveLineDownBasic(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta", "gamma"})
+	tb.CursorDown() // Move to "beta"
+	tb.MoveLineDown()
+
+	lines := tb.GetLines()
+	if lines[0] != "alpha" || lines[1] != "gamma" || lines[2] != "beta" {
+		t.Errorf("Expected ['alpha','gamma','beta'], got %v", lines)
+	}
+	if tb.CursorLine() != 2 {
+		t.Errorf("Expected cursor at line 2, got %d", tb.CursorLine())
+	}
+}
+
+func TestMoveLineDownAtLastLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta"})
+	tb.JumpToEnd()
+	tb.MoveLineDown()
+
+	lines := tb.GetLines()
+	if lines[0] != "alpha" || lines[1] != "beta" {
+		t.Errorf("Expected no change, got %v", lines)
+	}
+	if tb.CursorLine() != 1 {
+		t.Errorf("Expected cursor to remain at 1, got %d", tb.CursorLine())
+	}
+}
+
+func TestMoveLineUpUndo(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta", "gamma"})
+	tb.CursorDown()
+	tb.MoveLineUp()
+	tb.Undo()
+
+	lines := tb.GetLines()
+	if lines[0] != "alpha" || lines[1] != "beta" || lines[2] != "gamma" {
+		t.Errorf("Expected original order after Undo, got %v", lines)
+	}
+}
+
+func TestMoveLineDownUndo(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta", "gamma"})
+	tb.CursorDown()
+	tb.MoveLineDown()
+	tb.Undo()
+
+	lines := tb.GetLines()
+	if lines[0] != "alpha" || lines[1] != "beta" || lines[2] != "gamma" {
+		t.Errorf("Expected original order after Undo, got %v", lines)
+	}
+}

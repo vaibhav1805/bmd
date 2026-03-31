@@ -95,6 +95,9 @@ type Viewer struct {
 	jumpMode  bool   // true when ':' has been pressed and a line number is being typed
 	jumpInput string // digits accumulated for the target line number
 
+	// Line number display (Ctrl+Shift+L toggles in view mode)
+	showLineNumbers bool // true when line numbers are shown in view mode
+
 	// Mouse cursor state
 	mouseRow  int  // current mouse Y position (0-based, screen row)
 	mouseCol  int  // current mouse X position (0-based, screen col)
@@ -163,6 +166,9 @@ type Viewer struct {
 	// Split-pane mode (09-01): dual-pane layout with file list left, preview right.
 	splitMode          bool // true when split-pane view is active in directory mode
 	splitPreviewOffset int  // scroll offset for the right (preview) pane
+
+	// Word count modal (Ctrl+I): displays document statistics overlay.
+	wordCountVisible bool // true when word count modal is open
 }
 
 // FileMetadata holds metadata for a single markdown file discovered during directory scan.
@@ -1158,6 +1164,16 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case ":":
 			v.jumpMode = true
 			v.jumpInput = ""
+
+		case "ctrl+shift+l":
+			// Ctrl+Shift+L: toggle line numbers in view mode
+			v.showLineNumbers = !v.showLineNumbers
+			if v.showLineNumbers {
+				v.errorMsg = "Line numbers: ON"
+			} else {
+				v.errorMsg = "Line numbers: OFF"
+			}
+			return v, clearErrorAfter(statusTimeout)
 
 		}
 
@@ -2709,6 +2725,73 @@ func (v Viewer) renderOutline() string {
 	return sb.String()
 }
 
+// DocumentStats holds computed statistics for a document.
+type DocumentStats struct {
+	Words       int
+	Characters  int
+	Lines       int
+	ReadingMins int
+}
+
+// CountDocumentStats computes word/character/line counts and estimated reading time
+// for the given document lines. Characters excludes whitespace.
+func CountDocumentStats(lines []string) DocumentStats {
+	var words, chars int
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		words += len(fields)
+		for _, r := range line {
+			if r != ' ' && r != '\t' && r != '\n' && r != '\r' {
+				chars++
+			}
+		}
+	}
+	readingMins := words / 200
+	if readingMins < 1 && words > 0 {
+		readingMins = 1
+	}
+	return DocumentStats{
+		Words:       words,
+		Characters:  chars,
+		Lines:       len(lines),
+		ReadingMins: readingMins,
+	}
+}
+
+// renderWordCount returns the word count statistics modal overlay.
+func (v Viewer) renderWordCount() string {
+	stats := CountDocumentStats(v.Lines)
+
+	headerFg := lipgloss.Color("51")  // bright cyan
+	textFg := lipgloss.Color("252")   // light gray
+	valueFg := lipgloss.Color("226")  // yellow for values
+
+	headerStyle := lipgloss.NewStyle().Foreground(headerFg).Bold(true)
+	labelStyle := lipgloss.NewStyle().Foreground(textFg)
+	valueStyle := lipgloss.NewStyle().Foreground(valueFg).Bold(true)
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+
+	var sb strings.Builder
+	sb.WriteString("\n")
+	sb.WriteString(headerStyle.Render("  Word Count") + "\n")
+	sb.WriteString(strings.Repeat("─", 30) + "\n\n")
+
+	rows := []struct{ label, value string }{
+		{"  Words:", valueStyle.Render(fmt.Sprintf("%d", stats.Words))},
+		{"  Characters:", valueStyle.Render(fmt.Sprintf("%d", stats.Characters))},
+		{"  Lines:", valueStyle.Render(fmt.Sprintf("%d", stats.Lines))},
+		{"  Reading time:", valueStyle.Render(fmt.Sprintf("%d min", stats.ReadingMins))},
+	}
+	for _, row := range rows {
+		sb.WriteString(labelStyle.Render(row.label) + "  " + row.value + "\n")
+	}
+
+	sb.WriteString("\n")
+	sb.WriteString(dimStyle.Render("  Esc: close"))
+
+	return sb.String()
+}
+
 func (v Viewer) renderHeader() string {
 	// Left side: breadcrumb when opened from directory, or "filename  (parent/)" normally.
 	var left string
@@ -3118,10 +3201,13 @@ func (v Viewer) renderStatusBar() string {
 	}
 
 	// Line counter: "Line N of M" for small docs, "Line N" for large docs.
+	// When user has clicked to set a cursor, show precise "Ln N, Col C" position.
 	totalLines := len(v.Lines)
 	currentLine := v.Offset + 1 // 1-based display
 	var lineInfo string
-	if totalLines <= virtualThreshold {
+	if v.hasCursor {
+		lineInfo = fmt.Sprintf("\x1b[38;5;117mLn %d, Col %d\x1b[0m", v.cursorRow+1, v.cursorCol+1)
+	} else if totalLines <= virtualThreshold {
 		lineInfo = fmt.Sprintf("\x1b[38;5;117m%d/%d\x1b[0m", currentLine, totalLines)
 	} else {
 		lineInfo = fmt.Sprintf("\x1b[38;5;117m%d\x1b[0m", currentLine)
