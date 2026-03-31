@@ -88,10 +88,14 @@ func (urm *UndoRedoManager) PushUndo(state []string) {
 
 // TextBuffer represents an in-memory editable document with cursor position tracking.
 type TextBuffer struct {
-	lines      []string          // document lines (each line is the full text, no newlines)
-	cursorLine int               // 0-based line index
-	cursorCol  int               // 0-based column (character position in the line)
-	undoRedo   *UndoRedoManager  // undo/redo manager for edit history
+	lines      []string         // document lines (each line is the full text, no newlines)
+	cursorLine int              // 0-based line index
+	cursorCol  int              // 0-based column (character position in the line)
+	undoRedo   *UndoRedoManager // undo/redo manager for edit history
+
+	// Selection state: nil when no selection active.
+	selectionStart *[2]int // [line, col] anchor where selection began
+	selectionEnd   *[2]int // [line, col] current selection end (moves with shift+arrows)
 }
 
 // NewTextBuffer creates a TextBuffer from initial lines.
@@ -238,6 +242,8 @@ func (tb *TextBuffer) Backspace() {
 }
 
 // EnterNewLine splits the current line at cursor and creates a new line.
+// Auto-indents the new line by preserving leading whitespace from the current line.
+// Also continues list markers (-, *, +, or ordered digits) on the new line.
 func (tb *TextBuffer) EnterNewLine() {
 	if tb.cursorLine >= len(tb.lines) {
 		return
@@ -252,10 +258,110 @@ func (tb *TextBuffer) EnterNewLine() {
 	rightPart := string(runes[tb.cursorCol:])
 
 	tb.lines[tb.cursorLine] = leftPart
-	tb.lines = append(tb.lines[:tb.cursorLine+1], append([]string{rightPart}, tb.lines[tb.cursorLine+1:]...)...)
+
+	// Detect leading whitespace and list markers for auto-indent
+	indent := tb.detectAutoIndent(line)
+	newLine := indent + rightPart
+
+	tb.lines = append(tb.lines[:tb.cursorLine+1], append([]string{newLine}, tb.lines[tb.cursorLine+1:]...)...)
 
 	tb.cursorLine++
-	tb.cursorCol = 0
+	tb.cursorCol = len([]rune(indent))
+}
+
+// detectAutoIndent returns the prefix to apply when pressing Enter on the given line.
+// It preserves leading whitespace. If the line starts with a list marker (-, *, +, or N.),
+// it continues the marker. If at the end of an empty list item, returns just whitespace.
+func (tb *TextBuffer) detectAutoIndent(line string) string {
+	if line == "" {
+		return ""
+	}
+
+	runes := []rune(line)
+	n := len(runes)
+
+	// Collect leading whitespace
+	wsEnd := 0
+	for wsEnd < n && (runes[wsEnd] == ' ' || runes[wsEnd] == '\t') {
+		wsEnd++
+	}
+	ws := string(runes[:wsEnd])
+
+	// Check if the rest starts with a bullet marker (-, *, +) followed by a space
+	rest := runes[wsEnd:]
+	if len(rest) >= 2 && (rest[0] == '-' || rest[0] == '*' || rest[0] == '+') && rest[1] == ' ' {
+		// If the rest after the marker is empty (just "- "), don't continue the list
+		if len(rest) == 2 {
+			return ws
+		}
+		return ws + string(rest[0]) + " "
+	}
+
+	// Check if the rest starts with an ordered list marker (digits followed by ". ")
+	if len(rest) >= 3 {
+		digitEnd := 0
+		for digitEnd < len(rest) && rest[digitEnd] >= '0' && rest[digitEnd] <= '9' {
+			digitEnd++
+		}
+		if digitEnd > 0 && digitEnd < len(rest) && rest[digitEnd] == '.' && digitEnd+1 < len(rest) && rest[digitEnd+1] == ' ' {
+			// Only continue if the ordered item has content after the marker
+			if digitEnd+2 < len(rest) {
+				// Increment the number
+				num := 0
+				for _, d := range rest[:digitEnd] {
+					num = num*10 + int(d-'0')
+				}
+				return ws + fmt.Sprintf("%d. ", num+1)
+			}
+			return ws
+		}
+	}
+
+	return ws
+}
+
+// IndentLine inserts 2 spaces at the start of the current line.
+// The cursor column is adjusted to account for the added indentation.
+func (tb *TextBuffer) IndentLine() {
+	if tb.cursorLine >= len(tb.lines) {
+		return
+	}
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	tb.lines[tb.cursorLine] = "  " + tb.lines[tb.cursorLine]
+	tb.cursorCol += 2
+}
+
+// DedentLine removes up to 2 leading spaces from the start of the current line.
+// The cursor column is adjusted accordingly (clamped to 0).
+func (tb *TextBuffer) DedentLine() {
+	if tb.cursorLine >= len(tb.lines) {
+		return
+	}
+	line := tb.lines[tb.cursorLine]
+	if line == "" {
+		return
+	}
+
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	removed := 0
+	for removed < 2 && removed < len(line) && line[removed] == ' ' {
+		removed++
+	}
+
+	if removed == 0 {
+		// No leading spaces to remove; discard the undo snapshot
+		tb.undoRedo.Undo()
+		return
+	}
+
+	tb.lines[tb.cursorLine] = line[removed:]
+	if tb.cursorCol >= removed {
+		tb.cursorCol -= removed
+	} else {
+		tb.cursorCol = 0
+	}
 }
 
 // JumpToStart moves the cursor to the beginning of the document.
@@ -332,6 +438,278 @@ func (tb *TextBuffer) CanUndo() bool {
 // CanRedo returns true if redo is available.
 func (tb *TextBuffer) CanRedo() bool {
 	return tb.undoRedo.CanRedo()
+}
+
+// CursorWordLeft moves the cursor left to the start of the previous word.
+// Word characters are defined as alphanumeric + underscore [a-zA-Z0-9_].
+// Behavior: skip backward over non-word chars, then skip backward over word chars.
+func (tb *TextBuffer) CursorWordLeft() {
+	if tb.cursorLine >= len(tb.lines) {
+		return
+	}
+	line := []rune(tb.lines[tb.cursorLine])
+	col := tb.cursorCol
+
+	// If at start of line, wrap to end of previous line
+	if col == 0 {
+		if tb.cursorLine > 0 {
+			tb.cursorLine--
+			tb.cursorCol = len([]rune(tb.lines[tb.cursorLine]))
+		}
+		return
+	}
+
+	// Skip backward over non-word characters
+	for col > 0 && !isWordChar(line[col-1]) {
+		col--
+	}
+
+	// Skip backward over word characters
+	for col > 0 && isWordChar(line[col-1]) {
+		col--
+	}
+
+	tb.cursorCol = col
+}
+
+// CursorWordRight moves the cursor right to the start of the next word.
+// Word characters are defined as alphanumeric + underscore [a-zA-Z0-9_].
+// Behavior: skip forward over word chars, then skip forward over non-word chars.
+func (tb *TextBuffer) CursorWordRight() {
+	if tb.cursorLine >= len(tb.lines) {
+		return
+	}
+	line := []rune(tb.lines[tb.cursorLine])
+	col := tb.cursorCol
+	lineLen := len(line)
+
+	// If at end of line, wrap to start of next line
+	if col == lineLen {
+		if tb.cursorLine < len(tb.lines)-1 {
+			tb.cursorLine++
+			tb.cursorCol = 0
+		}
+		return
+	}
+
+	// Skip forward over word characters
+	for col < lineLen && isWordChar(line[col]) {
+		col++
+	}
+
+	// Skip forward over non-word characters
+	for col < lineLen && !isWordChar(line[col]) {
+		col++
+	}
+
+	tb.cursorCol = col
+}
+
+// StartSelection anchors the selection start at the current cursor position.
+// If a selection is already active this resets the anchor.
+func (tb *TextBuffer) StartSelection() {
+	pos := [2]int{tb.cursorLine, tb.cursorCol}
+	tb.selectionStart = &pos
+	end := [2]int{tb.cursorLine, tb.cursorCol}
+	tb.selectionEnd = &end
+}
+
+// EndSelection moves the selection end to the current cursor position.
+// Does nothing if StartSelection was never called.
+func (tb *TextBuffer) EndSelection() {
+	if tb.selectionStart == nil {
+		return
+	}
+	end := [2]int{tb.cursorLine, tb.cursorCol}
+	tb.selectionEnd = &end
+}
+
+// ClearSelection deselects any active selection.
+func (tb *TextBuffer) ClearSelection() {
+	tb.selectionStart = nil
+	tb.selectionEnd = nil
+}
+
+// HasSelection returns true when a non-empty selection is active.
+func (tb *TextBuffer) HasSelection() bool {
+	if tb.selectionStart == nil || tb.selectionEnd == nil {
+		return false
+	}
+	return *tb.selectionStart != *tb.selectionEnd
+}
+
+// normalizeSelection returns (start, end) such that start <= end in document order.
+func normalizeSelection(a, b [2]int) ([2]int, [2]int) {
+	if a[0] < b[0] || (a[0] == b[0] && a[1] <= b[1]) {
+		return a, b
+	}
+	return b, a
+}
+
+// GetSelectedText returns the text covered by the current selection.
+// Returns "" when no selection is active.
+func (tb *TextBuffer) GetSelectedText() string {
+	if !tb.HasSelection() {
+		return ""
+	}
+	start, end := normalizeSelection(*tb.selectionStart, *tb.selectionEnd)
+	if start[0] == end[0] {
+		// Single line
+		if start[0] >= len(tb.lines) {
+			return ""
+		}
+		runes := []rune(tb.lines[start[0]])
+		s, e := start[1], end[1]
+		if s > len(runes) {
+			s = len(runes)
+		}
+		if e > len(runes) {
+			e = len(runes)
+		}
+		return string(runes[s:e])
+	}
+
+	// Multi-line
+	var sb strings.Builder
+	// First line: from start[1] to end of line
+	if start[0] < len(tb.lines) {
+		runes := []rune(tb.lines[start[0]])
+		if start[1] <= len(runes) {
+			sb.WriteString(string(runes[start[1]:]))
+		}
+		sb.WriteRune('\n')
+	}
+	// Middle lines
+	for i := start[0] + 1; i < end[0]; i++ {
+		if i < len(tb.lines) {
+			sb.WriteString(tb.lines[i])
+			sb.WriteRune('\n')
+		}
+	}
+	// Last line: from start to end[1]
+	if end[0] < len(tb.lines) {
+		runes := []rune(tb.lines[end[0]])
+		e := end[1]
+		if e > len(runes) {
+			e = len(runes)
+		}
+		sb.WriteString(string(runes[:e]))
+	}
+	return sb.String()
+}
+
+// DeleteSelection removes the selected text and places the cursor at the selection start.
+// Pushes to undo stack. Does nothing if no selection.
+func (tb *TextBuffer) DeleteSelection() {
+	if !tb.HasSelection() {
+		return
+	}
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	start, end := normalizeSelection(*tb.selectionStart, *tb.selectionEnd)
+	tb.ClearSelection()
+
+	if start[0] == end[0] {
+		// Single line deletion
+		runes := []rune(tb.lines[start[0]])
+		s, e := start[1], end[1]
+		if s > len(runes) {
+			s = len(runes)
+		}
+		if e > len(runes) {
+			e = len(runes)
+		}
+		tb.lines[start[0]] = string(runes[:s]) + string(runes[e:])
+		tb.cursorLine = start[0]
+		tb.cursorCol = start[1]
+		return
+	}
+
+	// Multi-line deletion: merge first and last lines
+	startRunes := []rune(tb.lines[start[0]])
+	endRunes := []rune(tb.lines[end[0]])
+
+	sc := start[1]
+	if sc > len(startRunes) {
+		sc = len(startRunes)
+	}
+	ec := end[1]
+	if ec > len(endRunes) {
+		ec = len(endRunes)
+	}
+
+	merged := string(startRunes[:sc]) + string(endRunes[ec:])
+
+	// Build new lines slice
+	newLines := make([]string, 0, len(tb.lines)-(end[0]-start[0]))
+	newLines = append(newLines, tb.lines[:start[0]]...)
+	newLines = append(newLines, merged)
+	newLines = append(newLines, tb.lines[end[0]+1:]...)
+	tb.lines = newLines
+
+	tb.cursorLine = start[0]
+	tb.cursorCol = start[1]
+	tb.clampCursorCol()
+}
+
+// InsertText inserts a multi-character string at the current cursor position.
+// If a selection is active, it is replaced by the new text.
+// Pushes a single undo snapshot for the entire operation.
+func (tb *TextBuffer) InsertText(text string) {
+	if text == "" {
+		return
+	}
+	if tb.HasSelection() {
+		tb.DeleteSelection()
+	}
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	// Split text into lines
+	parts := strings.Split(text, "\n")
+	if len(parts) == 1 {
+		// No newlines: simple insert
+		if tb.cursorLine >= len(tb.lines) {
+			return
+		}
+		line := tb.lines[tb.cursorLine]
+		runes := []rune(line)
+		col := tb.cursorCol
+		if col > len(runes) {
+			col = len(runes)
+		}
+		newLine := string(runes[:col]) + text + string(runes[col:])
+		tb.lines[tb.cursorLine] = newLine
+		tb.cursorCol = col + len([]rune(text))
+		return
+	}
+
+	// Multiple lines: split current line and insert parts
+	if tb.cursorLine >= len(tb.lines) {
+		return
+	}
+	line := tb.lines[tb.cursorLine]
+	runes := []rune(line)
+	col := tb.cursorCol
+	if col > len(runes) {
+		col = len(runes)
+	}
+
+	before := string(runes[:col])
+	after := string(runes[col:])
+
+	newLines := make([]string, 0, len(tb.lines)+len(parts)-1)
+	newLines = append(newLines, tb.lines[:tb.cursorLine]...)
+	newLines = append(newLines, before+parts[0])
+	for i := 1; i < len(parts)-1; i++ {
+		newLines = append(newLines, parts[i])
+	}
+	lastPart := parts[len(parts)-1]
+	newLines = append(newLines, lastPart+after)
+	newLines = append(newLines, tb.lines[tb.cursorLine+1:]...)
+
+	tb.lines = newLines
+	tb.cursorLine = tb.cursorLine + len(parts) - 1
+	tb.cursorCol = len([]rune(lastPart))
 }
 
 // clampCursorCol ensures the cursor column is within valid bounds for the current line.

@@ -383,6 +383,244 @@ func TestDeleteAtLineEnd(t *testing.T) {
 	}
 }
 
+// TestCursorWordLeft tests backward word-jump movement.
+func TestCursorWordLeft(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello world foo"})
+
+	// Start at col 15 (end of line)
+	tb.SetCursorCol(15)
+	tb.CursorWordLeft() // skip non-word (none), skip "foo" -> col 12
+	if tb.CursorCol() != 12 {
+		t.Errorf("Expected col 12 after first CursorWordLeft, got %d", tb.CursorCol())
+	}
+
+	tb.CursorWordLeft() // skip space, skip "world" -> col 6
+	if tb.CursorCol() != 6 {
+		t.Errorf("Expected col 6 after second CursorWordLeft, got %d", tb.CursorCol())
+	}
+
+	tb.CursorWordLeft() // skip space, skip "hello" -> col 0
+	if tb.CursorCol() != 0 {
+		t.Errorf("Expected col 0 after third CursorWordLeft, got %d", tb.CursorCol())
+	}
+
+	// At start of line: should not move further (only one line)
+	tb.CursorWordLeft()
+	if tb.CursorLine() != 0 || tb.CursorCol() != 0 {
+		t.Errorf("Expected (0,0) at start, got (%d,%d)", tb.CursorLine(), tb.CursorCol())
+	}
+}
+
+// TestCursorWordLeftWrapsLine tests that CursorWordLeft wraps to previous line.
+func TestCursorWordLeftWrapsLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"line1", "line2"})
+	tb.SetCursorLine(1)
+	tb.SetCursorCol(0)
+
+	tb.CursorWordLeft() // wraps to end of line1
+	if tb.CursorLine() != 0 || tb.CursorCol() != 5 {
+		t.Errorf("Expected (0,5) after wrap, got (%d,%d)", tb.CursorLine(), tb.CursorCol())
+	}
+}
+
+// TestCursorWordRight tests forward word-jump movement.
+func TestCursorWordRight(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello world foo"})
+
+	// Start at col 0
+	tb.CursorWordRight() // skip "hello", skip " " -> col 6
+	if tb.CursorCol() != 6 {
+		t.Errorf("Expected col 6 after first CursorWordRight, got %d", tb.CursorCol())
+	}
+
+	tb.CursorWordRight() // skip "world", skip " " -> col 12
+	if tb.CursorCol() != 12 {
+		t.Errorf("Expected col 12 after second CursorWordRight, got %d", tb.CursorCol())
+	}
+
+	tb.CursorWordRight() // skip "foo" -> col 15 (end of line)
+	if tb.CursorCol() != 15 {
+		t.Errorf("Expected col 15 after third CursorWordRight, got %d", tb.CursorCol())
+	}
+
+	// At end of line (single line): should not move further
+	tb.CursorWordRight()
+	if tb.CursorLine() != 0 || tb.CursorCol() != 15 {
+		t.Errorf("Expected (0,15) at end, got (%d,%d)", tb.CursorLine(), tb.CursorCol())
+	}
+}
+
+// TestCursorWordRightWrapsLine tests that CursorWordRight wraps to next line.
+func TestCursorWordRightWrapsLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"line1", "line2"})
+	// Move to end of line1
+	tb.SetCursorCol(5)
+
+	tb.CursorWordRight() // wraps to start of line2
+	if tb.CursorLine() != 1 || tb.CursorCol() != 0 {
+		t.Errorf("Expected (1,0) after wrap, got (%d,%d)", tb.CursorLine(), tb.CursorCol())
+	}
+}
+
+// TestEnterNewLineAutoIndent tests that Enter preserves leading whitespace.
+func TestEnterNewLineAutoIndent(t *testing.T) {
+	tb := NewTextBuffer([]string{"  hello"})
+	tb.SetCursorCol(7) // end of line
+
+	tb.EnterNewLine()
+
+	lines := tb.GetLines()
+	if len(lines) != 2 {
+		t.Fatalf("Expected 2 lines, got %d", len(lines))
+	}
+	if lines[1] != "  " {
+		t.Errorf("Expected '  ' (2 spaces indent), got %q", lines[1])
+	}
+	if tb.CursorLine() != 1 || tb.CursorCol() != 2 {
+		t.Errorf("Expected cursor at (1,2), got (%d,%d)", tb.CursorLine(), tb.CursorCol())
+	}
+}
+
+// TestEnterNewLineBulletList tests that Enter continues bullet list markers.
+func TestEnterNewLineBulletList(t *testing.T) {
+	tb := NewTextBuffer([]string{"- item one"})
+	tb.SetCursorCol(10) // end of line
+
+	tb.EnterNewLine()
+
+	lines := tb.GetLines()
+	if len(lines) != 2 {
+		t.Fatalf("Expected 2 lines, got %d", len(lines))
+	}
+	if lines[1] != "- " {
+		t.Errorf("Expected '- ' on new line, got %q", lines[1])
+	}
+}
+
+// TestEnterNewLineEmptyBullet tests that Enter on an empty bullet stops continuation.
+func TestEnterNewLineEmptyBullet(t *testing.T) {
+	tb := NewTextBuffer([]string{"- "})
+	tb.SetCursorCol(2)
+
+	tb.EnterNewLine()
+
+	lines := tb.GetLines()
+	if len(lines) != 2 {
+		t.Fatalf("Expected 2 lines, got %d", len(lines))
+	}
+	if lines[1] != "" {
+		t.Errorf("Expected empty new line after empty bullet, got %q", lines[1])
+	}
+}
+
+// TestEnterNewLineOrderedList tests that Enter increments ordered list numbers.
+func TestEnterNewLineOrderedList(t *testing.T) {
+	tb := NewTextBuffer([]string{"1. first item"})
+	tb.SetCursorCol(13)
+
+	tb.EnterNewLine()
+
+	lines := tb.GetLines()
+	if len(lines) != 2 {
+		t.Fatalf("Expected 2 lines, got %d", len(lines))
+	}
+	if lines[1] != "2. " {
+		t.Errorf("Expected '2. ' on new line, got %q", lines[1])
+	}
+}
+
+// TestEnterNewLineNoIndent tests that plain lines don't get unexpected indentation.
+func TestEnterNewLineNoIndent(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello"})
+	tb.SetCursorCol(5)
+
+	tb.EnterNewLine()
+
+	lines := tb.GetLines()
+	if lines[1] != "" {
+		t.Errorf("Expected empty new line, got %q", lines[1])
+	}
+}
+
+// TestIndentLine tests adding 2-space indentation.
+func TestIndentLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello"})
+	tb.SetCursorCol(3)
+
+	tb.IndentLine()
+
+	lines := tb.GetLines()
+	if lines[0] != "  hello" {
+		t.Errorf("Expected '  hello', got %q", lines[0])
+	}
+	if tb.CursorCol() != 5 {
+		t.Errorf("Expected cursor col 5 after indent, got %d", tb.CursorCol())
+	}
+}
+
+// TestDedentLine tests removing up to 2 leading spaces.
+func TestDedentLine(t *testing.T) {
+	tb := NewTextBuffer([]string{"    hello"})
+	tb.SetCursorCol(5)
+
+	tb.DedentLine() // removes 2 spaces -> "  hello"
+
+	lines := tb.GetLines()
+	if lines[0] != "  hello" {
+		t.Errorf("Expected '  hello', got %q", lines[0])
+	}
+	if tb.CursorCol() != 3 {
+		t.Errorf("Expected cursor col 3 after dedent, got %d", tb.CursorCol())
+	}
+
+	tb.DedentLine() // removes 2 more -> "hello"
+
+	lines = tb.GetLines()
+	if lines[0] != "hello" {
+		t.Errorf("Expected 'hello', got %q", lines[0])
+	}
+}
+
+// TestDedentLineNoSpaces tests that DedentLine is a no-op when no leading spaces.
+func TestDedentLineNoSpaces(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello"})
+	tb.DedentLine()
+
+	lines := tb.GetLines()
+	if lines[0] != "hello" {
+		t.Errorf("Expected 'hello' unchanged, got %q", lines[0])
+	}
+}
+
+// TestDedentLineClampsCursor tests that cursor clamps to col 0 when ahead of removed spaces.
+func TestDedentLineClampsCursor(t *testing.T) {
+	tb := NewTextBuffer([]string{"  hello"})
+	tb.SetCursorCol(1) // cursor inside the whitespace
+
+	tb.DedentLine() // removes 2 spaces, cursor was at 1 -> clamp to 0
+
+	if tb.CursorCol() != 0 {
+		t.Errorf("Expected cursor col 0 after dedent clamp, got %d", tb.CursorCol())
+	}
+}
+
+// TestIndentDedentUndo tests that indent/dedent operations are undoable.
+func TestIndentDedentUndo(t *testing.T) {
+	tb := NewTextBuffer([]string{"hello"})
+	tb.IndentLine()
+
+	lines := tb.GetLines()
+	if lines[0] != "  hello" {
+		t.Fatalf("Expected '  hello' after indent, got %q", lines[0])
+	}
+
+	tb.Undo()
+	lines = tb.GetLines()
+	if lines[0] != "hello" {
+		t.Errorf("Expected 'hello' after undo, got %q", lines[0])
+	}
+}
+
 // TestBackspaceAtLineStart tests backspace at start of line (joins previous line).
 func TestBackspaceAtLineStart(t *testing.T) {
 	tb := NewTextBuffer([]string{"line1", "line2"})

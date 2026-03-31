@@ -727,9 +727,21 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.replaceState = ReplaceState{CurrentMatch: -1}
 				return v, nil
 			}
-			// Handle Page Up/Down by string matching
+			// Handle additional keys by string matching (Page Up/Down, word movement, indentation)
 			keyStr := msg.String()
 			switch keyStr {
+			case "ctrl+left":
+				v.editBuffer.CursorWordLeft()
+				return v, nil
+			case "ctrl+right":
+				v.editBuffer.CursorWordRight()
+				return v, nil
+			case "tab":
+				v.editBuffer.IndentLine()
+				return v, nil
+			case "shift+tab":
+				v.editBuffer.DedentLine()
+				return v, nil
 			case "pgup":
 				// Scroll up one page (Height - 2 for header/status)
 				pageSize := v.Height - 2

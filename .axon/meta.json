@@ -1,0 +1,16 @@
+{
+  "version": "1.0.1",
+  "name": "bmd",
+  "path": "/Users/flurryhead/Developer/Opensource/bmd",
+  "stats": {
+    "files": 1,
+    "symbols": 8,
+    "relationships": 33,
+    "clusters": 3,
+    "flows": 1,
+    "dead_code": 0,
+    "coupled_pairs": 0,
+    "embeddings": 9
+  },
+  "last_indexed_at": "2026-03-29T16:27:42.385532+00:00"
+}
