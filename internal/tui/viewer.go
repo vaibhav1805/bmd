@@ -595,6 +595,11 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v.updateHelp(msg)
 		}
 
+		// When word count modal is open, route all input to word count handling.
+		if v.wordCountVisible {
+			return v.updateWordCount(msg)
+		}
+
 		// When browser is open, route keys to browser handling
 		if v.browserOpen {
 			return v.updateBrowser(msg)
@@ -1126,6 +1131,11 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.outlineSelection = 0
 			v.lastWasG = false
 
+		case "ctrl+i":
+			// Ctrl+I: open word count modal
+			v.wordCountVisible = true
+			v.lastWasG = false
+
 		// Ctrl+F = in-document search (not forward nav; forward nav uses Ctrl+Right/Alt+Right per design decision)
 		case "ctrl+f":
 			if v.searchState.Active {
@@ -1415,6 +1425,10 @@ func (v *Viewer) updateJump(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			var lineNum int
 			if _, err := fmt.Sscanf(v.jumpInput, "%d", &lineNum); err == nil && lineNum > 0 {
 				v.Offset = clamp(lineNum-1, 0, v.maxOffset())
+				// In edit mode, also move the cursor to the target line
+				if v.editMode && v.editBuffer != nil {
+					v.editBuffer.SetCursorLine(lineNum - 1)
+				}
 			}
 		}
 		v.jumpMode = false
@@ -1605,6 +1619,16 @@ func (v *Viewer) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "?", "h":
 		v.helpOpen = false
+	}
+	return v, nil
+}
+
+// updateWordCount handles keyboard input when the word count modal is open.
+// Pressing Esc or Ctrl+I closes the modal. All other keys are absorbed.
+func (v *Viewer) updateWordCount(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "ctrl+i":
+		v.wordCountVisible = false
 	}
 	return v, nil
 }
@@ -2958,6 +2982,12 @@ func (v Viewer) View() string {
 	visible := displayLines[v.Offset:end]
 	for i, line := range visible {
 		docLine := v.Offset + i
+
+		// Prepend line number if enabled (before any ANSI codes to avoid corruption)
+		if v.showLineNumbers {
+			lineNum := fmt.Sprintf("%5d | ", docLine+1)
+			line = lineNum + line
+		}
 
 		// Apply selection highlighting if this line is part of the selection
 		if v.HasSelection() {
