@@ -2917,6 +2917,11 @@ func (v Viewer) View() string {
 		return v.renderHeader() + "\n" + v.renderOutline()
 	}
 
+	// If the word count modal is open, render it as the full view.
+	if v.wordCountVisible {
+		return v.renderHeader() + "\n" + v.renderWordCount()
+	}
+
 	// Reserve 1 line at top for header and 1 line at bottom for status bar.
 	contentHeight := v.Height - 2 // header + status bar
 
