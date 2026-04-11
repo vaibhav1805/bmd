@@ -28,14 +28,26 @@ type SessionState struct {
 
 // Config holds bmd configuration settings.
 type Config struct {
-	Theme string `json:"theme"` // ThemeName as string
+	Theme            string        `json:"theme"`              // ThemeName as string
+	AutoSaveEnabled  bool          `json:"auto_save_enabled"`  // whether auto-save is active while editing
+	AutoSaveInterval time.Duration `json:"auto_save_interval"` // interval between auto-saves (e.g. 30s)
 }
 
 // DefaultConfig returns a new Config with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		Theme: string(theme.ThemeDefault),
+		Theme:            string(theme.ThemeDefault),
+		AutoSaveEnabled:  true,
+		AutoSaveInterval: 30 * time.Second,
 	}
+}
+
+// GetAutoSaveInterval returns the configured auto-save interval, falling back to 30s.
+func (c Config) GetAutoSaveInterval() time.Duration {
+	if c.AutoSaveInterval <= 0 {
+		return 30 * time.Second
+	}
+	return c.AutoSaveInterval
 }
 
 // configDir returns the bmd config directory, creating it if needed.
@@ -105,6 +117,11 @@ func Load() (Config, error) {
 	if !validTheme {
 		// Invalid theme in config: use default
 		cfg.Theme = string(theme.ThemeDefault)
+	}
+
+	// Apply defaults for auto-save fields missing from older config files.
+	if cfg.AutoSaveInterval <= 0 {
+		cfg.AutoSaveInterval = 30 * time.Second
 	}
 
 	return cfg, nil
