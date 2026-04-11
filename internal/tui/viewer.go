@@ -39,6 +39,9 @@ const virtualBuffer = 50
 // clearErrorMsg is sent after the status timeout to clear the error display.
 type clearErrorMsg struct{}
 
+// autoSaveTickMsg is sent periodically to trigger auto-save in edit mode.
+type autoSaveTickMsg struct{}
+
 // Viewer is the bubbletea model for the interactive markdown viewer.
 type Viewer struct {
 	Doc      *ast.Document
@@ -120,6 +123,14 @@ type Viewer struct {
 	markdownSyntaxOpen    bool                 // true when markdown syntax help is displayed in edit mode
 	savedScrollOffset     int                  // scroll position saved when entering edit mode (restored on exit)
 	editEditClipboard     string               // internal clipboard for edit mode copy/cut/paste
+
+	// Auto-save state (30-06)
+	autoSaveEnabled  bool   // mirrors config; false disables ticking
+	autoSavePath     string // path of the .bmd-autosave-{basename} file (computed once per file)
+
+	// Crash recovery state (30-06)
+	recoveryAvailable bool   // true when an autosave file was found on open
+	recoveryContent   string // raw content loaded from the autosave file
 
 	// Find & Replace state (Ctrl+H in edit mode)
 	replaceMode   bool         // true when find/replace prompt is open
@@ -261,6 +272,8 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer 
 	sh := search.NewSearchHistory(search.DefaultHistoryPath())
 	_ = sh.Load()
 
+	cfg, _ := config.Load()
+
 	return &Viewer{
 		Doc:              doc,
 		rendered:         strings.Join(lines, "\n"),
@@ -279,6 +292,8 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer 
 		themeDialog:      NewThemeDialog(theme.ThemeDefault),
 		currentThemeName: theme.ThemeDefault,
 		virtualMode:      len(lines) > virtualThreshold,
+		autoSaveEnabled:  cfg.AutoSaveEnabled,
+		autoSavePath:     autoSaveFilePath(absPath),
 	}
 }
 
@@ -558,6 +573,9 @@ func (v *Viewer) RestoreSession(s *config.SessionState) {
 
 // Init satisfies bubbletea.Model — no I/O on startup.
 func (v Viewer) Init() tea.Cmd {
+	if v.autoSaveEnabled {
+		return v.scheduleAutoSave()
+	}
 	return nil
 }
 
@@ -567,6 +585,18 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearErrorMsg:
 		v.errorMsg = ""
 		return v, nil
+
+	case autoSaveTickMsg:
+		if v.editMode && v.editBuffer != nil {
+			v.AutoSave()
+			v.errorMsg = "Auto-saved"
+			return v, tea.Batch(
+				clearErrorAfter(1*time.Second),
+				v.scheduleAutoSave(),
+			)
+		}
+		// Not in edit mode: reschedule the tick so it fires again when editing resumes.
+		return v, v.scheduleAutoSave()
 
 	case tea.WindowSizeMsg:
 		v.Height = msg.Height
@@ -767,6 +797,8 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return clearErrorMsg{}
 					})
 				} else {
+					// Delete the autosave file — user has explicitly saved.
+					v.deleteAutoSave()
 					v.errorMsg = "Saved"
 					// Clear the saved message after a shorter timeout
 					return v, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
@@ -939,6 +971,35 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Backspace returns to directory when file was opened from directory mode (DIR-02).
 			if v.openedFromDirectory {
 				return v.BackToDirectory()
+			}
+
+		case "r", "R":
+			// Recover from autosave (only when recovery is available)
+			if v.recoveryAvailable {
+				lines := strings.Split(v.recoveryContent, "\n")
+				v.recoveryAvailable = false
+				v.recoveryContent = ""
+				v.deleteAutoSave()
+				// Enter edit mode with recovered content
+				v.editMode = true
+				v.savedScrollOffset = v.Offset
+				v.editBuffer = editor.NewTextBuffer(lines)
+				v.searchMode = false
+				v.searchInput = ""
+				v.isSelecting = false
+				v.selectedText = ""
+				v.errorMsg = "Recovered from autosave"
+				return v, clearErrorAfter(statusTimeout)
+			}
+
+		case "d":
+			// Discard autosave recovery (only when recovery prompt is shown)
+			if v.recoveryAvailable {
+				v.recoveryAvailable = false
+				v.recoveryContent = ""
+				v.deleteAutoSave()
+				v.errorMsg = "Autosave discarded"
+				return v, clearErrorAfter(statusTimeout)
 			}
 
 		case "e", "E":
@@ -3313,6 +3374,12 @@ func (v *Viewer) loadFile(path string) (*Viewer, tea.Cmd) {
 	v.links = BuildRegistry(v.rawLines)
 	v.virtualMode = len(v.Lines) > virtualThreshold
 
+	// Update autosave path for the new file.
+	v.autoSavePath = autoSaveFilePath(path)
+
+	// Check for crash recovery: if an autosave file exists and is newer than the main file.
+	v.checkAutoSaveRecovery(path)
+
 	return v, nil
 }
 
@@ -3474,6 +3541,80 @@ func stripAllSentinels(lines []string) []string {
 func clearErrorAfter(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(_ time.Time) tea.Msg {
 		return clearErrorMsg{}
+	})
+}
+
+// autoSaveFilePath returns the path for the autosave file corresponding to the given file.
+// The autosave file is placed in the same directory as the original with a .bmd-autosave- prefix.
+func autoSaveFilePath(filePath string) string {
+	if filePath == "" {
+		return ""
+	}
+	dir := filepath.Dir(filePath)
+	base := filepath.Base(filePath)
+	return filepath.Join(dir, ".bmd-autosave-"+base)
+}
+
+// AutoSave writes the current buffer contents to the autosave file.
+// I/O errors are silently ignored to avoid interrupting editing.
+func (v *Viewer) AutoSave() {
+	if !v.autoSaveEnabled || v.editBuffer == nil || v.autoSavePath == "" {
+		return
+	}
+	content := strings.Join(v.editBuffer.GetLines(), "\n")
+	_ = os.WriteFile(v.autoSavePath, []byte(content), 0o600)
+}
+
+// deleteAutoSave removes the autosave file if it exists.
+// Errors are ignored because a stale autosave file is not critical.
+func (v *Viewer) deleteAutoSave() {
+	if v.autoSavePath == "" {
+		return
+	}
+	_ = os.Remove(v.autoSavePath)
+}
+
+// checkAutoSaveRecovery looks for a .bmd-autosave-{basename} file next to filePath.
+// If one exists and is newer than the main file, it sets recoveryAvailable and stores the content.
+func (v *Viewer) checkAutoSaveRecovery(filePath string) {
+	v.recoveryAvailable = false
+	v.recoveryContent = ""
+
+	autoPath := autoSaveFilePath(filePath)
+	if autoPath == "" {
+		return
+	}
+
+	autoInfo, err := os.Stat(autoPath)
+	if err != nil {
+		return // no autosave file
+	}
+
+	// Compare modification times: only offer recovery if autosave is newer.
+	mainInfo, err := os.Stat(filePath)
+	if err != nil || !autoInfo.ModTime().After(mainInfo.ModTime()) {
+		return
+	}
+
+	content, err := os.ReadFile(autoPath)
+	if err != nil {
+		return
+	}
+
+	v.recoveryAvailable = true
+	v.recoveryContent = string(content)
+	v.errorMsg = "Autosave found. Press 'r' to recover, 'd' to discard."
+}
+
+// scheduleAutoSave returns a command that fires autoSaveTickMsg after the configured interval.
+func (v *Viewer) scheduleAutoSave() tea.Cmd {
+	if !v.autoSaveEnabled {
+		return nil
+	}
+	cfg, _ := config.Load()
+	interval := cfg.GetAutoSaveInterval()
+	return tea.Tick(interval, func(_ time.Time) tea.Msg {
+		return autoSaveTickMsg{}
 	})
 }
 
