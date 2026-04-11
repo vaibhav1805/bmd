@@ -2973,3 +2973,246 @@ func TestWordCountModalRoutedInView(t *testing.T) {
 		t.Error("Expected 'Word Count' in view when modal is open")
 	}
 }
+
+// --- Auto-Save and Crash Recovery Tests (30-06) ---
+
+// TestAutoSaveFilePathHelper verifies autoSaveFilePath generates the correct path.
+func TestAutoSaveFilePathHelper(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"/tmp/notes.md", "/tmp/.bmd-autosave-notes.md"},
+		{"/home/user/docs/readme.md", "/home/user/docs/.bmd-autosave-readme.md"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		got := autoSaveFilePath(tc.input)
+		if got != tc.expected {
+			t.Errorf("autoSaveFilePath(%q): got %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+// TestAutoSaveCreatesFile verifies AutoSave() writes the autosave file.
+func TestAutoSaveCreatesFile(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "test.md")
+	if err := os.WriteFile(filePath, []byte("# Hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	doc := createTestDocument([]string{})
+	v := New(doc, filePath, theme.NewTheme(), 80)
+	v.autoSaveEnabled = true // explicitly enable regardless of config file on disk
+	v.editMode = true
+	v.editBuffer = editor.NewTextBuffer([]string{"# Hello", "edited line"})
+
+	v.AutoSave()
+
+	autoPath := autoSaveFilePath(filePath)
+	data, err := os.ReadFile(autoPath)
+	if err != nil {
+		t.Fatalf("autosave file not created: %v", err)
+	}
+	if !strings.Contains(string(data), "edited line") {
+		t.Errorf("autosave file missing expected content; got: %s", string(data))
+	}
+}
+
+// TestAutoSaveNoopWhenDisabled verifies AutoSave() does nothing when disabled.
+func TestAutoSaveNoopWhenDisabled(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "test.md")
+	if err := os.WriteFile(filePath, []byte("# Hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	doc := createTestDocument([]string{})
+	v := New(doc, filePath, theme.NewTheme(), 80)
+	v.autoSaveEnabled = false
+	v.editMode = true
+	v.editBuffer = editor.NewTextBuffer([]string{"# Hello", "edited"})
+
+	v.AutoSave()
+
+	autoPath := autoSaveFilePath(filePath)
+	if _, err := os.Stat(autoPath); !os.IsNotExist(err) {
+		t.Error("autosave file should not be created when auto-save is disabled")
+	}
+}
+
+// TestAutoSaveDeletedOnCtrlS verifies autosave file is removed after explicit save.
+func TestAutoSaveDeletedOnCtrlS(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "test.md")
+	if err := os.WriteFile(filePath, []byte("# Hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	doc := createTestDocument([]string{})
+	v := New(doc, filePath, theme.NewTheme(), 80)
+	v.editMode = true
+	v.editBuffer = editor.NewTextBuffer([]string{"# Hello", "edited"})
+
+	// Create an autosave file manually.
+	autoPath := autoSaveFilePath(filePath)
+	if err := os.WriteFile(autoPath, []byte("# Hello\nedited\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate Ctrl+S
+	result, _ := v.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	vv := result.(*Viewer)
+
+	// Autosave file should be gone.
+	if _, err := os.Stat(autoPath); !os.IsNotExist(err) {
+		t.Error("expected autosave file to be deleted after Ctrl+S save")
+	}
+	if !strings.Contains(vv.errorMsg, "Saved") {
+		t.Errorf("expected 'Saved' status message; got %q", vv.errorMsg)
+	}
+}
+
+// TestCrashRecoveryDetected verifies checkAutoSaveRecovery sets recoveryAvailable when
+// an autosave file is newer than the main file.
+func TestCrashRecoveryDetected(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "test.md")
+
+	// Write the main file first.
+	if err := os.WriteFile(filePath, []byte("# Hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait a moment so the autosave file has a clearly newer mtime.
+	time.Sleep(10 * time.Millisecond)
+
+	// Write a newer autosave file.
+	autoPath := autoSaveFilePath(filePath)
+	if err := os.WriteFile(autoPath, []byte("# Hello\nrecovered content\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	doc := createTestDocument([]string{})
+	v := New(doc, filePath, theme.NewTheme(), 80)
+	v.autoSavePath = autoPath
+
+	v.checkAutoSaveRecovery(filePath)
+
+	if !v.recoveryAvailable {
+		t.Error("expected recoveryAvailable=true when autosave file is newer")
+	}
+	if !strings.Contains(v.recoveryContent, "recovered content") {
+		t.Errorf("unexpected recovery content: %q", v.recoveryContent)
+	}
+	if !strings.Contains(strings.ToLower(v.errorMsg), "autosave") {
+		t.Errorf("expected autosave prompt in errorMsg, got %q", v.errorMsg)
+	}
+}
+
+// TestCrashRecoveryNotDetectedWhenOlder verifies no recovery when the main file is newer.
+func TestCrashRecoveryNotDetectedWhenOlder(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "test.md")
+	autoPath := autoSaveFilePath(filePath)
+
+	// Write the autosave first, then the main file (so main is newer).
+	if err := os.WriteFile(autoPath, []byte("# Hello\nstale autosave\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	if err := os.WriteFile(filePath, []byte("# Hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	doc := createTestDocument([]string{})
+	v := New(doc, filePath, theme.NewTheme(), 80)
+	v.checkAutoSaveRecovery(filePath)
+
+	if v.recoveryAvailable {
+		t.Error("expected recoveryAvailable=false when autosave file is older than main file")
+	}
+}
+
+// TestRecoveryKeyRestoresContent verifies 'r' key loads recovery content into edit mode.
+func TestRecoveryKeyRestoresContent(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "test.md")
+	if err := os.WriteFile(filePath, []byte("# Hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	doc := createTestDocument([]string{})
+	v := New(doc, filePath, theme.NewTheme(), 80)
+	v.Height = 24
+	v.Width = 80
+
+	// Simulate recovery state.
+	v.recoveryAvailable = true
+	v.recoveryContent = "# Hello\nrecovered line\n"
+
+	// Write autosave file so deleteAutoSave() has something to remove.
+	autoPath := autoSaveFilePath(filePath)
+	_ = os.WriteFile(autoPath, []byte(v.recoveryContent), 0o600)
+
+	// Press 'r'
+	result, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	vv := result.(*Viewer)
+
+	if !vv.editMode {
+		t.Error("expected edit mode to be activated after recovery")
+	}
+	if vv.recoveryAvailable {
+		t.Error("expected recoveryAvailable=false after recovery")
+	}
+	lines := vv.editBuffer.GetLines()
+	found := false
+	for _, l := range lines {
+		if strings.Contains(l, "recovered line") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected recovered content in buffer; lines: %v", lines)
+	}
+	// Autosave file should be gone.
+	if _, err := os.Stat(autoPath); !os.IsNotExist(err) {
+		t.Error("expected autosave file deleted after recovery")
+	}
+}
+
+// TestDiscardKeyRemovesAutosave verifies 'd' key deletes the autosave file without recovery.
+func TestDiscardKeyRemovesAutosave(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "test.md")
+	if err := os.WriteFile(filePath, []byte("# Hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	doc := createTestDocument([]string{})
+	v := New(doc, filePath, theme.NewTheme(), 80)
+	v.Height = 24
+	v.Width = 80
+
+	v.recoveryAvailable = true
+	v.recoveryContent = "# Hello\nrecovered line\n"
+
+	autoPath := autoSaveFilePath(filePath)
+	_ = os.WriteFile(autoPath, []byte(v.recoveryContent), 0o600)
+
+	// Press 'd'
+	result, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	vv := result.(*Viewer)
+
+	if vv.editMode {
+		t.Error("expected edit mode NOT activated after discard")
+	}
+	if vv.recoveryAvailable {
+		t.Error("expected recoveryAvailable=false after discard")
+	}
+	if _, err := os.Stat(autoPath); !os.IsNotExist(err) {
+		t.Error("expected autosave file deleted after discard")
+	}
+}
