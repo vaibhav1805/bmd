@@ -922,6 +922,13 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					v.editBuffer.CursorDown()
 				}
 				return v, nil
+			case "ctrl+o":
+				// Open outline/TOC in edit mode — scan buffer for headings
+				v.outlineMode = true
+				v.outlineHeadings = v.extractEditHeadings()
+				v.outlineSelection = 0
+				v.errorMsg = "Outline (Enter to jump, Esc to close)"
+				return v, clearErrorAfter(statusTimeout)
 			}
 			// Bracketed paste: msg.Paste is true and Runes contains pasted content
 			if msg.Paste && len(msg.Runes) > 0 {
@@ -1636,7 +1643,12 @@ func (v *Viewer) updateOutline(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(v.outlineHeadings) > 0 && v.outlineSelection < len(v.outlineHeadings) {
 			heading := v.outlineHeadings[v.outlineSelection]
 			v.Offset = heading.LineIdx
-			if v.Offset > v.maxOffset() {
+			if v.editMode && v.editBuffer != nil {
+				// renderEditMode() clamps its own display window against the
+				// edit buffer's line count, so no need to clamp against the
+				// (stale, view-mode) v.Lines/maxOffset() here.
+				v.editBuffer.SetCursorLine(heading.LineIdx)
+			} else if v.Offset > v.maxOffset() {
 				v.Offset = v.maxOffset()
 			}
 		}
@@ -3688,6 +3700,40 @@ func (v *Viewer) extractHeadings() []HeadingInfo {
 	}
 
 	walkNodes(v.Doc)
+	return headings
+}
+
+// extractEditHeadings scans the edit buffer lines for ATX headings (# syntax)
+// and returns HeadingInfo entries with accurate line indices.
+// Used instead of extractHeadings() in edit mode since the buffer may differ from the parsed AST.
+func (v *Viewer) extractEditHeadings() []HeadingInfo {
+	if v.editBuffer == nil {
+		return nil
+	}
+	lines := v.editBuffer.GetLines()
+	var headings []HeadingInfo
+	for i, line := range lines {
+		level := 0
+		for level < len(line) && level < 6 && line[level] == '#' {
+			level++
+		}
+		// Must have at least one '#' followed by a space (or be end-of-line)
+		if level == 0 {
+			continue
+		}
+		if level < len(line) && line[level] != ' ' {
+			continue
+		}
+		text := ""
+		if level < len(line) {
+			text = strings.TrimSpace(line[level:])
+		}
+		headings = append(headings, HeadingInfo{
+			Level:   level,
+			Text:    text,
+			LineIdx: i,
+		})
+	}
 	return headings
 }
 

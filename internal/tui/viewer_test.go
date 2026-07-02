@@ -3216,3 +3216,178 @@ func TestDiscardKeyRemovesAutosave(t *testing.T) {
 		t.Error("expected autosave file deleted after discard")
 	}
 }
+
+// --- Outline in Edit Mode Tests (30-07) ---
+
+// TestExtractEditHeadings verifies headings are extracted from buffer lines.
+func TestExtractEditHeadings(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Height = 24
+	v.Width = 80
+	v.editMode = true
+	v.editBuffer = editor.NewTextBuffer([]string{
+		"# First Heading",
+		"Some paragraph text.",
+		"## Second Heading",
+		"More text.",
+		"### Third Level",
+		"#notaheading",
+		"###### Sixth Level",
+	})
+
+	headings := v.extractEditHeadings()
+
+	if len(headings) != 4 {
+		t.Fatalf("expected 4 headings, got %d", len(headings))
+	}
+	if headings[0].Level != 1 || headings[0].Text != "First Heading" || headings[0].LineIdx != 0 {
+		t.Errorf("heading[0] wrong: %+v", headings[0])
+	}
+	if headings[1].Level != 2 || headings[1].Text != "Second Heading" || headings[1].LineIdx != 2 {
+		t.Errorf("heading[1] wrong: %+v", headings[1])
+	}
+	if headings[2].Level != 3 || headings[2].Text != "Third Level" || headings[2].LineIdx != 4 {
+		t.Errorf("heading[2] wrong: %+v", headings[2])
+	}
+	if headings[3].Level != 6 || headings[3].Text != "Sixth Level" || headings[3].LineIdx != 6 {
+		t.Errorf("heading[3] wrong: %+v", headings[3])
+	}
+}
+
+// TestExtractEditHeadingsNilBuffer returns nil when no edit buffer is set.
+func TestExtractEditHeadingsNilBuffer(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.editBuffer = nil
+
+	headings := v.extractEditHeadings()
+	if headings != nil {
+		t.Errorf("expected nil headings with no buffer, got %v", headings)
+	}
+}
+
+// TestEditModeOutlineOpensWithCtrlO verifies Ctrl+O opens outline in edit mode.
+func TestEditModeOutlineOpensWithCtrlO(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Height = 24
+	v.Width = 80
+	v.editMode = true
+	v.editBuffer = editor.NewTextBuffer([]string{
+		"# Intro",
+		"paragraph",
+		"## Details",
+	})
+
+	model, _ := v.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	result := model.(*Viewer)
+
+	if !result.outlineMode {
+		t.Error("expected outlineMode=true after Ctrl+O in edit mode")
+	}
+	if len(result.outlineHeadings) != 2 {
+		t.Errorf("expected 2 headings, got %d", len(result.outlineHeadings))
+	}
+	if result.outlineSelection != 0 {
+		t.Error("expected outlineSelection reset to 0")
+	}
+}
+
+// TestEditModeOutlineJumpsToHeading verifies Enter in outline sets cursor line.
+func TestEditModeOutlineJumpsToHeading(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Height = 24
+	v.Width = 80
+	v.editMode = true
+	v.editBuffer = editor.NewTextBuffer([]string{
+		"# First",
+		"text",
+		"text",
+		"## Second",
+		"more text",
+	})
+	// Open outline and select second heading
+	v.outlineMode = true
+	v.outlineHeadings = v.extractEditHeadings()
+	v.outlineSelection = 1 // select "## Second" at line 3
+
+	model, _ := v.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	result := model.(*Viewer)
+
+	if result.outlineMode {
+		t.Error("expected outline closed after Enter")
+	}
+	// Cursor should be at line 3 (0-based)
+	if result.editBuffer.CursorLine() != 3 {
+		t.Errorf("expected cursor at line 3, got %d", result.editBuffer.CursorLine())
+	}
+	// Offset should be set to the heading line
+	if result.Offset != 3 {
+		t.Errorf("expected scroll offset=3, got %d", result.Offset)
+	}
+}
+
+// TestEditModeOutlineEscPreservesEdits verifies Esc does not clear the edit buffer.
+func TestEditModeOutlineEscPreservesEdits(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Height = 24
+	v.Width = 80
+	v.editMode = true
+	v.editBuffer = editor.NewTextBuffer([]string{"# Hello", "modified line"})
+	v.editBuffer.Insert('X') // make a modification
+	v.outlineMode = true
+	v.outlineHeadings = v.extractEditHeadings()
+	v.outlineSelection = 0
+
+	model, _ := v.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	result := model.(*Viewer)
+
+	if result.outlineMode {
+		t.Error("expected outline closed after Esc")
+	}
+	// Edit buffer should still be present with content intact
+	if result.editBuffer == nil {
+		t.Error("expected edit buffer to be preserved after Esc")
+	}
+	lines := result.editBuffer.GetLines()
+	if len(lines) == 0 {
+		t.Error("expected edit buffer content preserved after Esc")
+	}
+	// editMode should still be on
+	if !result.editMode {
+		t.Error("expected editMode still active after outline Esc")
+	}
+}
+
+// TestOutlineNavigationUpDown verifies arrow keys navigate heading list.
+func TestOutlineNavigationUpDown(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Height = 24
+	v.Width = 80
+	v.outlineMode = true
+	v.outlineHeadings = []HeadingInfo{
+		{Level: 1, Text: "A", LineIdx: 0},
+		{Level: 2, Text: "B", LineIdx: 5},
+		{Level: 3, Text: "C", LineIdx: 10},
+	}
+	v.outlineSelection = 0
+
+	// Down
+	model, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
+	result := model.(*Viewer)
+	if result.outlineSelection != 1 {
+		t.Errorf("expected selection=1 after Down, got %d", result.outlineSelection)
+	}
+
+	// Up
+	result.outlineMode = true
+	model2, _ := result.Update(tea.KeyMsg{Type: tea.KeyUp})
+	result2 := model2.(*Viewer)
+	if result2.outlineSelection != 0 {
+		t.Errorf("expected selection=0 after Up, got %d", result2.outlineSelection)
+	}
+}
