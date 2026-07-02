@@ -934,10 +934,17 @@ func (v *Viewer) updateJump(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if v.jumpInput != "" {
 			var lineNum int
 			if _, err := fmt.Sscanf(v.jumpInput, "%d", &lineNum); err == nil && lineNum > 0 {
-				v.Offset = clamp(lineNum-1, 0, v.maxOffset())
-				// In edit mode, also move the cursor to the target line
+				v.Offset = lineNum - 1
 				if v.editMode && v.editBuffer != nil {
+					// renderEditMode() clamps its own display window against the
+					// edit buffer's line count, so don't clamp against the
+					// (stale, view-mode) v.Lines/maxOffset() here — see updateOutline().
+					if v.Offset < 0 {
+						v.Offset = 0
+					}
 					v.editBuffer.SetCursorLine(lineNum - 1)
+				} else {
+					v.Offset = clamp(v.Offset, 0, v.maxOffset())
 				}
 			}
 		}

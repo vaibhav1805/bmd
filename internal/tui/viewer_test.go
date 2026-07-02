@@ -353,6 +353,45 @@ func TestEditModeJumpToLine(t *testing.T) {
 	}
 }
 
+// TestEditModeJumpViaUpdateSetsOffset drives Ctrl+G go-to-line through
+// v.Update() (not editBuffer.JumpToLine() directly) to catch the case where
+// the edit buffer has grown past the original view-mode v.Lines length —
+// updateJump() must not clamp v.Offset against the stale view-mode
+// maxOffset(), the same bug class fixed for updateOutline() in 30-07.
+func TestEditModeJumpViaUpdateSetsOffset(t *testing.T) {
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Height = 24
+	v.Width = 80
+	// view-mode Lines is short — maxOffset() would clamp to 0 here.
+	v.Lines = []string{"line1", "line2"}
+	v.editMode = true
+	lines := make([]string, 20)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line%d", i)
+	}
+	v.editBuffer = editor.NewTextBuffer(lines)
+
+	v.jumpMode = true
+	v.jumpInput = ""
+	for _, r := range "10" {
+		model, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		v = model.(*Viewer)
+	}
+	model, _ := v.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	result := model.(*Viewer)
+
+	if result.jumpMode {
+		t.Error("expected jump mode closed after Enter")
+	}
+	if result.editBuffer.CursorLine() != 9 {
+		t.Errorf("expected cursor at line 9, got %d", result.editBuffer.CursorLine())
+	}
+	if result.Offset != 9 {
+		t.Errorf("expected scroll offset=9, got %d", result.Offset)
+	}
+}
+
 // TestEditModeRenderEditMode tests the renderEditMode output.
 func TestEditModeRenderEditMode(t *testing.T) {
 	doc := createTestDocument([]string{})
