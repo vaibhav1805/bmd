@@ -41,3 +41,7 @@ node_modules/
 *.db
 knowledge.db
 .planning/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key
