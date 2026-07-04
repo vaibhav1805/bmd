@@ -754,6 +754,7 @@ func TestExtractor_MalformedLink(t *testing.T) {
 	// Should not panic.
 	_ = ex.Extract(doc)
 }
+
 // ---------------------------------------------------------------------------
 // Large-scale benchmark
 // ---------------------------------------------------------------------------
