@@ -8,6 +8,14 @@ import (
 // EdgeType categorises the semantic relationship between two documents.
 // Constants are defined as strings so they are human-readable in JSON output
 // and debug logs.
+//
+// Only EdgeReferences is produced by the current extractor (see extractor.go)
+// — bmd's graph is link-based only. The remaining constants are retained as
+// part of the Edge/Graph type's shape (and used as distinct-type fixtures in
+// tests) but are not currently manufactured by any extraction path; the
+// prose-pattern-matched "dependency" guessing that used to produce them
+// belonged to bmd's earlier service-dependency-analysis direction, which
+// moved to the separate graphmd project.
 type EdgeType string
 
 const (
@@ -16,36 +24,28 @@ const (
 	EdgeReferences EdgeType = "references"
 
 	// EdgeDependsOn indicates the source document explicitly states it depends
-	// on the target (e.g. "depends on", "requires" in prose). Confidence: 0.7.
+	// on the target. Not currently produced by any extractor.
 	EdgeDependsOn EdgeType = "depends-on"
 
 	// EdgeCalls indicates the source document contains a code snippet that
-	// calls a function or method defined in the target. Confidence: 0.9.
+	// calls a function or method defined in the target. Not currently produced
+	// by any extractor.
 	EdgeCalls EdgeType = "calls"
 
 	// EdgeImplements indicates the source document describes an implementation
-	// of a contract or interface described in the target. Confidence: 0.7.
+	// of a contract or interface described in the target. Not currently
+	// produced by any extractor.
 	EdgeImplements EdgeType = "implements"
 
 	// EdgeMentions indicates the source document contains a textual mention of
-	// the target (e.g. a service name following "integrates with"). Confidence: 0.7.
+	// the target. Not currently produced by any extractor.
 	EdgeMentions EdgeType = "mentions"
-
-	// EdgeRelated indicates two documents are semantically related based on
-	// TF-IDF vector similarity. Confidence range: [0.5, 0.75].
-	EdgeRelated EdgeType = "related"
 )
 
-// Confidence values used by the three extractor types.
+// Confidence values used by the link extractor.
 const (
 	// ConfidenceLink is assigned to edges derived from explicit markdown links.
 	ConfidenceLink float64 = 1.0
-
-	// ConfidenceCode is assigned to edges derived from code import/call patterns.
-	ConfidenceCode float64 = 0.9
-
-	// ConfidenceMention is assigned to edges derived from prose mention patterns.
-	ConfidenceMention float64 = 0.7
 
 	// ConfidenceUnresolved is assigned to edges whose target file does not exist
 	// on disk at graph-construction time.

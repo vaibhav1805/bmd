@@ -4,7 +4,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -14,10 +13,13 @@ import (
 
 // Extractor extracts relationship edges from a single Document.
 //
-// Three extraction strategies are applied in sequence:
-//  1. LinkExtractor — markdown links → EdgeReferences edges (confidence 1.0)
-//  2. MentionExtractor — prose dependency patterns → EdgeDependsOn / EdgeMentions (confidence 0.7)
-//  3. CodeExtractor — import/require statements in fenced code blocks → EdgeCalls (confidence 0.9)
+// The graph is link-based only: an edge exists between two documents when one
+// actually links to the other via a markdown link (EdgeReferences, confidence
+// 1.0). Prose-pattern-matched "dependency" guessing (depends-on/calls/mentions/
+// implements from text like "calls X" or "depends on X") and code-import
+// detection were removed — that speculative, confidence-0.7-guessed edge
+// extraction belonged to bmd's earlier service-dependency-analysis direction,
+// which moved to the separate graphmd project.
 type Extractor struct {
 	// root is the absolute path of the scanned directory.  It is used to
 	// validate whether link targets exist on disk.
@@ -39,14 +41,9 @@ func NewExtractor(root string) *Extractor {
 
 // Extract analyses doc and returns all discovered relationship edges.
 //
-// The three extractors are applied in sequence; results are concatenated.
-// Malformed links and code patterns are skipped silently (no panics).
+// Malformed links are skipped silently (no panics).
 func (ex *Extractor) Extract(doc *Document) []*Edge {
-	var edges []*Edge
-	edges = append(edges, ex.extractLinks(doc)...)
-	edges = append(edges, ex.extractMentions(doc)...)
-	edges = append(edges, ex.extractCode(doc)...)
-	return edges
+	return ex.extractLinks(doc)
 }
 
 // --- LinkExtractor -----------------------------------------------------------
@@ -123,317 +120,6 @@ func (ex *Extractor) extractLinks(doc *Document) []*Edge {
 	}) //nolint:errcheck
 
 	return edges
-}
-
-// --- MentionExtractor --------------------------------------------------------
-
-// mentionPatterns is a list of (compiled regex, EdgeType) pairs.
-// Each regex captures the referenced component name in the first capture group.
-// Patterns are matched case-insensitively against each line of plain text.
-var mentionPatterns = []struct {
-	re       *regexp.Regexp
-	edgeType EdgeType
-}{
-	{regexp.MustCompile(`(?i)\bdepends\s+on\s+([\w\-./]+)`), EdgeDependsOn},
-	{regexp.MustCompile(`(?i)\brequires\s+([\w\-./]+)`), EdgeDependsOn},
-	{regexp.MustCompile(`(?i)\bcalls\s+([\w\-./]+)`), EdgeCalls},
-	{regexp.MustCompile(`(?i)\bintegrates\s+with\s+([\w\-./]+)`), EdgeMentions},
-	{regexp.MustCompile(`(?i)\bimplements\s+([\w\-./]+)`), EdgeImplements},
-	{regexp.MustCompile(`(?i)\buses\s+([\w\-./]+)`), EdgeMentions},
-}
-
-// extractMentions searches the plain-text content of doc for prose dependency
-// patterns and produces EdgeDependsOn / EdgeMentions edges.
-func (ex *Extractor) extractMentions(doc *Document) []*Edge {
-	lines := strings.Split(doc.PlainText, "\n")
-
-	var edges []*Edge
-	seen := make(map[string]bool)
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		for _, pat := range mentionPatterns {
-			matches := pat.re.FindAllStringSubmatch(line, -1)
-			for _, m := range matches {
-				if len(m) < 2 {
-					continue
-				}
-				mentioned := m[1]
-				if mentioned == "" {
-					continue
-				}
-
-				// Normalise to lower case for dedup key.
-				dedupKey := doc.ID + "\x00" + strings.ToLower(mentioned) + "\x00" + string(pat.edgeType)
-				if seen[dedupKey] {
-					continue
-				}
-				seen[dedupKey] = true
-
-				// Attempt to resolve as a file path for higher-fidelity linking.
-				// If resolution fails, use the mention text directly as target.
-				target := strings.ToLower(mentioned)
-				canonical, confidence := ResolveLink(doc.RelPath, mentioned+".md", ex.root)
-				if canonical != "" {
-					target = canonical
-				} else {
-					confidence = ConfidenceMention
-				}
-
-				edge, err := NewEdge(doc.ID, target, pat.edgeType, confidence, line)
-				if err != nil {
-					continue
-				}
-				edges = append(edges, edge)
-			}
-		}
-	}
-
-	return edges
-}
-
-// --- CodeExtractor -----------------------------------------------------------
-
-// codeExtractors maps language names to their import pattern extractors.
-// Each extractor function accepts a code block body and returns a slice of
-// (target, evidence) pairs.
-var codeExtractors = map[string]func(string) []codeRef{
-	"go":         extractGoImports,
-	"python":     extractPythonImports,
-	"py":         extractPythonImports,
-	"javascript": extractJSImports,
-	"js":         extractJSImports,
-	"typescript": extractJSImports,
-	"ts":         extractJSImports,
-}
-
-// codeRef is an intermediate result from a language-specific code extractor.
-type codeRef struct {
-	target   string
-	evidence string
-}
-
-// extractCode parses fenced code blocks in the raw markdown source and
-// produces EdgeCalls edges for each detected import/require statement.
-func (ex *Extractor) extractCode(doc *Document) []*Edge {
-	var edges []*Edge
-	seen := make(map[string]bool)
-
-	// Use a simple state machine to parse fenced code blocks without relying on
-	// goldmark code-block node extraction.
-	type codeBlock struct {
-		lang string
-		body strings.Builder
-	}
-
-	lines := strings.Split(doc.Content, "\n")
-	var block *codeBlock
-
-	for _, rawLine := range lines {
-		trimmed := strings.TrimSpace(rawLine)
-
-		if block == nil {
-			// Look for opening fence with optional language specifier.
-			if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-				fence := trimmed[:3]
-				lang := strings.ToLower(strings.TrimSpace(trimmed[len(fence):]))
-				// Strip any trailing fence characters that some editors add.
-				lang = strings.TrimRight(lang, "`~")
-				block = &codeBlock{lang: lang}
-			}
-			continue
-		}
-
-		// Check for closing fence.
-		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-			// Process the accumulated block.
-			if extFn, ok := codeExtractors[block.lang]; ok {
-				refs := extFn(block.body.String())
-				for _, ref := range refs {
-					dedupKey := doc.ID + "\x00" + ref.target
-					if seen[dedupKey] {
-						continue
-					}
-					seen[dedupKey] = true
-
-					edge, err := NewEdge(doc.ID, ref.target, EdgeCalls, ConfidenceCode, ref.evidence)
-					if err != nil {
-						continue
-					}
-					edges = append(edges, edge)
-				}
-			}
-			block = nil
-			continue
-		}
-
-		block.body.WriteString(rawLine)
-		block.body.WriteByte('\n')
-	}
-
-	return edges
-}
-
-// --- Language-specific import extractors ------------------------------------
-
-var (
-	goImportSingle = regexp.MustCompile(`^\s*import\s+"([^"]+)"`)
-	goImportBlock  = regexp.MustCompile(`"([^"]+)"`)
-	goFuncCall     = regexp.MustCompile(`(\w+)\.(\w+)\(`)
-
-	pyFromImport = regexp.MustCompile(`^\s*from\s+([\w.]+)\s+import`)
-	pyImport     = regexp.MustCompile(`^\s*import\s+([\w.,\s]+)`)
-	pyFuncCall   = regexp.MustCompile(`([\w]+)\.([\w]+)\(`)
-
-	// jsImport matches:
-	//   import 'module'
-	//   import { foo } from 'module'
-	//   import * as x from "module"
-	//   const x = require('module')
-	// The (?:from\s+)? allows the optional "from" keyword before the quote.
-	jsImport = regexp.MustCompile(`(?:import|require)(?:\s+[\w{}\s*,]+from)?\s*(?:\(?\s*)?['"]([^'"]+)['"]`)
-)
-
-// extractGoImports finds import paths and qualified function calls in Go code.
-func extractGoImports(body string) []codeRef {
-	var refs []codeRef
-	lines := strings.Split(body, "\n")
-	inImportBlock := false
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		// Ignore comment lines.
-		if strings.HasPrefix(trimmed, "//") {
-			continue
-		}
-
-		if strings.HasPrefix(trimmed, "import (") || trimmed == "import(" {
-			inImportBlock = true
-			continue
-		}
-		if inImportBlock && trimmed == ")" {
-			inImportBlock = false
-			continue
-		}
-
-		if inImportBlock {
-			m := goImportBlock.FindStringSubmatch(trimmed)
-			if m != nil && m[1] != "" {
-				refs = append(refs, codeRef{target: m[1], evidence: strings.TrimSpace(line)})
-			}
-			continue
-		}
-
-		// Single-line import.
-		if m := goImportSingle.FindStringSubmatch(line); m != nil {
-			refs = append(refs, codeRef{target: m[1], evidence: strings.TrimSpace(line)})
-			continue
-		}
-
-		// pkg.Func() call patterns (skip common builtins).
-		for _, m := range goFuncCall.FindAllStringSubmatch(line, -1) {
-			pkg := m[1]
-			if isGoBuiltinPkg(pkg) {
-				continue
-			}
-			refs = append(refs, codeRef{target: pkg, evidence: strings.TrimSpace(line)})
-		}
-	}
-
-	return refs
-}
-
-// extractPythonImports finds import statements in Python code.
-func extractPythonImports(body string) []codeRef {
-	var refs []codeRef
-	lines := strings.Split(body, "\n")
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-
-		// from X import ...
-		if m := pyFromImport.FindStringSubmatch(line); m != nil {
-			refs = append(refs, codeRef{target: m[1], evidence: trimmed})
-			continue
-		}
-
-		// import X, Y, Z
-		if m := pyImport.FindStringSubmatch(line); m != nil {
-			for _, mod := range strings.Split(m[1], ",") {
-				mod = strings.TrimSpace(mod)
-				if mod != "" {
-					refs = append(refs, codeRef{target: mod, evidence: trimmed})
-				}
-			}
-			continue
-		}
-
-		// module.function() call patterns.
-		for _, m := range pyFuncCall.FindAllStringSubmatch(line, -1) {
-			pkg := m[1]
-			if isPyBuiltin(pkg) {
-				continue
-			}
-			refs = append(refs, codeRef{target: pkg, evidence: trimmed})
-		}
-	}
-
-	return refs
-}
-
-// extractJSImports finds import/require statements in JavaScript/TypeScript.
-func extractJSImports(body string) []codeRef {
-	var refs []codeRef
-	lines := strings.Split(body, "\n")
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		// Ignore comment lines.
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
-			continue
-		}
-
-		for _, m := range jsImport.FindAllStringSubmatch(line, -1) {
-			if m[1] != "" {
-				refs = append(refs, codeRef{target: m[1], evidence: trimmed})
-			}
-		}
-	}
-
-	return refs
-}
-
-// --- helpers for filtering builtins ------------------------------------------
-
-// isGoBuiltinPkg returns true for single-character and stdlib-common identifiers
-// that appear as package references in qualified calls but are not imports.
-func isGoBuiltinPkg(name string) bool {
-	switch name {
-	case "fmt", "os", "io", "log", "err", "t", "r", "s", "b", "n",
-		"strings", "strconv", "sync", "time", "math", "bytes",
-		"bufio", "sort", "rand", "big", "http", "url", "json", "context":
-		return true
-	}
-	return false
-}
-
-// isPyBuiltin returns true for common Python built-in names used in method calls.
-func isPyBuiltin(name string) bool {
-	switch name {
-	case "self", "cls", "str", "int", "float", "list", "dict", "set",
-		"tuple", "bool", "len", "range", "print", "type", "super",
-		"object", "None", "True", "False":
-		return true
-	}
-	return false
 }
 
 // --- ResolveLink -------------------------------------------------------------
