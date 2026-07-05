@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/renderer"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // updateGraph handles keyboard input when graph view mode is active.
@@ -30,22 +30,34 @@ func (v *Viewer) updateGraph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.helpOpen = true
 		return v, nil
 
+	// Up/Down cycles graphState.NodeOrder (all documents, sorted by
+	// importance/in-degree) with wraparound at both ends. Left/Right, below,
+	// stay as edge-traversal (parent/child via this node's real incoming and
+	// outgoing links). These are two complementary navigation modes: Up/Down
+	// browses every document by importance, Left/Right follows this specific
+	// document's real links.
 	case "up", "k":
-		// Navigate to parent node (incoming)
-		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
-			incoming := v.graphState.Graph.GetIncoming(v.graphState.SelectedNodeID)
-			if len(incoming) > 0 {
-				v.graphState.SelectedNodeID = incoming[0].Source
+		order := v.graphState.NodeOrder
+		if len(order) > 0 {
+			idx := graphIndexOfNode(order, v.graphState.SelectedNodeID)
+			if idx == -1 {
+				v.graphState.SelectedNodeID = order[0]
+			} else {
+				prev := (idx - 1 + len(order)) % len(order)
+				v.graphState.SelectedNodeID = graphNodeAtIndex(order, prev)
 			}
 		}
 		return v, nil
 
 	case "down", "j":
-		// Navigate to child node (outgoing)
-		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
-			outgoing := v.graphState.Graph.GetOutgoing(v.graphState.SelectedNodeID)
-			if len(outgoing) > 0 {
-				v.graphState.SelectedNodeID = outgoing[0].Target
+		order := v.graphState.NodeOrder
+		if len(order) > 0 {
+			idx := graphIndexOfNode(order, v.graphState.SelectedNodeID)
+			if idx == -1 {
+				v.graphState.SelectedNodeID = order[0]
+			} else {
+				next := (idx + 1) % len(order)
+				v.graphState.SelectedNodeID = graphNodeAtIndex(order, next)
 			}
 		}
 		return v, nil
@@ -287,8 +299,8 @@ func forceDirectedLayout(g *knowledge.Graph, width, height int) map[string][2]fl
 	// Parameters for the force simulation
 	const (
 		iterations        = 40
-		springLength      = 80.0 // Natural length of edges
-		springForce       = 0.1  // Spring attraction constant
+		springLength      = 80.0   // Natural length of edges
+		springForce       = 0.1    // Spring attraction constant
 		repulsionStrength = 5000.0 // Node repulsion constant
 		damping           = 0.8    // Velocity damping per iteration
 		minForce          = 0.01   // Convergence threshold
@@ -303,7 +315,7 @@ func forceDirectedLayout(g *knowledge.Graph, width, height int) map[string][2]fl
 		hash := hashString(id)
 		x := float64(int(hash)%width) * 0.8
 		y := float64(int(hash/1000)%height) * 0.8
-		pos[id] = Vector2{x + float64(width) * 0.1, y + float64(height) * 0.1}
+		pos[id] = Vector2{x + float64(width)*0.1, y + float64(height)*0.1}
 		vel[id] = Vector2{0, 0}
 	}
 
