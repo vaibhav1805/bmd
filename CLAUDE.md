@@ -60,13 +60,7 @@ go test ./internal/tui/...       # single package
 gofmt -l <changed files>         # must be silent before committing
 ```
 
-**Known pre-existing test failures** (not caused by your changes, do not try to fix unless that's the task):
-- `internal/tui`: `TestUpdateGraph_DownNavigates`/`UpNavigates`/`DownWraps`/`UpWraps` — graph-view nav wrap bug
-- `internal/nav`: `TestResolveLink_ExternalLink`/`ExternalLinkHTTPS`
-- `internal/renderer`: `TestRenderDocument_Empty`
-- `internal/knowledge`: `TestOpenClawDescriptor_Valid`/`QueryCommand`, `TestDockerfile_Valid`, `TestDeploymentDocs_Valid` — reference a Dockerfile/openclaw.yaml/DEPLOYMENT.md that don't exist in the repo
-
-All four are tracked in `.planning/REQUIREMENTS.md` (REL-01..04) for milestone v1.1.
+`go test ./...` is fully green as of Phase 31 (v1.1) — the 4 previously-known pre-existing failures (graph-view nav wrap, external-link test contract, empty-doc render, dead OpenClaw/Dockerfile tests) were fixed; see REL-01..04 in `.planning/REQUIREMENTS.md`.
 
 ## Architecture Overview
 
