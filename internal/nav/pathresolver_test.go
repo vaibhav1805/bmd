@@ -125,12 +125,13 @@ func TestResolveLink_ExternalLink(t *testing.T) {
 
 	currentFile := filepath.Join(dir, "index.md")
 	href := "http://example.com/file.md"
-	_, err := nav.ResolveLink(currentFile, href, dir)
-	if err == nil {
-		t.Fatal("ResolveLink external link: expected error, got nil")
+	resolved, err := nav.ResolveLink(currentFile, href, dir)
+	if err != nil {
+		t.Fatalf("ResolveLink external link: expected no error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "external") {
-		t.Errorf("ResolveLink external error: got %q, want message containing 'external'", err.Error())
+	want := "external://" + href
+	if resolved != want {
+		t.Errorf("ResolveLink external link: got %q, want %q", resolved, want)
 	}
 }
 
@@ -140,12 +141,13 @@ func TestResolveLink_ExternalLinkHTTPS(t *testing.T) {
 
 	currentFile := filepath.Join(dir, "index.md")
 	href := "https://example.com/file.md"
-	_, err := nav.ResolveLink(currentFile, href, dir)
-	if err == nil {
-		t.Fatal("ResolveLink https link: expected error, got nil")
+	resolved, err := nav.ResolveLink(currentFile, href, dir)
+	if err != nil {
+		t.Fatalf("ResolveLink external link: expected no error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "external") {
-		t.Errorf("ResolveLink https error: got %q, want message containing 'external'", err.Error())
+	want := "external://" + href
+	if resolved != want {
+		t.Errorf("ResolveLink external link: got %q, want %q", resolved, want)
 	}
 }
 
