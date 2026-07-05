@@ -12,8 +12,8 @@ import (
 type Renderer struct {
 	theme             theme.Theme
 	termWidth         int
-	emitLinkSentinels bool // if true, wrap links with sentinel markers for LinkRegistry
-	leftMargin        int   // left margin (spaces) for elegant screen edge padding
+	emitLinkSentinels bool   // if true, wrap links with sentinel markers for LinkRegistry
+	leftMargin        int    // left margin (spaces) for elegant screen edge padding
 	docDir            string // directory of the document being rendered (for relative image paths)
 }
 
@@ -101,6 +101,10 @@ func (r *Renderer) RenderNode(node ast.Node) string {
 // are joined directly; others get a blank line separator.
 // Extra spacing is added around major elements (headings, code blocks) for better readability.
 func (r *Renderer) renderDocument(doc *ast.Document) string {
+	if len(doc.Children()) == 0 {
+		return "\n"
+	}
+
 	var sb strings.Builder
 	first := true
 
