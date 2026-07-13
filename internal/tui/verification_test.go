@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/bmd/bmd/internal/ast"
 	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/theme"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // ============================================================================
@@ -70,11 +70,17 @@ func sendKey(keyStr string) tea.KeyMsg {
 	}
 }
 
-// pressKeys sends a sequence of key events to a viewer, returning the final state.
+// pressKeys sends a sequence of key events to a viewer, returning the final
+// state. Any tea.Cmd returned by a key press (e.g. openFileMsg/switchModeMsg
+// emitted by an active child model such as DirectoryModel) is fully resolved
+// via settleCmd before moving to the next key, mirroring bubbletea's real
+// event loop (ARCH-03/ARCH-05 message-passing handoffs are async by shape,
+// synchronous in practice for this codebase's local-disk-only workloads).
 func pressKeys(v *Viewer, keys ...string) *Viewer {
 	for _, k := range keys {
-		model, _ := v.Update(sendKey(k))
+		model, cmd := v.Update(sendKey(k))
 		v = model.(*Viewer)
+		v = settleCmd(v, cmd)
 	}
 	return v
 }
@@ -94,11 +100,11 @@ func TestDirListing_DiscoversMdFiles(t *testing.T) {
 	})
 	v := newDirViewer(t, dir)
 
-	if len(v.directoryState.Files) != 3 {
-		t.Errorf("Expected 3 .md files, got %d", len(v.directoryState.Files))
+	if len(dirModel(v).state.Files) != 3 {
+		t.Errorf("Expected 3 .md files, got %d", len(dirModel(v).state.Files))
 	}
 	// Verify no non-markdown files
-	for _, f := range v.directoryState.Files {
+	for _, f := range dirModel(v).state.Files {
 		if !strings.HasSuffix(f.Name, ".md") {
 			t.Errorf("Non-markdown file found: %s", f.Name)
 		}
@@ -113,10 +119,10 @@ func TestDirListing_MetadataAccuracy(t *testing.T) {
 	})
 	v := newDirViewer(t, dir)
 
-	if len(v.directoryState.Files) != 1 {
+	if len(dirModel(v).state.Files) != 1 {
 		t.Fatal("Expected 1 file")
 	}
-	f := v.directoryState.Files[0]
+	f := dirModel(v).state.Files[0]
 	if f.Size != int64(len(content)) {
 		t.Errorf("Expected size %d, got %d", len(content), f.Size)
 	}
@@ -128,14 +134,14 @@ func TestDirListing_MetadataAccuracy(t *testing.T) {
 // TestDirListing_SortedAlphabetically verifies files are sorted.
 func TestDirListing_SortedAlphabetically(t *testing.T) {
 	dir := mkTmpDir(t, map[string]string{
-		"zebra.md":   "# Zebra",
-		"apple.md":   "# Apple",
-		"mango.md":   "# Mango",
+		"zebra.md": "# Zebra",
+		"apple.md": "# Apple",
+		"mango.md": "# Mango",
 	})
 	v := newDirViewer(t, dir)
 
-	names := make([]string, len(v.directoryState.Files))
-	for i, f := range v.directoryState.Files {
+	names := make([]string, len(dirModel(v).state.Files))
+	for i, f := range dirModel(v).state.Files {
 		names[i] = f.Name
 	}
 	if names[0] != "apple.md" || names[1] != "mango.md" || names[2] != "zebra.md" {
@@ -154,26 +160,26 @@ func TestDirListing_CursorNavigation(t *testing.T) {
 
 	// Down from 0 -> 1
 	v = pressKeys(v, "down")
-	if v.directoryState.SelectedIndex != 1 {
-		t.Errorf("Expected 1 after down, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 1 {
+		t.Errorf("Expected 1 after down, got %d", dirModel(v).state.SelectedIndex)
 	}
 
 	// Down from 1 -> 2
 	v = pressKeys(v, "down")
-	if v.directoryState.SelectedIndex != 2 {
-		t.Errorf("Expected 2, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 2 {
+		t.Errorf("Expected 2, got %d", dirModel(v).state.SelectedIndex)
 	}
 
 	// Down wraps from 2 -> 0
 	v = pressKeys(v, "down")
-	if v.directoryState.SelectedIndex != 0 {
-		t.Errorf("Expected wrap to 0, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 0 {
+		t.Errorf("Expected wrap to 0, got %d", dirModel(v).state.SelectedIndex)
 	}
 
 	// Up wraps from 0 -> 2
 	v = pressKeys(v, "up")
-	if v.directoryState.SelectedIndex != 2 {
-		t.Errorf("Expected wrap to 2, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 2 {
+		t.Errorf("Expected wrap to 2, got %d", dirModel(v).state.SelectedIndex)
 	}
 }
 
@@ -186,13 +192,13 @@ func TestDirListing_VimKeys(t *testing.T) {
 	v := newDirViewer(t, dir)
 
 	v = pressKeys(v, "j")
-	if v.directoryState.SelectedIndex != 1 {
-		t.Errorf("Expected 1 after j, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 1 {
+		t.Errorf("Expected 1 after j, got %d", dirModel(v).state.SelectedIndex)
 	}
 
 	v = pressKeys(v, "k")
-	if v.directoryState.SelectedIndex != 0 {
-		t.Errorf("Expected 0 after k, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 0 {
+		t.Errorf("Expected 0 after k, got %d", dirModel(v).state.SelectedIndex)
 	}
 }
 
@@ -203,8 +209,9 @@ func TestDirListing_RenderOutput(t *testing.T) {
 	})
 	v := newDirViewer(t, dir)
 	v.Width = 200 // wide enough to avoid header truncation
+	dirModel(v).width = 200
 
-	out := v.renderDirectoryListing(20)
+	out := dirModel(v).renderDirectoryListing(20)
 	if !strings.Contains(out, "README.md") {
 		t.Error("Expected README.md in directory listing output")
 	}
@@ -222,8 +229,9 @@ func TestDirListing_RenderShowsFileCount(t *testing.T) {
 	})
 	v := newDirViewer(t, dir)
 	v.Width = 200 // wide enough to avoid header truncation
+	dirModel(v).width = 200
 
-	out := v.renderDirectoryListing(20)
+	out := dirModel(v).renderDirectoryListing(20)
 	if !strings.Contains(out, "3 file") {
 		t.Errorf("Expected '3 file' in header, got:\n%s", out)
 	}
@@ -236,13 +244,13 @@ func TestDirListing_PreviewExtracted(t *testing.T) {
 	})
 	v := newDirViewer(t, dir)
 
-	if len(v.directoryState.Files) != 1 {
+	if len(dirModel(v).state.Files) != 1 {
 		t.Fatal("Expected 1 file")
 	}
-	if v.directoryState.Files[0].Preview == "" {
+	if dirModel(v).state.Files[0].Preview == "" {
 		t.Error("Expected non-empty Preview")
 	}
-	if !strings.Contains(v.directoryState.Files[0].Preview, "Preview Test") {
+	if !strings.Contains(dirModel(v).state.Files[0].Preview, "Preview Test") {
 		t.Error("Expected preview to contain file content")
 	}
 }
@@ -274,7 +282,7 @@ func TestFileNav_OpenFileFromDirectory(t *testing.T) {
 	// Open the file via Enter
 	v = pressKeys(v, "enter")
 
-	if v.directoryMode {
+	if dirModel(v) != nil {
 		t.Error("Expected directoryMode=false after opening file")
 	}
 	if !v.openedFromDirectory {
@@ -296,23 +304,23 @@ func TestFileNav_BackToDirectory(t *testing.T) {
 
 	// Select second file
 	v = pressKeys(v, "down")
-	if v.directoryState.SelectedIndex != 1 {
-		t.Fatalf("Expected SelectedIndex=1, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 1 {
+		t.Fatalf("Expected SelectedIndex=1, got %d", dirModel(v).state.SelectedIndex)
 	}
 
 	// Open it
 	v = pressKeys(v, "enter")
-	if v.directoryMode {
+	if dirModel(v) != nil {
 		t.Fatal("Expected directoryMode=false after enter")
 	}
 
 	// Go back with 'h'
 	v = pressKeys(v, "h")
-	if !v.directoryMode {
+	if dirModel(v) == nil {
 		t.Error("Expected directoryMode=true after 'h'")
 	}
-	if v.directoryState.SelectedIndex != 1 {
-		t.Errorf("Expected cursor restored to 1, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 1 {
+		t.Errorf("Expected cursor restored to 1, got %d", dirModel(v).state.SelectedIndex)
 	}
 }
 
@@ -325,13 +333,13 @@ func TestFileNav_BackspaceReturnsToDirectory(t *testing.T) {
 
 	// Open file
 	v = pressKeys(v, "enter")
-	if v.directoryMode {
+	if dirModel(v) != nil {
 		t.Fatal("Expected directoryMode=false")
 	}
 
 	// Go back with backspace
 	v = pressKeys(v, "backspace")
-	if !v.directoryMode {
+	if dirModel(v) == nil {
 		t.Error("Expected directoryMode=true after backspace")
 	}
 }
@@ -344,7 +352,7 @@ func TestFileNav_LKeyOpensFile(t *testing.T) {
 	v := newDirViewer(t, dir)
 
 	v = pressKeys(v, "l")
-	if v.directoryMode {
+	if dirModel(v) != nil {
 		t.Error("Expected directoryMode=false after 'l'")
 	}
 	if !v.openedFromDirectory {
@@ -360,7 +368,7 @@ func TestFileNav_RightArrowOpensFile(t *testing.T) {
 	v := newDirViewer(t, dir)
 
 	v = pressKeys(v, "right")
-	if v.directoryMode {
+	if dirModel(v) != nil {
 		t.Error("Expected directoryMode=false after Right arrow")
 	}
 }
@@ -418,7 +426,7 @@ func TestCrossSearch_SlashFromDirectory(t *testing.T) {
 	if !v.crossSearchMode {
 		t.Error("Expected crossSearchMode=true after '/'")
 	}
-	if v.directoryMode {
+	if dirModel(v) != nil {
 		t.Error("Expected directoryMode=false after search activated")
 	}
 }
@@ -432,8 +440,9 @@ func TestCrossSearch_CtrlFFromDirectory(t *testing.T) {
 
 	// Simulate ctrl+f
 	msg := tea.KeyMsg{Type: tea.KeyCtrlF}
-	model, _ := v.Update(msg)
+	model, cmd := v.Update(msg)
 	result := model.(*Viewer)
+	result = settleCmd(result, cmd)
 
 	if !result.crossSearchMode {
 		t.Error("Expected crossSearchMode=true after Ctrl+F from directory")
@@ -451,7 +460,7 @@ func TestCrossSearch_ExecuteAndShowResults(t *testing.T) {
 	// Enter search mode, type query, press enter
 	v.crossSearchMode = true
 	v.crossSearchInput = "authentication"
-	v.directoryMode = false
+	v.activeChild = nil
 
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
 	model, _ := v.Update(enter)
@@ -598,7 +607,7 @@ func TestGraphView_GKeyFromDirectory(t *testing.T) {
 	// If graph loaded, graphMode should be true. If it failed, directoryMode should still be true.
 	// Either way, no panic.
 	if v.graphMode {
-		if v.directoryMode {
+		if dirModel(v) != nil {
 			t.Error("Expected directoryMode=false when graphMode=true")
 		}
 	}
@@ -688,19 +697,19 @@ func TestIntegration_DirectoryToFileAndBack(t *testing.T) {
 	v := newDirViewer(t, dir)
 
 	// Start in directory mode
-	if !v.directoryMode {
+	if dirModel(v) == nil {
 		t.Fatal("Expected start in directory mode")
 	}
 
 	// Navigate down to second file
 	v = pressKeys(v, "down")
-	if v.directoryState.SelectedIndex != 1 {
+	if dirModel(v).state.SelectedIndex != 1 {
 		t.Fatal("Expected SelectedIndex=1")
 	}
 
 	// Open file
 	v = pressKeys(v, "enter")
-	if v.directoryMode {
+	if dirModel(v) != nil {
 		t.Fatal("Expected directoryMode=false after enter")
 	}
 	if v.currentView != "file" {
@@ -709,15 +718,15 @@ func TestIntegration_DirectoryToFileAndBack(t *testing.T) {
 
 	// Go back to directory
 	v = pressKeys(v, "h")
-	if !v.directoryMode {
+	if dirModel(v) == nil {
 		t.Fatal("Expected directoryMode=true after 'h'")
 	}
 	if v.currentView != "directory" {
 		t.Fatalf("Expected currentView=directory, got %q", v.currentView)
 	}
 	// Cursor should be restored to position 1
-	if v.directoryState.SelectedIndex != 1 {
-		t.Errorf("Expected cursor restored to 1, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 1 {
+		t.Errorf("Expected cursor restored to 1, got %d", dirModel(v).state.SelectedIndex)
 	}
 }
 
@@ -733,7 +742,7 @@ func TestIntegration_DirectoryToSearchAndBack(t *testing.T) {
 	if !v.crossSearchMode {
 		t.Fatal("Expected crossSearchMode=true")
 	}
-	if v.directoryMode {
+	if dirModel(v) != nil {
 		t.Fatal("Expected directoryMode=false during search")
 	}
 
@@ -763,7 +772,7 @@ func TestIntegration_SearchToFileAndBack(t *testing.T) {
 		{RelPath: "api.md", Score: 5.0, Path: absPath},
 	}
 	v.crossSearchSelected = 0
-	v.directoryMode = false
+	v.activeChild = nil
 
 	// Open result with 'l'
 	v = pressKeys(v, "l")
@@ -784,24 +793,24 @@ func TestIntegration_MultipleNavCycles(t *testing.T) {
 	// Cycle 1: Open first file, return
 	v = pressKeys(v, "enter")
 	v = pressKeys(v, "h")
-	if !v.directoryMode {
+	if dirModel(v) == nil {
 		t.Fatal("Cycle 1: Expected return to directory")
 	}
 
 	// Cycle 2: Open second file, return
 	v = pressKeys(v, "down", "enter")
 	v = pressKeys(v, "h")
-	if !v.directoryMode {
+	if dirModel(v) == nil {
 		t.Fatal("Cycle 2: Expected return to directory")
 	}
-	if v.directoryState.SelectedIndex != 1 {
-		t.Errorf("Cycle 2: Expected cursor at 1, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 1 {
+		t.Errorf("Cycle 2: Expected cursor at 1, got %d", dirModel(v).state.SelectedIndex)
 	}
 
 	// Cycle 3: Open third file, return
 	v = pressKeys(v, "down", "enter")
 	v = pressKeys(v, "h")
-	if !v.directoryMode {
+	if dirModel(v) == nil {
 		t.Fatal("Cycle 3: Expected return to directory")
 	}
 }
@@ -815,7 +824,7 @@ func TestIntegration_StateConsistency(t *testing.T) {
 
 	// Open file
 	v = pressKeys(v, "enter")
-	if v.directoryMode {
+	if dirModel(v) != nil {
 		t.Fatal("Expected directoryMode=false")
 	}
 	if !v.openedFromDirectory {
@@ -824,7 +833,7 @@ func TestIntegration_StateConsistency(t *testing.T) {
 
 	// Return to directory
 	v = pressKeys(v, "h")
-	if !v.directoryMode {
+	if dirModel(v) == nil {
 		t.Fatal("Expected directoryMode=true")
 	}
 	if v.openedFromDirectory {
@@ -847,11 +856,11 @@ func TestEdge_EmptyDirectory(t *testing.T) {
 	dir := t.TempDir() // empty
 	v := newDirViewer(t, dir)
 
-	if len(v.directoryState.Files) != 0 {
-		t.Errorf("Expected 0 files, got %d", len(v.directoryState.Files))
+	if len(dirModel(v).state.Files) != 0 {
+		t.Errorf("Expected 0 files, got %d", len(dirModel(v).state.Files))
 	}
 
-	out := v.renderDirectoryListing(20)
+	out := dirModel(v).renderDirectoryListing(20)
 	if !strings.Contains(out, "No markdown") && !strings.Contains(out, "none found") {
 		t.Errorf("Expected empty directory message, got: %s", out)
 	}
@@ -866,8 +875,8 @@ func TestEdge_DirectoryWithNoMdFiles(t *testing.T) {
 	})
 	v := newDirViewer(t, dir)
 
-	if len(v.directoryState.Files) != 0 {
-		t.Errorf("Expected 0 .md files, got %d", len(v.directoryState.Files))
+	if len(dirModel(v).state.Files) != 0 {
+		t.Errorf("Expected 0 .md files, got %d", len(dirModel(v).state.Files))
 	}
 }
 
@@ -878,20 +887,20 @@ func TestEdge_SingleFileDirectory(t *testing.T) {
 	})
 	v := newDirViewer(t, dir)
 
-	if len(v.directoryState.Files) != 1 {
-		t.Errorf("Expected 1 file, got %d", len(v.directoryState.Files))
+	if len(dirModel(v).state.Files) != 1 {
+		t.Errorf("Expected 1 file, got %d", len(dirModel(v).state.Files))
 	}
 
 	// Navigate down should wrap
 	v = pressKeys(v, "down")
-	if v.directoryState.SelectedIndex != 0 {
-		t.Errorf("Expected wrap to 0 with single file, got %d", v.directoryState.SelectedIndex)
+	if dirModel(v).state.SelectedIndex != 0 {
+		t.Errorf("Expected wrap to 0 with single file, got %d", dirModel(v).state.SelectedIndex)
 	}
 
 	// Open and return
 	v = pressKeys(v, "enter")
 	v = pressKeys(v, "h")
-	if !v.directoryMode {
+	if dirModel(v) == nil {
 		t.Error("Expected return to directory")
 	}
 }
@@ -903,10 +912,10 @@ func TestEdge_EmptyFileContent(t *testing.T) {
 	})
 	v := newDirViewer(t, dir)
 
-	if len(v.directoryState.Files) != 1 {
+	if len(dirModel(v).state.Files) != 1 {
 		t.Fatal("Expected 1 file")
 	}
-	f := v.directoryState.Files[0]
+	f := dirModel(v).state.Files[0]
 	if f.LineCount != 0 {
 		t.Errorf("Expected 0 lines for empty file, got %d", f.LineCount)
 	}
@@ -918,17 +927,17 @@ func TestEdge_EmptyFileContent(t *testing.T) {
 // TestEdge_SpecialCharsInFilename handles special characters.
 func TestEdge_SpecialCharsInFilename(t *testing.T) {
 	dir := mkTmpDir(t, map[string]string{
-		"my notes (draft).md":    "# My Notes\nDraft content",
-		"project-v2.0-spec.md":  "# Project Spec\nVersion 2.0",
+		"my notes (draft).md":  "# My Notes\nDraft content",
+		"project-v2.0-spec.md": "# Project Spec\nVersion 2.0",
 	})
 	v := newDirViewer(t, dir)
 
-	if len(v.directoryState.Files) != 2 {
-		t.Errorf("Expected 2 files, got %d", len(v.directoryState.Files))
+	if len(dirModel(v).state.Files) != 2 {
+		t.Errorf("Expected 2 files, got %d", len(dirModel(v).state.Files))
 	}
 
 	// Verify filenames are readable in render output
-	out := v.renderDirectoryListing(20)
+	out := dirModel(v).renderDirectoryListing(20)
 	if !strings.Contains(out, "my notes (draft).md") {
 		t.Error("Expected special chars filename in output")
 	}
@@ -944,20 +953,20 @@ func TestEdge_SubdirectoryFiles(t *testing.T) {
 	})
 	v := newDirViewer(t, dir)
 
-	if len(v.directoryState.Files) != 4 {
-		t.Errorf("Expected 4 files across subdirs, got %d", len(v.directoryState.Files))
+	if len(dirModel(v).state.Files) != 4 {
+		t.Errorf("Expected 4 files across subdirs, got %d", len(dirModel(v).state.Files))
 	}
 
 	// Verify relative names include path
 	hasDeep := false
-	for _, f := range v.directoryState.Files {
+	for _, f := range dirModel(v).state.Files {
 		if strings.Contains(f.Name, "deep/nested/file.md") || strings.Contains(f.Name, filepath.Join("deep", "nested", "file.md")) {
 			hasDeep = true
 		}
 	}
 	if !hasDeep {
-		names := make([]string, len(v.directoryState.Files))
-		for i, f := range v.directoryState.Files {
+		names := make([]string, len(dirModel(v).state.Files))
+		for i, f := range dirModel(v).state.Files {
 			names[i] = f.Name
 		}
 		t.Errorf("Expected deep/nested/file.md in files, got: %v", names)
@@ -1032,11 +1041,11 @@ func TestEdge_DirectoryOpenAndReturnMultipleTimes(t *testing.T) {
 	// Open and close 10 times without crash
 	for i := 0; i < 10; i++ {
 		v = pressKeys(v, "enter")
-		if v.directoryMode {
+		if dirModel(v) != nil {
 			t.Fatalf("Iteration %d: Expected directoryMode=false", i)
 		}
 		v = pressKeys(v, "h")
-		if !v.directoryMode {
+		if dirModel(v) == nil {
 			t.Fatalf("Iteration %d: Expected directoryMode=true", i)
 		}
 	}
@@ -1110,8 +1119,8 @@ func TestPerf_DirectoryListing20Files(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDirectory error: %v", err)
 	}
-	if len(v.directoryState.Files) != 20 {
-		t.Errorf("Expected 20 files, got %d", len(v.directoryState.Files))
+	if len(dirModel(v).state.Files) != 20 {
+		t.Errorf("Expected 20 files, got %d", len(dirModel(v).state.Files))
 	}
 	if duration > 500*time.Millisecond {
 		t.Errorf("Directory listing took %v, expected < 500ms", duration)
@@ -1139,8 +1148,8 @@ func TestPerf_DirectoryListing50Files(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDirectory error: %v", err)
 	}
-	if len(v.directoryState.Files) != 50 {
-		t.Errorf("Expected 50 files, got %d", len(v.directoryState.Files))
+	if len(dirModel(v).state.Files) != 50 {
+		t.Errorf("Expected 50 files, got %d", len(dirModel(v).state.Files))
 	}
 	if duration > 2000*time.Millisecond {
 		t.Errorf("Directory listing (50 files) took %v, expected < 2000ms", duration)
@@ -1235,7 +1244,7 @@ func TestRegression_FileMode_StillWorks(t *testing.T) {
 	v.Height = 24
 
 	// Should NOT be in directory mode
-	if v.directoryMode {
+	if dirModel(v) != nil {
 		t.Error("File mode viewer should not be in directory mode")
 	}
 	if v.openedFromDirectory {
@@ -1320,14 +1329,14 @@ func TestRegression_NewDirectoryViewer(t *testing.T) {
 	dir := t.TempDir()
 	v := NewDirectoryViewer(dir, theme.NewTheme(), 80)
 
-	if !v.directoryMode {
+	if dirModel(v) == nil {
 		t.Error("Expected directoryMode=true for NewDirectoryViewer")
 	}
 	if v.currentView != "directory" {
 		t.Errorf("Expected currentView='directory', got %q", v.currentView)
 	}
-	if v.directoryState.RootPath != dir {
-		t.Errorf("Expected RootPath=%q, got %q", dir, v.directoryState.RootPath)
+	if dirModel(v).state.RootPath != dir {
+		t.Errorf("Expected RootPath=%q, got %q", dir, dirModel(v).state.RootPath)
 	}
 }
 
