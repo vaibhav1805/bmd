@@ -115,9 +115,17 @@ func (v *Viewer) updateCrossSearchNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.crossSearchMode = false
 		v.crossSearchResults = nil
 		v.crossSearchSelected = -1
-		// Return to directory mode if available.
-		if v.directoryState.RootPath != "" && msg.String() != "q" {
-			v.directoryMode = true
+		// Return to directory mode if available. Restores the paused
+		// DirectoryModel (stashed when "/" switched away from it) instead of
+		// rescanning, matching pre-refactor behavior of never clearing
+		// directoryState on exit.
+		if v.startDir != "" && msg.String() != "q" {
+			if v.dirModelPaused != nil {
+				v.activeChild = v.dirModelPaused
+				v.dirModelPaused = nil
+			} else if dm, err := NewDirectoryModel(v.startDir, v.Theme, v.Width, v.Height); err == nil {
+				v.activeChild = dm
+			}
 			v.currentView = "directory"
 		}
 		if msg.String() == "q" {

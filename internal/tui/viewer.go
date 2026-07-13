@@ -158,9 +158,17 @@ type Viewer struct {
 	crossSearchSelected int                      // index of highlighted result (-1 = none)
 	crossSearchStrategy string                   // strategy used for the last search ("bm25" or "pageindex")
 
-	// Directory browser mode (DIR-01): interactive file listing when bmd is run with no args.
-	directoryMode  bool           // true when in directory listing mode
-	directoryState DirectoryState // state for directory listing view
+	// Directory browser mode (DIR-01, ARCH-01): directory-listing state lives
+	// entirely in DirectoryModel (directory.go), reachable while browsing via
+	// activeChild. nil activeChild means plain file/edit view.
+	activeChild tea.Model
+
+	// dirModelPaused holds the DirectoryModel instance while a file opened
+	// from directory view is being displayed (activeChild is nil during file
+	// view), so BackToDirectory can restore it without rescanning the
+	// directory (matches pre-refactor behavior of never discarding
+	// directoryState while a file is open).
+	dirModelPaused *DirectoryModel
 
 	// DIR-02: View state tracking — tracks which view is currently shown.
 	// Values: "directory" | "file" | "search" | "graph"
@@ -173,10 +181,6 @@ type Viewer struct {
 	// DIR-04: When true, the current file was opened from search results.
 	// Used to enable 'h' to return to search results with cursor preserved.
 	openedFromSearch bool
-
-	// Split-pane mode (09-01): dual-pane layout with file list left, preview right.
-	splitMode          bool // true when split-pane view is active in directory mode
-	splitPreviewOffset int  // scroll offset for the right (preview) pane
 
 	// Word count modal (Ctrl+I): displays document statistics overlay.
 	wordCountVisible bool // true when word count modal is open
@@ -274,7 +278,7 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer 
 }
 
 // NewDirectoryViewer creates a Viewer configured for directory browsing mode.
-// Call LoadDirectory() on the returned viewer to populate file metadata.
+// Call LoadDirectory() on the returned viewer to (re)populate file metadata.
 func NewDirectoryViewer(dirPath string, th theme.Theme, width int) *Viewer {
 	h := nav.New()
 	doc := &ast.Document{}
@@ -282,7 +286,7 @@ func NewDirectoryViewer(dirPath string, th theme.Theme, width int) *Viewer {
 	sh := search.NewSearchHistory(search.DefaultHistoryPath())
 	_ = sh.Load()
 
-	return &Viewer{
+	v := &Viewer{
 		Doc:              doc,
 		Height:           24,
 		Width:            width,
@@ -295,10 +299,51 @@ func NewDirectoryViewer(dirPath string, th theme.Theme, width int) *Viewer {
 		searchHistory:    sh,
 		themeDialog:      NewThemeDialog(theme.ThemeDefault),
 		currentThemeName: theme.ThemeDefault,
-		directoryMode:    true,
 		currentView:      "directory",
-		directoryState:   DirectoryState{RootPath: dirPath},
 	}
+	if dm, err := NewDirectoryModel(dirPath, th, width, v.Height); err == nil {
+		v.activeChild = dm
+	}
+	return v
+}
+
+// LoadDirectory (re)scans rootPath for .md files and activates a fresh
+// DirectoryModel (ARCH-01) as the Viewer's activeChild. Preserved as a
+// *Viewer method for backward compatibility with callers (cmd/bmd/main.go)
+// that construct via NewDirectoryViewer then call LoadDirectory explicitly.
+func (v *Viewer) LoadDirectory(path string) error {
+	dm, err := NewDirectoryModel(path, v.Theme, v.Width, v.Height)
+	if err != nil {
+		return err
+	}
+	v.activeChild = dm
+	v.currentView = "directory"
+	v.startDir = dm.state.RootPath
+	return nil
+}
+
+// BackToDirectory restores the directory view, re-entering directory mode
+// with the cursor position restored to where it was before opening the
+// file. This stays a parent-owned operation (ARCH-03/D-06): it restores the
+// paused DirectoryModel instance (stashed by the openFileMsg handler) rather
+// than asking a child to reach back into Viewer.
+func (v *Viewer) BackToDirectory() (*Viewer, tea.Cmd) {
+	if !v.openedFromDirectory {
+		return v, nil
+	}
+	if v.dirModelPaused != nil {
+		v.dirModelPaused.state.RestoreDirectorySelection()
+		v.activeChild = v.dirModelPaused
+		v.dirModelPaused = nil
+	}
+	v.openedFromDirectory = false
+	v.currentView = "directory"
+	// Reset file view state.
+	v.Offset = 0
+	v.searchState = NewSearchState()
+	v.searchMode = false
+	v.searchInput = ""
+	return v, nil
 }
 
 // LoadGraph loads the Phase 6 knowledge graph from the database at rootPath.
@@ -378,7 +423,7 @@ func (v *Viewer) getCurrentThemeName() theme.ThemeName {
 // SessionState returns the current viewer state for session persistence.
 // Returns nil if the viewer is in directory mode (no file to restore).
 func (v *Viewer) SessionState() *config.SessionState {
-	if v.directoryMode || v.FilePath == "" {
+	if v.activeChild != nil || v.FilePath == "" {
 		return nil
 	}
 	s := &config.SessionState{
@@ -434,6 +479,68 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Not in edit mode: reschedule the tick so it fires again when editing resumes.
 		return v, v.scheduleAutoSave()
 
+	case openFileMsg:
+		// ARCH-03: the parent Viewer is the only place that calls loadFile().
+		v.openedFromDirectory = msg.origin == originDirectory
+		v.openedFromSearch = msg.origin == originSearch
+		if msg.origin == originDirectory {
+			if dm, ok := v.activeChild.(*DirectoryModel); ok {
+				// Stash the DirectoryModel instead of discarding it so
+				// BackToDirectory can restore it without rescanning.
+				v.dirModelPaused = dm
+			}
+		}
+		v.activeChild = nil
+		v.currentView = "file"
+		return v.loadFile(msg.path)
+
+	case toggleHelpMsg:
+		v.helpOpen = !v.helpOpen
+		return v, nil
+
+	case statusMsg:
+		v.errorMsg = msg.text
+		return v, clearErrorAfter(statusTimeout)
+
+	case switchModeMsg:
+		// ARCH-05: the parent Viewer is the only place a mode-flag or
+		// "active child" pointer changes.
+		switch msg.mode {
+		case modeDirectory:
+			dm, err := NewDirectoryModel(msg.arg, v.Theme, v.Width, v.Height)
+			if err == nil {
+				v.activeChild = dm
+				v.currentView = "directory"
+			}
+		case modeGraph:
+			// INTERIM (Pitfall 2): GraphModel isn't migrated until a later
+			// plan, so this handler still sets the existing bool flag as its
+			// *implementation* of handling the message — the point is that
+			// no child ever writes graphMode itself, only this parent does.
+			if !v.graphState.Loaded {
+				if err := v.LoadGraph(msg.arg); err != nil {
+					v.errorMsg = fmt.Sprintf("Graph load error: %v", err)
+					return v, clearErrorAfter(statusTimeout)
+				}
+			}
+			v.activeChild = nil
+			v.graphMode = true
+		case modeCrossSearch:
+			// INTERIM (Pitfall 2): CrossSearchModel isn't migrated until a
+			// later plan; same rationale as modeGraph above.
+			if dm, ok := v.activeChild.(*DirectoryModel); ok {
+				// Stash so cross_search.go's own back-to-directory path
+				// (updateCrossSearchNav's "h"/"esc"/"q") can restore the
+				// exact same listing/selection, matching pre-refactor
+				// behavior of never clearing directoryState on exit.
+				v.dirModelPaused = dm
+			}
+			v.activeChild = nil
+			v.crossSearchMode = true
+			v.crossSearchInput = ""
+		}
+		return v, nil
+
 	case tea.WindowSizeMsg:
 		v.Height = msg.Height
 		if msg.Width != v.Width {
@@ -449,6 +556,13 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Clamp offset to new max
 		v.Offset = clamp(v.Offset, 0, v.maxOffset())
+		// Pitfall 1: forward the resize to whichever child is currently active
+		// so split-pane widths / graph layout recompute.
+		if v.activeChild != nil {
+			updated, cmd := v.activeChild.Update(msg)
+			v.activeChild = updated.(tea.Model)
+			return v, cmd
+		}
 
 	case tea.KeyMsg:
 		// When theme dialog is open, route all input to theme dialog handling.
@@ -501,9 +615,13 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v.updateCrossSearchNav(msg)
 		}
 
-		// When directory listing is active, route keys to directory handling.
-		if v.directoryMode {
-			return v.updateDirectory(msg)
+		// When a child model (currently: DirectoryModel) is active, route
+		// keys to it. Its returned tea.Cmd may resolve to openFileMsg,
+		// switchModeMsg, or toggleHelpMsg — all handled above.
+		if v.activeChild != nil {
+			updated, cmd := v.activeChild.Update(msg)
+			v.activeChild = updated.(tea.Model)
+			return v, cmd
 		}
 
 		// Edit mode key handlers (only when editMode is true)
@@ -1384,7 +1502,7 @@ func (v *Viewer) getContextualHint() string {
 			"\x1b[38;5;117mCtrl+Z: undo  •  Ctrl+Y: redo\x1b[0m",
 			"\x1b[38;5;117mCtrl+H: find/replace  •  ?:help\x1b[0m",
 		}
-	} else if v.directoryMode {
+	} else if v.activeChild != nil {
 		hints = []string{
 			"\x1b[38;5;117m↑↓:navigate  •  Enter:open  •  s:split\x1b[0m",
 			"\x1b[38;5;117m/:search  •  e:edit  •  ?:help\x1b[0m",
@@ -1565,7 +1683,7 @@ func (v Viewer) renderHeader() string {
 	} else if v.openedFromDirectory {
 		// DIR-02: Breadcrumb shows directory context: "[~/docs] filename.md"
 		filename := filepath.Base(v.FilePath)
-		dirDisplay := v.directoryState.RootPath
+		dirDisplay := v.startDir
 		if home, err := os.UserHomeDir(); err == nil {
 			if strings.HasPrefix(dirDisplay, home) {
 				dirDisplay = "~" + dirDisplay[len(home):]
@@ -1676,15 +1794,14 @@ func (v Viewer) View() string {
 		return v.renderGraphView(contentHeight)
 	}
 
-	if v.directoryMode {
+	if v.activeChild != nil {
+		// D-05: the active child (currently: DirectoryModel) owns its own
+		// content rendering; Viewer still wraps it with the shared
+		// header/status-bar chrome, unchanged from pre-refactor byte output.
 		var sb strings.Builder
 		sb.WriteString(v.renderHeader())
 		sb.WriteString("\n")
-		if v.splitMode {
-			sb.WriteString(v.renderSplitPane(contentHeight))
-		} else {
-			sb.WriteString(v.renderDirectoryListing(contentHeight))
-		}
+		sb.WriteString(v.activeChild.View())
 		sb.WriteString("\n")
 		sb.WriteString(v.renderStatusBar())
 		return sb.String()

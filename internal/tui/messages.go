@@ -66,3 +66,19 @@ type toggleHelpMsg struct{}
 
 // toggleHelpCmd returns a tea.Cmd that resolves to a toggleHelpMsg.
 func toggleHelpCmd() tea.Cmd { return func() tea.Msg { return toggleHelpMsg{} } }
+
+// statusMsg asks the parent Viewer to display a transient status/error
+// message in its header/status bar (and schedule it to clear after
+// statusTimeout), without giving a child model a back-pointer into Viewer
+// (RESEARCH.md Open Question 2). This keeps self-contained, non-mode-
+// transitioning side effects — e.g. a "terminal too narrow" warning — on the
+// same message-passing footing as file-open/mode-switch requests, without
+// requiring the child to reach into Viewer's errorMsg field directly.
+type statusMsg struct {
+	text string
+}
+
+// statusCmd returns a tea.Cmd that resolves to a statusMsg with the given text.
+func statusCmd(text string) tea.Cmd {
+	return func() tea.Msg { return statusMsg{text: text} }
+}

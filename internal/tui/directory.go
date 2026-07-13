@@ -1,6 +1,13 @@
 // Package tui: directory browser mode — scans a directory for markdown
 // files and lets the user navigate/open them, with an optional split-pane
 // preview.
+//
+// DirectoryModel is an independent tea.Model (ARCH-01): its state (file
+// list, selection, split-pane) lives entirely here, not as flat fields on
+// Viewer. It never calls Viewer.loadFile() directly (ARCH-03) and never sets
+// a sibling mode's flag inline (ARCH-05) — file-open and mode-transition
+// requests are emitted as tea.Cmds resolving to the shared messages defined
+// in messages.go.
 package tui
 
 import (
@@ -13,6 +20,7 @@ import (
 
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/renderer"
+	"github.com/bmd/bmd/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -40,13 +48,28 @@ func (ds *DirectoryState) RestoreDirectorySelection() {
 	ds.SelectedIndex = ds.SavedSelectedIndex
 }
 
-// LoadDirectory scans the given directory for .md files and populates
-// the DirectoryState with FileMetadata (size, line count, mod time, preview).
-// It sets directoryMode = true on the viewer.
-func (v *Viewer) LoadDirectory(path string) error {
-	absPath, err := filepath.Abs(path)
+// DirectoryModel is the independent tea.Model for directory-browser mode.
+// It owns DirectoryState plus mode-local split-pane fields, and copies of
+// shared render context (D-06) — never a pointer back into Viewer.
+type DirectoryModel struct {
+	state DirectoryState
+
+	splitMode          bool // true when split-pane view is active
+	splitPreviewOffset int  // scroll offset for the right (preview) pane
+
+	// Shared context copies (D-06).
+	theme  theme.Theme
+	width  int
+	height int
+}
+
+// NewDirectoryModel scans rootPath for .md files and returns a fully
+// populated DirectoryModel. The scan is synchronous (Pitfall 3 — not
+// deferred into Init()), matching today's LoadDirectory behavior.
+func NewDirectoryModel(rootPath string, th theme.Theme, width, height int) (*DirectoryModel, error) {
+	absPath, err := filepath.Abs(rootPath)
 	if err != nil {
-		return fmt.Errorf("resolve path: %w", err)
+		return nil, fmt.Errorf("resolve path: %w", err)
 	}
 
 	var files []FileMetadata
@@ -105,7 +128,7 @@ func (v *Viewer) LoadDirectory(path string) error {
 		return nil
 	})
 	if walkErr != nil {
-		return fmt.Errorf("scan directory: %w", walkErr)
+		return nil, fmt.Errorf("scan directory: %w", walkErr)
 	}
 
 	// Sort files alphabetically by relative name.
@@ -113,130 +136,103 @@ func (v *Viewer) LoadDirectory(path string) error {
 		return files[i].Name < files[j].Name
 	})
 
-	v.directoryMode = true
-	v.currentView = "directory"
+	m := &DirectoryModel{theme: th, width: width, height: height}
 	// Enable split-pane view by default in directory mode (if terminal is wide enough)
-	v.splitMode = v.Width >= 80
-	v.directoryState = DirectoryState{
+	m.splitMode = width >= 80
+	m.state = DirectoryState{
 		RootPath:      absPath,
 		Files:         files,
 		SelectedIndex: 0,
 	}
-	v.startDir = absPath
-	return nil
+	return m, nil
 }
 
-// OpenFileFromDirectory saves the directory selection state then opens the
-// selected file in file view. Sets openedFromDirectory=true so 'h' can return.
-func (v *Viewer) OpenFileFromDirectory() (*Viewer, tea.Cmd) {
-	if len(v.directoryState.Files) == 0 {
-		return v, nil
-	}
-	// Save cursor position for restoration when returning.
-	v.directoryState.SaveDirectorySelection()
+// Init satisfies tea.Model. The synchronous load already happened in the
+// constructor (Pitfall 3), so there's nothing to do here.
+func (m *DirectoryModel) Init() tea.Cmd { return nil }
 
-	selected := v.directoryState.Files[v.directoryState.SelectedIndex]
-	v.directoryMode = false
-	v.openedFromDirectory = true
-	v.currentView = "file"
+// Update handles keyboard input and window resizes for directory listing
+// mode. Arrow keys move the cursor; Enter/'l' opens the selected file (via
+// openFileCmd, ARCH-03); 'g'/'/' hand off to graph/cross-search mode (via
+// switchModeCmd, ARCH-05); '?'/'h' toggle help (via toggleHelpCmd);
+// 'q'/Ctrl+C quits.
+func (m *DirectoryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		return m, nil
 
-	return v.loadFile(selected.Path)
-}
+	case tea.KeyMsg:
+		files := m.state.Files
+		n := len(files)
 
-// BackToDirectory restores the directory view, re-entering directory mode with
-// the cursor position restored to where it was before opening the file.
-func (v *Viewer) BackToDirectory() (*Viewer, tea.Cmd) {
-	if !v.openedFromDirectory {
-		return v, nil
-	}
-	v.directoryMode = true
-	v.openedFromDirectory = false
-	v.currentView = "directory"
-	v.directoryState.RestoreDirectorySelection()
-	// Reset file view state.
-	v.Offset = 0
-	v.searchState = NewSearchState()
-	v.searchMode = false
-	v.searchInput = ""
-	return v, nil
-}
+		switch msg.String() {
+		case "q", "ctrl+c":
+			return m, tea.Quit
 
-// updateDirectory handles keyboard input when directory listing mode is active.
-// Arrow keys move the cursor; Enter/'l' opens the selected file; 'q'/Ctrl+C quits.
-func (v *Viewer) updateDirectory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	files := v.directoryState.Files
-	n := len(files)
+		case "?", "h":
+			return m, toggleHelpCmd()
 
-	switch msg.String() {
-	case "q", "ctrl+c":
-		return v, tea.Quit
-
-	case "?", "h":
-		v.helpOpen = true
-		return v, nil
-
-	case "s":
-		// Toggle split-pane mode in directory view.
-		if v.Width < 80 {
-			v.errorMsg = "Terminal too narrow for split pane (need 80+ cols)"
-			return v, clearErrorAfter(statusTimeout)
-		}
-		v.splitMode = !v.splitMode
-		v.splitPreviewOffset = 0
-		return v, nil
-
-	case "up", "k":
-		if n > 0 {
-			v.directoryState.SelectedIndex = (v.directoryState.SelectedIndex - 1 + n) % n
-			v.splitPreviewOffset = 0 // reset preview scroll on cursor move
-		}
-		return v, nil
-
-	case "down", "j":
-		if n > 0 {
-			v.directoryState.SelectedIndex = (v.directoryState.SelectedIndex + 1) % n
-			v.splitPreviewOffset = 0 // reset preview scroll on cursor move
-		}
-		return v, nil
-
-	case "enter", "l", "right":
-		if n > 0 {
-			if v.splitMode {
-				v.splitMode = false // exit split mode when opening file full-screen
+		case "s":
+			// Toggle split-pane mode in directory view.
+			if m.width < 80 {
+				return m, statusCmd("Terminal too narrow for split pane (need 80+ cols)")
 			}
-			// Use OpenFileFromDirectory() to save cursor state for return navigation.
-			return v.OpenFileFromDirectory()
-		}
-		return v, nil
+			m.splitMode = !m.splitMode
+			m.splitPreviewOffset = 0
+			return m, nil
 
-	case "g":
-		// Open graph view from directory mode.
-		v.graphMode = true
-		v.directoryMode = false
-		if !v.graphState.Loaded {
-			if err := v.LoadGraph(v.directoryState.RootPath); err != nil {
-				v.graphMode = false
-				v.directoryMode = true
-				v.errorMsg = fmt.Sprintf("Graph load error: %v", err)
-				return v, clearErrorAfter(statusTimeout)
+		case "up", "k":
+			if n > 0 {
+				m.state.SelectedIndex = (m.state.SelectedIndex - 1 + n) % n
+				m.splitPreviewOffset = 0 // reset preview scroll on cursor move
 			}
-		}
-		return v, nil
+			return m, nil
 
-	case "/", "ctrl+f":
-		// Switch to cross-document search from directory mode.
-		v.crossSearchMode = true
-		v.crossSearchInput = ""
-		v.directoryMode = false
-		return v, nil
+		case "down", "j":
+			if n > 0 {
+				m.state.SelectedIndex = (m.state.SelectedIndex + 1) % n
+				m.splitPreviewOffset = 0 // reset preview scroll on cursor move
+			}
+			return m, nil
+
+		case "enter", "l", "right":
+			if n > 0 {
+				if m.splitMode {
+					m.splitMode = false // exit split mode when opening file full-screen
+				}
+				selected := files[m.state.SelectedIndex]
+				m.state.SaveDirectorySelection()
+				return m, openFileCmd(selected.Path, originDirectory)
+			}
+			return m, nil
+
+		case "g":
+			// Switch to graph view from directory mode.
+			return m, switchModeCmd(modeGraph, m.state.RootPath)
+
+		case "/", "ctrl+f":
+			// Switch to cross-document search from directory mode.
+			return m, switchModeCmd(modeCrossSearch, "")
+		}
 	}
-	return v, nil
+	return m, nil
+}
+
+// View renders the interactive file listing (or split-pane view) for
+// directory mode.
+func (m *DirectoryModel) View() string {
+	contentHeight := m.height - 2 // header + status bar reserved by Viewer's wrapper
+	if m.splitMode {
+		return m.renderSplitPane(contentHeight)
+	}
+	return m.renderDirectoryListing(contentHeight)
 }
 
 // renderDirectoryListing renders the interactive file listing for directory mode.
 // Shows header with directory path, scrollable file list with metadata, and footer hints.
-func (v Viewer) renderDirectoryListing(contentHeight int) string {
-	ds := v.directoryState
+func (m *DirectoryModel) renderDirectoryListing(contentHeight int) string {
+	ds := m.state
 	files := ds.Files
 
 	// ANSI color helpers (consistent with existing codebase style)
@@ -265,15 +261,15 @@ func (v Viewer) renderDirectoryListing(contentHeight int) string {
 	}
 	// Pad or truncate to width
 	headerRunes := []rune(headerTitle)
-	if len(headerRunes) > v.Width {
-		headerTitle = string(headerRunes[:v.Width-3]) + "..."
+	if len(headerRunes) > m.width {
+		headerTitle = string(headerRunes[:m.width-3]) + "..."
 	} else {
-		headerTitle = headerTitle + strings.Repeat(" ", v.Width-len(headerRunes))
+		headerTitle = headerTitle + strings.Repeat(" ", m.width-len(headerRunes))
 	}
 	sb.WriteString(headerBg + headerTitle + reset + "\n")
 
 	// Separator
-	sb.WriteString(dimText + strings.Repeat("─", v.Width) + reset + "\n")
+	sb.WriteString(dimText + strings.Repeat("─", m.width) + reset + "\n")
 
 	// Compute visible window: keep selected index in view.
 	listHeight := contentHeight - 3 // header + separator + footer
@@ -328,7 +324,7 @@ func (v Viewer) renderDirectoryListing(contentHeight int) string {
 			meta := fmt.Sprintf("[%s, %d lines]", sizeStr, f.LineCount)
 
 			// Build the line: "  filename.md              [12 KB, 234 lines]"
-			nameMaxWidth := v.Width - len(meta) - len(prefix) - 3
+			nameMaxWidth := m.width - len(meta) - len(prefix) - 3
 			displayName := f.Name
 			nameRunes := []rune(displayName)
 			if len(nameRunes) > nameMaxWidth {
@@ -344,8 +340,8 @@ func (v Viewer) renderDirectoryListing(contentHeight int) string {
 			if isSelected {
 				// Pad line to full width for highlight
 				lineRunes := []rune(line)
-				if len(lineRunes) < v.Width {
-					line = line + strings.Repeat(" ", v.Width-len(lineRunes))
+				if len(lineRunes) < m.width {
+					line = line + strings.Repeat(" ", m.width-len(lineRunes))
 				}
 				sb.WriteString(selectedBg + boldText + line + reset + "\n")
 			} else {
@@ -372,7 +368,7 @@ func (v Viewer) renderDirectoryListing(contentHeight int) string {
 	// The footer contains ANSI codes, so display length != byte length; truncate by visible chars.
 	// Approximate: strip ANSI for length calc but keep original string.
 	footerPlain := stripANSI(footerStr)
-	if len([]rune(footerPlain)) > v.Width {
+	if len([]rune(footerPlain)) > m.width {
 		// Trim the visible text
 		footerStr = dimText + " [↑/↓] Navigate  [Enter] Open  [/] Search  [q] Quit" + reset
 		_ = footerRunes // discard
@@ -406,8 +402,8 @@ func splitPaneWidths(totalWidth int) (int, int, bool) {
 	return left, right, true
 }
 
-func (v Viewer) renderDirectoryListingSplit(leftWidth, contentHeight int) []string {
-	ds := v.directoryState
+func (m *DirectoryModel) renderDirectoryListingSplit(leftWidth, contentHeight int) []string {
+	ds := m.state
 	files := ds.Files
 
 	selectedBg := "\x1b[48;5;22m\x1b[38;5;46m"
@@ -503,8 +499,8 @@ func (v Viewer) renderDirectoryListingSplit(leftWidth, contentHeight int) []stri
 	return rows
 }
 
-func (v Viewer) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
-	ds := v.directoryState
+func (m *DirectoryModel) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
+	ds := m.state
 	files := ds.Files
 	rows := make([]string, contentHeight)
 
@@ -544,7 +540,7 @@ func (v Viewer) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
 		// Parse and render the markdown with full styling
 		doc, parseErr := parser.ParseMarkdown(string(data))
 		if parseErr == nil {
-			r := renderer.NewRenderer(v.Theme, rightWidth).WithDocDir(filepath.Dir(f.Path))
+			r := renderer.NewRenderer(m.theme, rightWidth).WithDocDir(filepath.Dir(f.Path))
 			rendered := r.Render(doc)
 			previewLines = stripAllSentinels(strings.Split(rendered, "\n"))
 		} else {
@@ -558,7 +554,7 @@ func (v Viewer) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
 	}
 
 	// Apply scroll offset
-	start := v.splitPreviewOffset
+	start := m.splitPreviewOffset
 	if start >= len(previewLines) {
 		start = 0
 	}
@@ -604,16 +600,15 @@ func (v Viewer) renderFilePreviewSplit(rightWidth, contentHeight int) []string {
 
 // renderSplitPane combines the left (directory list) and right (file preview)
 // panes side-by-side with a border character. Returns the full split view string.
-
-func (v Viewer) renderSplitPane(contentHeight int) string {
-	leftWidth, rightWidth, ok := splitPaneWidths(v.Width)
+func (m *DirectoryModel) renderSplitPane(contentHeight int) string {
+	leftWidth, rightWidth, ok := splitPaneWidths(m.width)
 	if !ok {
 		// Terminal too narrow — fall back to full-screen directory listing.
-		return v.renderDirectoryListing(contentHeight)
+		return m.renderDirectoryListing(contentHeight)
 	}
 
-	leftRows := v.renderDirectoryListingSplit(leftWidth, contentHeight)
-	rightRows := v.renderFilePreviewSplit(rightWidth, contentHeight)
+	leftRows := m.renderDirectoryListingSplit(leftWidth, contentHeight)
+	rightRows := m.renderFilePreviewSplit(rightWidth, contentHeight)
 
 	border := "\x1b[38;5;240m│\x1b[0m"
 
