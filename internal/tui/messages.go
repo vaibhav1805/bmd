@@ -1,0 +1,68 @@
+// Package tui: shared tea.Msg vocabulary for mode-transition and file-open
+// handoff between the parent Viewer and its independent child models
+// (DirectoryModel, and — in later phases — CrossSearchModel/GraphModel).
+//
+// Designed once, upfront (D-02): these types are frozen here and reused
+// unchanged by every child model. No child model may invent its own
+// transition/file-open message dialect.
+package tui
+
+import (
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// origin identifies which mode a file-open request originated from, so the
+// parent Viewer can enable the correct "back" navigation (ARCH-03).
+type origin int
+
+const (
+	originDirectory origin = iota
+	originSearch
+	originGraph
+)
+
+// openFileMsg asks the parent Viewer to load a file. A child model never
+// calls Viewer.loadFile() directly; it returns openFileCmd's tea.Cmd instead.
+type openFileMsg struct {
+	path   string
+	origin origin
+}
+
+// openFileCmd returns a tea.Cmd that resolves to an openFileMsg for the given
+// path and origin.
+func openFileCmd(path string, o origin) tea.Cmd {
+	return func() tea.Msg { return openFileMsg{path: path, origin: o} }
+}
+
+// appMode identifies which child mode should become active. modeNone means
+// plain file-view/edit-mode, handled by Viewer itself (no child active).
+type appMode int
+
+const (
+	modeNone appMode = iota
+	modeDirectory
+	modeCrossSearch
+	modeGraph
+)
+
+// switchModeMsg asks the parent Viewer to activate a different mode/child
+// model. arg carries mode-specific context (e.g. rootPath for modeGraph and
+// modeDirectory; empty for modeCrossSearch).
+type switchModeMsg struct {
+	mode appMode
+	arg  string
+}
+
+// switchModeCmd returns a tea.Cmd that resolves to a switchModeMsg for the
+// given mode and arg.
+func switchModeCmd(mode appMode, arg string) tea.Cmd {
+	return func() tea.Msg { return switchModeMsg{mode: mode, arg: arg} }
+}
+
+// toggleHelpMsg asks the parent Viewer to toggle the help overlay. helpOpen
+// stays a plain bool on Viewer (D-04) but every mode toggles it via this
+// message instead of writing v.helpOpen directly.
+type toggleHelpMsg struct{}
+
+// toggleHelpCmd returns a tea.Cmd that resolves to a toggleHelpMsg.
+func toggleHelpCmd() tea.Cmd { return func() tea.Msg { return toggleHelpMsg{} } }
