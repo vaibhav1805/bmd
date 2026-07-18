@@ -148,15 +148,16 @@ type Viewer struct {
 	lastHintTime   time.Time // time of last hint rotation
 	currentHintIdx int       // index of current hint to display
 
-	// Cross-document search state (DIR-03): search across all markdown files in the directory.
-	// This is distinct from searchState which searches within the current document.
-	crossSearchMode     bool                     // true when cross-document search input prompt is open
-	crossSearchInput    string                   // query being typed before Enter commits it
-	crossSearchActive   bool                     // true after a search has been executed
-	crossSearchQuery    string                   // last committed cross-search query
-	crossSearchResults  []knowledge.SearchResult // results from BM25 search across all files
-	crossSearchSelected int                      // index of highlighted result (-1 = none)
-	crossSearchStrategy string                   // strategy used for the last search ("bm25" or "pageindex")
+	// Cross-document search state (DIR-03, ARCH-02): search-in-progress state
+	// (query input, results, selection) lives entirely in CrossSearchModel
+	// (cross_search.go), reachable while searching via activeChild.
+	// crossSearchQuery/crossSearchStrategy remain here (not moved) because
+	// renderHeader()'s "[search: query] filename" breadcrumb needs the last
+	// search query while a file opened from search is being viewed —
+	// i.e. after the CrossSearchModel that produced it has been stashed into
+	// csModelPaused and is no longer the active child.
+	crossSearchQuery    string // last committed cross-search query
+	crossSearchStrategy string // strategy used for the last search ("bm25" or "pageindex")
 
 	// Directory browser mode (DIR-01, ARCH-01): directory-listing state lives
 	// entirely in DirectoryModel (directory.go), reachable while browsing via
@@ -169,6 +170,13 @@ type Viewer struct {
 	// directory (matches pre-refactor behavior of never discarding
 	// directoryState while a file is open).
 	dirModelPaused *DirectoryModel
+
+	// csModelPaused holds the CrossSearchModel instance while a file opened
+	// from search results is being displayed (activeChild is nil during file
+	// view), so BackToSearchResults can restore it (preserving results and
+	// selection) without re-running the search — mirrors dirModelPaused's
+	// pattern for directory mode.
+	csModelPaused *CrossSearchModel
 
 	// DIR-02: View state tracking — tracks which view is currently shown.
 	// Values: "directory" | "file" | "search" | "graph"
@@ -346,6 +354,30 @@ func (v *Viewer) BackToDirectory() (*Viewer, tea.Cmd) {
 	return v, nil
 }
 
+// BackToSearchResults restores the cross-document search results view,
+// returning from a file that was opened by pressing 'l'/Enter on a search
+// result. This stays a parent-owned operation (ARCH-03/D-06): it restores
+// the paused CrossSearchModel instance (stashed by the openFileMsg handler)
+// preserving its prior results/selection, rather than asking the model to
+// reach back into Viewer (DIR-04).
+func (v *Viewer) BackToSearchResults() (*Viewer, tea.Cmd) {
+	if !v.openedFromSearch {
+		return v, nil
+	}
+	v.openedFromSearch = false
+	if v.csModelPaused != nil {
+		v.activeChild = v.csModelPaused
+		v.csModelPaused = nil
+	}
+	v.currentView = "search"
+	// Reset file view state.
+	v.Offset = 0
+	v.searchState = NewSearchState()
+	v.searchMode = false
+	v.searchInput = ""
+	return v, nil
+}
+
 // LoadGraph loads the Phase 6 knowledge graph from the database at rootPath.
 // If the database doesn't exist, attempts to build it first.
 // Returns an error if graph loading fails.
@@ -489,6 +521,17 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// BackToDirectory can restore it without rescanning.
 				v.dirModelPaused = dm
 			}
+		} else if msg.origin == originSearch {
+			if csm, ok := v.activeChild.(*CrossSearchModel); ok {
+				// Keep the breadcrumb query available for renderHeader()
+				// while the file is shown (crossSearchQuery/Strategy stay on
+				// Viewer for exactly this purpose — see field comment).
+				v.crossSearchQuery = csm.query
+				v.crossSearchStrategy = csm.strategy
+				// Stash the CrossSearchModel instead of discarding it so
+				// BackToSearchResults can restore it without re-searching.
+				v.csModelPaused = csm
+			}
 		}
 		v.activeChild = nil
 		v.currentView = "file"
@@ -506,9 +549,21 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// ARCH-05: the parent Viewer is the only place a mode-flag or
 		// "active child" pointer changes.
 		switch msg.mode {
+		case modeNone:
+			// Close whatever child is active (e.g. cross-search input
+			// cancelled/empty-submitted) with no destination to switch to.
+			v.activeChild = nil
 		case modeDirectory:
-			dm, err := NewDirectoryModel(msg.arg, v.Theme, v.Width, v.Height)
-			if err == nil {
+			// Restore the paused DirectoryModel (stashed by openFileMsg's
+			// originDirectory branch or switchModeMsg's modeCrossSearch
+			// branch below) instead of rescanning, so selection/listing are
+			// preserved — matches pre-refactor behavior of never discarding
+			// directoryState while another mode is on top of it.
+			if v.dirModelPaused != nil {
+				v.activeChild = v.dirModelPaused
+				v.dirModelPaused = nil
+				v.currentView = "directory"
+			} else if dm, err := NewDirectoryModel(msg.arg, v.Theme, v.Width, v.Height); err == nil {
 				v.activeChild = dm
 				v.currentView = "directory"
 			}
@@ -526,18 +581,15 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.activeChild = nil
 			v.graphMode = true
 		case modeCrossSearch:
-			// INTERIM (Pitfall 2): CrossSearchModel isn't migrated until a
-			// later plan; same rationale as modeGraph above.
 			if dm, ok := v.activeChild.(*DirectoryModel); ok {
-				// Stash so cross_search.go's own back-to-directory path
-				// (updateCrossSearchNav's "h"/"esc"/"q") can restore the
-				// exact same listing/selection, matching pre-refactor
-				// behavior of never clearing directoryState on exit.
+				// Stash so CrossSearchModel's own back-to-directory path
+				// (h/esc, resolved via switchModeCmd(modeDirectory, ...)
+				// above) can restore the exact same listing/selection,
+				// matching pre-refactor behavior of never clearing
+				// directoryState on exit.
 				v.dirModelPaused = dm
 			}
-			v.activeChild = nil
-			v.crossSearchMode = true
-			v.crossSearchInput = ""
+			v.activeChild = NewCrossSearchModel(v.startDir, v.Theme, v.Width, v.Height)
 		}
 		return v, nil
 
@@ -605,19 +657,9 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v.updateSearch(msg)
 		}
 
-		// When cross-document search input prompt is open, route all input there.
-		if v.crossSearchMode {
-			return v.updateCrossSearch(msg)
-		}
-
-		// When cross-document search results are active, route navigation there.
-		if v.crossSearchActive {
-			return v.updateCrossSearchNav(msg)
-		}
-
-		// When a child model (currently: DirectoryModel) is active, route
-		// keys to it. Its returned tea.Cmd may resolve to openFileMsg,
-		// switchModeMsg, or toggleHelpMsg — all handled above.
+		// When a child model (currently: DirectoryModel, CrossSearchModel) is
+		// active, route keys to it. Its returned tea.Cmd may resolve to
+		// openFileMsg, switchModeMsg, or toggleHelpMsg — all handled above.
 		if v.activeChild != nil {
 			updated, cmd := v.activeChild.Update(msg)
 			v.activeChild = updated.(tea.Model)
@@ -900,11 +942,7 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// "/" = cross-document search across all markdown files in the directory (DIR-03).
 		case "/":
 			// Open cross-document search input prompt.
-			v.crossSearchMode = true
-			v.crossSearchInput = ""
-			v.crossSearchActive = false
-			v.crossSearchResults = nil
-			v.crossSearchSelected = -1
+			return v, switchModeCmd(modeCrossSearch, "")
 
 		// n / N: jump to next/previous match when a search is active.
 		case "n":
@@ -1786,15 +1824,23 @@ func (v Viewer) View() string {
 		return v.renderHeader() + "\n" + v.viewWithBrowser(contentHeight)
 	}
 
-	if v.crossSearchActive && !v.crossSearchMode {
-		return v.renderCrossSearchResults(contentHeight)
-	}
-
 	if v.graphMode {
 		return v.renderGraphView(contentHeight)
 	}
 
-	if v.activeChild != nil {
+	if csm, ok := v.activeChild.(*CrossSearchModel); ok {
+		if csm.stage == csStageResults {
+			// Full-screen results view: no generic header/status-bar
+			// wrapper — renderResults() already includes its own footer
+			// hint as the last line, matching pre-refactor output exactly.
+			return v.renderHeader() + "\n" + csm.View()
+		}
+		// Input stage: fall through to the plain content view below. The
+		// document/directory content behind the prompt keeps rendering
+		// unchanged; renderStatusBar() detects the input stage and shows
+		// the query prompt as an overlay, matching pre-refactor behavior
+		// where the input prompt never took over the full screen.
+	} else if v.activeChild != nil {
 		// D-05: the active child (currently: DirectoryModel) owns its own
 		// content rendering; Viewer still wraps it with the shared
 		// header/status-bar chrome, unchanged from pre-refactor byte output.
@@ -2032,8 +2078,8 @@ func (v Viewer) renderStatusBar() string {
 	}
 
 	// Cross-document search input prompt.
-	if v.crossSearchMode {
-		bar := "🔍 Search all files: " + v.crossSearchInput + "_"
+	if csm, ok := v.activeChild.(*CrossSearchModel); ok && csm.stage == csStageInput {
+		bar := "🔍 Search all files: " + csm.input + "_"
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("220")).
 			Bold(true).

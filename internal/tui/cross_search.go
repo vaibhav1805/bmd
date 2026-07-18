@@ -1,5 +1,12 @@
 // Package tui: cross-document search mode — full-text BM25 (or PageIndex)
 // search across every markdown file under the browsed directory.
+//
+// CrossSearchModel is an independent tea.Model (ARCH-02): its state (query
+// input, executed results, selection) lives entirely here, not as flat
+// fields on Viewer. It never calls Viewer.loadFile() directly (ARCH-03) and
+// never sets a sibling mode's flag inline (ARCH-05) — file-open and
+// mode-transition requests are emitted as tea.Cmds resolving to the shared
+// messages defined in messages.go.
 package tui
 
 import (
@@ -9,149 +16,196 @@ import (
 	"strings"
 
 	"github.com/bmd/bmd/internal/knowledge"
+	"github.com/bmd/bmd/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// BackToSearchResults restores the cross-document search results view,
-// returning from a file that was opened by pressing 'l'/Enter on a search result.
-// The cursor position in results is preserved.
-func (v *Viewer) BackToSearchResults() (*Viewer, tea.Cmd) {
-	if !v.openedFromSearch {
-		return v, nil
-	}
-	v.openedFromSearch = false
-	v.crossSearchActive = true
-	v.crossSearchMode = false
-	v.currentView = "search"
-	// Reset file view state.
-	v.Offset = 0
-	v.searchState = NewSearchState()
-	v.searchMode = false
-	v.searchInput = ""
-	return v, nil
+// crossSearchStage discriminates CrossSearchModel's two-stage internal
+// state: typing a query (input) vs. browsing executed results (results).
+// Replaces the old crossSearchMode/crossSearchActive bool pair on Viewer.
+type crossSearchStage int
+
+const (
+	csStageInput crossSearchStage = iota
+	csStageResults
+)
+
+// CrossSearchModel is the independent tea.Model for cross-document search
+// mode (ARCH-02). It owns the query input, executed results, and selection
+// state that used to live as flat crossSearch* fields on Viewer, plus
+// shared-context copies (D-06) — never a pointer back into Viewer.
+type CrossSearchModel struct {
+	stage crossSearchStage
+
+	input    string                   // query being typed before Enter commits it (input stage)
+	query    string                   // last committed/executed query (results stage)
+	results  []knowledge.SearchResult // results from the last executed search
+	selected int                      // index of highlighted result (-1 = none)
+	strategy string                   // strategy used for the last search ("bm25" or "pageindex")
+
+	// rootPath is the directory searched, and the destination for h/esc's
+	// "back to directory" transition (empty when there's no directory to
+	// return to, e.g. bmd launched directly on a single file).
+	rootPath string
+
+	// Shared context copies (D-06).
+	theme  theme.Theme
+	width  int
+	height int
 }
 
-// updateCrossSearch handles keyboard input when the cross-document search
-// input prompt is open. Printable characters build the query; Enter executes
-// the search; Esc cancels.
-func (v *Viewer) updateCrossSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// NewCrossSearchModel constructs a CrossSearchModel ready to accept query
+// input. The search itself does not run until the user presses Enter — no
+// I/O happens at construction time.
+func NewCrossSearchModel(rootPath string, th theme.Theme, width, height int) *CrossSearchModel {
+	return &CrossSearchModel{
+		stage:    csStageInput,
+		selected: -1,
+		rootPath: rootPath,
+		theme:    th,
+		width:    width,
+		height:   height,
+	}
+}
+
+// Init satisfies tea.Model. No I/O happens until the user commits a query
+// (Enter), so there's nothing to do here.
+func (m *CrossSearchModel) Init() tea.Cmd { return nil }
+
+// Update handles keyboard input and window resizes for cross-search mode.
+// Dispatches on the internal stage discriminator: input-stage keys build/
+// commit/cancel the query; results-stage keys navigate/open/exit.
+func (m *CrossSearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		return m, nil
+
+	case tea.KeyMsg:
+		if m.stage == csStageInput {
+			return m.updateInput(msg)
+		}
+		return m.updateResults(msg)
+	}
+	return m, nil
+}
+
+// updateInput handles keyboard input when the cross-document search input
+// prompt is open. Printable characters build the query; Enter executes the
+// search; Esc/Ctrl+F cancels.
+func (m *CrossSearchModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
-		query := strings.TrimSpace(v.crossSearchInput)
-		v.crossSearchMode = false
+		query := strings.TrimSpace(m.input)
 		if query == "" {
-			// Empty query: close prompt without doing anything.
-			v.crossSearchActive = false
-			return v, nil
+			// Empty query: close the prompt without doing anything.
+			return m, switchModeCmd(modeNone, "")
 		}
-		// Execute cross-document search.
-		results, strategy, err := v.SearchAllFiles(query)
+		results, strategy, err := m.SearchAllFiles(query)
 		if err != nil {
-			v.errorMsg = "Search error: " + err.Error()
-			v.crossSearchActive = false
-			return v, clearErrorAfter(statusTimeout)
+			return m, tea.Batch(switchModeCmd(modeNone, ""), statusCmd("Search error: "+err.Error()))
 		}
-		v.crossSearchQuery = query
-		v.crossSearchResults = results
-		v.crossSearchStrategy = strategy
-		v.crossSearchSelected = 0
+		m.query = query
+		m.results = results
+		m.strategy = strategy
+		m.selected = 0
 		if len(results) == 0 {
-			v.crossSearchSelected = -1
+			m.selected = -1
 		}
-		v.crossSearchActive = true
-		return v, nil
+		m.stage = csStageResults
+		return m, nil
 
 	case "esc", "ctrl+f":
 		// Cancel cross-document search.
-		v.crossSearchMode = false
-		v.crossSearchInput = ""
-		v.crossSearchActive = false
-		v.crossSearchResults = nil
-		v.crossSearchSelected = -1
+		return m, switchModeCmd(modeNone, "")
 
 	case "backspace":
-		if len(v.crossSearchInput) > 0 {
-			runes := []rune(v.crossSearchInput)
-			v.crossSearchInput = string(runes[:len(runes)-1])
+		if len(m.input) > 0 {
+			runes := []rune(m.input)
+			m.input = string(runes[:len(runes)-1])
 		}
+		return m, nil
 
 	default:
 		if len(msg.Runes) > 0 {
-			v.crossSearchInput += string(msg.Runes)
+			m.input += string(msg.Runes)
 		}
+		return m, nil
 	}
-	return v, nil
 }
 
-// updateCrossSearchNav handles keyboard navigation when cross-document search
-// results are shown: ↑/↓ to move through results, l/Enter to open, h/Esc to exit.
-func (v *Viewer) updateCrossSearchNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	n := len(v.crossSearchResults)
+// updateResults handles keyboard navigation when cross-document search
+// results are shown: ↑/↓ to move through results, l/Enter to open, h/Esc to
+// exit back to directory (or close if there's no directory to return to).
+func (m *CrossSearchModel) updateResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	n := len(m.results)
 	switch msg.String() {
 	case "up", "k":
-		if n > 0 && v.crossSearchSelected > 0 {
-			v.crossSearchSelected--
+		if n > 0 && m.selected > 0 {
+			m.selected--
 		}
+		return m, nil
+
 	case "down", "j":
-		if n > 0 && v.crossSearchSelected < n-1 {
-			v.crossSearchSelected++
+		if n > 0 && m.selected < n-1 {
+			m.selected++
 		}
+		return m, nil
+
 	case "l", "enter":
-		// Open the selected file, preserving search state for back navigation.
-		if n > 0 && v.crossSearchSelected >= 0 && v.crossSearchSelected < n {
-			path := v.crossSearchResults[v.crossSearchSelected].Path
+		// Open the selected file; the parent Viewer stashes this model so
+		// h/backspace from the opened file can restore it (ARCH-03).
+		if n > 0 && m.selected >= 0 && m.selected < n {
+			path := m.results[m.selected].Path
 			if path != "" {
-				// Keep search results intact so 'h' can return.
-				v.crossSearchActive = false
-				v.crossSearchMode = false
-				v.openedFromSearch = true
-				v.currentView = "file"
-				return v.loadFile(path)
+				return m, openFileCmd(path, originSearch)
 			}
 		}
-	case "h", "esc", "q":
-		// Exit search results view.
-		v.crossSearchActive = false
-		v.crossSearchMode = false
-		v.crossSearchResults = nil
-		v.crossSearchSelected = -1
-		// Return to directory mode if available. Restores the paused
-		// DirectoryModel (stashed when "/" switched away from it) instead of
-		// rescanning, matching pre-refactor behavior of never clearing
-		// directoryState on exit.
-		if v.startDir != "" && msg.String() != "q" {
-			if v.dirModelPaused != nil {
-				v.activeChild = v.dirModelPaused
-				v.dirModelPaused = nil
-			} else if dm, err := NewDirectoryModel(v.startDir, v.Theme, v.Width, v.Height); err == nil {
-				v.activeChild = dm
-			}
-			v.currentView = "directory"
+		return m, nil
+
+	case "h", "esc":
+		// Exit search results view: return to directory if available, else
+		// close entirely.
+		if m.rootPath != "" {
+			return m, switchModeCmd(modeDirectory, m.rootPath)
 		}
-		if msg.String() == "q" {
-			return v, tea.Quit
-		}
+		return m, switchModeCmd(modeNone, "")
+
+	case "q":
+		return m, tea.Quit
+
 	case "/":
-		// Re-open search prompt with the same or new query.
-		v.crossSearchMode = true
-		v.crossSearchInput = v.crossSearchQuery
-		v.crossSearchActive = false
+		// Re-open search prompt with the same query.
+		m.stage = csStageInput
+		m.input = m.query
+		return m, nil
 	}
-	return v, nil
+	return m, nil
 }
 
-// renderCrossSearchResults renders the cross-document search results view.
-// Shows a list of matching files with BM25 scores, with the selected result
-// highlighted. Keyboard hints are shown at the bottom.
-func (v Viewer) renderCrossSearchResults(contentHeight int) string {
+// View renders the cross-document search results view. Returns "" during
+// the input stage: the parent Viewer keeps rendering its own current
+// content (file/directory view) with the query prompt shown as a status-bar
+// overlay, matching pre-refactor behavior where the input prompt never took
+// over the full screen.
+func (m *CrossSearchModel) View() string {
+	if m.stage != csStageResults {
+		return ""
+	}
+	return m.renderResults()
+}
+
+// renderResults renders the cross-document search results view. Shows a
+// list of matching files with BM25 scores, with the selected result
+// highlighted. Keyboard hints are shown at the bottom. The caller (Viewer's
+// View()) is responsible for prepending the shared header chrome.
+func (m *CrossSearchModel) renderResults() string {
+	contentHeight := m.height - 2 // header + status bar reserved by Viewer's wrapper
+
 	var sb strings.Builder
 
-	// Header.
-	sb.WriteString(v.renderHeader())
-	sb.WriteString("\n")
-
-	results := v.crossSearchResults
-	query := v.crossSearchQuery
+	results := m.results
+	query := m.query
 
 	// Title line with strategy indicator.
 	titleFg := "\x1b[1;38;5;226m" // bold yellow
@@ -161,14 +215,14 @@ func (v Viewer) renderCrossSearchResults(contentHeight int) string {
 		countStr += "s"
 	}
 	strategyStr := ""
-	if v.crossSearchStrategy != "" {
-		strategyStr = fmt.Sprintf(" [%s]", v.crossSearchStrategy)
+	if m.strategy != "" {
+		strategyStr = fmt.Sprintf(" [%s]", m.strategy)
 	}
 	title := fmt.Sprintf("%sSearch Results for %q (%s)%s%s", titleFg, query, countStr, strategyStr, reset)
 	sb.WriteString(title + "\n")
 
 	// Box border top.
-	innerWidth := v.Width - 4
+	innerWidth := m.width - 4
 	if innerWidth < 20 {
 		innerWidth = 20
 	}
@@ -189,8 +243,8 @@ func (v Viewer) renderCrossSearchResults(contentHeight int) string {
 
 	// Determine scroll window for results.
 	start := 0
-	if v.crossSearchSelected >= maxResults {
-		start = v.crossSearchSelected - maxResults + 1
+	if m.selected >= maxResults {
+		start = m.selected - maxResults + 1
 	}
 	end := start + maxResults
 	if end > len(results) {
@@ -211,7 +265,7 @@ func (v Viewer) renderCrossSearchResults(contentHeight int) string {
 
 	for i := start; i < end; i++ {
 		r := results[i]
-		selected := (i == v.crossSearchSelected)
+		selected := (i == m.selected)
 
 		// Line 1: "> N. filename [score]" or "  N. filename [score]"
 		name := r.RelPath
@@ -345,7 +399,7 @@ func stripANSIForLen(s string) string {
 }
 
 // SearchAllFiles executes a cross-document search across all markdown files in
-// the viewer's startDir.  The search strategy is determined by the BMD_STRATEGY
+// the model's rootPath.  The search strategy is determined by the BMD_STRATEGY
 // environment variable:
 //
 //   - "pageindex": use PageIndex semantic search (falls back to BM25 if trees
@@ -353,22 +407,22 @@ func stripANSIForLen(s string) string {
 //   - "bm25" or "" (default): use BM25 keyword search.
 //
 // Returns the results, the strategy actually used, and any error.
-func (v *Viewer) SearchAllFiles(query string) ([]knowledge.SearchResult, string, error) {
+func (m *CrossSearchModel) SearchAllFiles(query string) ([]knowledge.SearchResult, string, error) {
 	strategy := os.Getenv("BMD_STRATEGY")
 	if strategy == "" {
 		strategy = "bm25"
 	}
 
 	if strategy == "pageindex" {
-		results, err := knowledge.SearchAllDocumentsPageIndex(v.startDir, query, 50)
+		results, err := knowledge.SearchAllDocumentsPageIndex(m.rootPath, query, 50)
 		if err != nil {
 			// Fall back to BM25 when trees are missing or binary not found.
-			fallbackResults, fallbackErr := knowledge.SearchAllDocuments(v.startDir, query, 50)
+			fallbackResults, fallbackErr := knowledge.SearchAllDocuments(m.rootPath, query, 50)
 			return fallbackResults, "bm25", fallbackErr
 		}
 		return results, "pageindex", nil
 	}
 
-	results, err := knowledge.SearchAllDocuments(v.startDir, query, 50)
+	results, err := knowledge.SearchAllDocuments(m.rootPath, query, 50)
 	return results, strategy, err
 }
