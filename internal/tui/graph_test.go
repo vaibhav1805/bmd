@@ -1,13 +1,14 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/bmd/bmd/internal/ast"
 	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/theme"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // --- helpers -----------------------------------------------------------------
@@ -28,10 +29,48 @@ func makeEdge(src, tgt string) *knowledge.Edge {
 	return e
 }
 
-func newViewerForGraph(width, height int) *Viewer {
-	v := New(&ast.Document{}, "test.md", theme.NewTheme(), width)
-	v.Height = height
-	return v
+// newTestGraphModel builds a *GraphModel with hand-constructed state,
+// bypassing NewGraphModel's SQLite read, for fast Update()/View() unit
+// tests that don't need to exercise the constructor itself (mirrors the
+// pre-refactor buildViewerWithGraph helper's approach of constructing
+// GraphViewState directly rather than going through LoadGraph).
+func newTestGraphModel(width, height int, nodes []knowledge.Node, edges []knowledge.Edge) *GraphModel {
+	g := newTestGraph(nodes, edges)
+	order := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		order = append(order, n.ID)
+	}
+	m := &GraphModel{
+		theme:  theme.NewTheme(),
+		width:  width,
+		height: height,
+	}
+	m.state = GraphViewState{
+		Graph:      g,
+		NodeOrder:  order,
+		NodeLayout: computeNodeLayout(g),
+		RootPath:   "/tmp/docs",
+		Loaded:     true,
+	}
+	if len(order) > 0 {
+		m.state.SelectedNodeID = order[0]
+	}
+	return m
+}
+
+// buildTestKnowledgeDB creates a knowledge.db at dir/knowledge.db containing
+// g, for exercising NewGraphModel's real synchronous SQLite-read constructor
+// path (Pitfall 3) without requiring `bmd index`.
+func buildTestKnowledgeDB(t *testing.T, dir string, g *knowledge.Graph) {
+	t.Helper()
+	db, err := knowledge.OpenDB(filepath.Join(dir, "knowledge.db"))
+	if err != nil {
+		t.Fatalf("OpenDB: %v", err)
+	}
+	defer db.Close()
+	if err := db.SaveGraph(g); err != nil {
+		t.Fatalf("SaveGraph: %v", err)
+	}
 }
 
 // --- Task 2: computeNodeLayout tests -----------------------------------------
@@ -311,210 +350,14 @@ func TestGraphIndexOfNode_Empty(t *testing.T) {
 	}
 }
 
-// --- Task 3: updateGraph navigation tests ------------------------------------
+// --- NewGraphModel — synchronous construction (Pitfall 3, ARCH-04) ----------
 
-func buildViewerWithGraph(nodes []knowledge.Node, edges []knowledge.Edge) *Viewer {
-	v := newViewerForGraph(120, 40)
-	g := newTestGraph(nodes, edges)
-	v.graphState = GraphViewState{
-		Graph:          g,
-		NodeOrder:      []string{"a.md", "b.md", "c.md"},
-		SelectedNodeID: "a.md",
-		NodeLayout:     computeNodeLayout(g),
-		RootPath:       "/tmp/docs",
-		Loaded:         true,
-	}
-	v.graphMode = true
-	return v
-}
-
-// TestUpdateGraph_EscClosesGraph exits graph mode on Esc.
-func TestUpdateGraph_EscClosesGraph(t *testing.T) {
-	v := buildViewerWithGraph(
-		[]knowledge.Node{
-			{ID: "a.md", Title: "A", Type: "document"},
-			{ID: "b.md", Title: "B", Type: "document"},
-			{ID: "c.md", Title: "C", Type: "document"},
-		},
-		nil,
-	)
-	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyEsc})
-	viewer := result.(*Viewer)
-	if viewer.graphMode {
-		t.Error("expected graphMode=false after Esc")
-	}
-}
-
-// TestUpdateGraph_HClosesGraph exits graph mode on 'h'.
-func TestUpdateGraph_HClosesGraph(t *testing.T) {
-	v := buildViewerWithGraph(
-		[]knowledge.Node{
-			{ID: "a.md", Title: "A", Type: "document"},
-			{ID: "b.md", Title: "B", Type: "document"},
-			{ID: "c.md", Title: "C", Type: "document"},
-		},
-		nil,
-	)
-	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
-	viewer := result.(*Viewer)
-	if viewer.graphMode {
-		t.Error("expected graphMode=false after 'h'")
-	}
-}
-
-// TestUpdateGraph_DownNavigates moves selection down in NodeOrder.
-func TestUpdateGraph_DownNavigates(t *testing.T) {
-	v := buildViewerWithGraph(
-		[]knowledge.Node{
-			{ID: "a.md", Title: "A", Type: "document"},
-			{ID: "b.md", Title: "B", Type: "document"},
-			{ID: "c.md", Title: "C", Type: "document"},
-		},
-		nil,
-	)
-	v.graphState.SelectedNodeID = "a.md"
-	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyDown})
-	viewer := result.(*Viewer)
-	if viewer.graphState.SelectedNodeID != "b.md" {
-		t.Errorf("expected b.md selected after Down, got %q", viewer.graphState.SelectedNodeID)
-	}
-}
-
-// TestUpdateGraph_UpNavigates moves selection up in NodeOrder.
-func TestUpdateGraph_UpNavigates(t *testing.T) {
-	v := buildViewerWithGraph(
-		[]knowledge.Node{
-			{ID: "a.md", Title: "A", Type: "document"},
-			{ID: "b.md", Title: "B", Type: "document"},
-			{ID: "c.md", Title: "C", Type: "document"},
-		},
-		nil,
-	)
-	v.graphState.SelectedNodeID = "b.md"
-	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyUp})
-	viewer := result.(*Viewer)
-	if viewer.graphState.SelectedNodeID != "a.md" {
-		t.Errorf("expected a.md selected after Up, got %q", viewer.graphState.SelectedNodeID)
-	}
-}
-
-// TestUpdateGraph_DownWraps wraps to first node when at last node.
-func TestUpdateGraph_DownWraps(t *testing.T) {
-	v := buildViewerWithGraph(
-		[]knowledge.Node{
-			{ID: "a.md", Title: "A", Type: "document"},
-			{ID: "b.md", Title: "B", Type: "document"},
-			{ID: "c.md", Title: "C", Type: "document"},
-		},
-		nil,
-	)
-	v.graphState.SelectedNodeID = "c.md" // last
-	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyDown})
-	viewer := result.(*Viewer)
-	if viewer.graphState.SelectedNodeID != "a.md" {
-		t.Errorf("expected wrap to a.md, got %q", viewer.graphState.SelectedNodeID)
-	}
-}
-
-// TestUpdateGraph_UpWraps wraps to last node when at first node.
-func TestUpdateGraph_UpWraps(t *testing.T) {
-	v := buildViewerWithGraph(
-		[]knowledge.Node{
-			{ID: "a.md", Title: "A", Type: "document"},
-			{ID: "b.md", Title: "B", Type: "document"},
-			{ID: "c.md", Title: "C", Type: "document"},
-		},
-		nil,
-	)
-	v.graphState.SelectedNodeID = "a.md" // first
-	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyUp})
-	viewer := result.(*Viewer)
-	if viewer.graphState.SelectedNodeID != "c.md" {
-		t.Errorf("expected wrap to c.md, got %q", viewer.graphState.SelectedNodeID)
-	}
-}
-
-// TestUpdateGraph_RightNavigatesChild navigates to child via right arrow.
-func TestUpdateGraph_RightNavigatesChild(t *testing.T) {
-	v := newViewerForGraph(120, 40)
-	g := knowledge.NewGraph()
-	_ = g.AddNode(&knowledge.Node{ID: "a.md", Title: "A", Type: "document"})
-	_ = g.AddNode(&knowledge.Node{ID: "b.md", Title: "B", Type: "document"})
-	_ = g.AddEdge(makeEdge("a.md", "b.md"))
-
-	v.graphState = GraphViewState{
-		Graph:          g,
-		NodeOrder:      []string{"a.md", "b.md"},
-		SelectedNodeID: "a.md",
-		NodeLayout:     computeNodeLayout(g),
-		RootPath:       "/tmp",
-		Loaded:         true,
-	}
-	v.graphMode = true
-
-	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyRight})
-	viewer := result.(*Viewer)
-	if viewer.graphState.SelectedNodeID != "b.md" {
-		t.Errorf("expected b.md selected after Right, got %q", viewer.graphState.SelectedNodeID)
-	}
-}
-
-// TestUpdateGraph_LeftNavigatesParent navigates to parent via left arrow.
-func TestUpdateGraph_LeftNavigatesParent(t *testing.T) {
-	v := newViewerForGraph(120, 40)
-	g := knowledge.NewGraph()
-	_ = g.AddNode(&knowledge.Node{ID: "a.md", Title: "A", Type: "document"})
-	_ = g.AddNode(&knowledge.Node{ID: "b.md", Title: "B", Type: "document"})
-	_ = g.AddEdge(makeEdge("a.md", "b.md"))
-
-	v.graphState = GraphViewState{
-		Graph:          g,
-		NodeOrder:      []string{"a.md", "b.md"},
-		SelectedNodeID: "b.md",
-		NodeLayout:     computeNodeLayout(g),
-		RootPath:       "/tmp",
-		Loaded:         true,
-	}
-	v.graphMode = true
-
-	result, _ := v.updateGraph(tea.KeyMsg{Type: tea.KeyLeft})
-	viewer := result.(*Viewer)
-	if viewer.graphState.SelectedNodeID != "a.md" {
-		t.Errorf("expected a.md selected after Left, got %q", viewer.graphState.SelectedNodeID)
-	}
-}
-
-// --- Task 4: renderGraphView tests -------------------------------------------
-
-// TestRenderGraphView_ShowsHeader renders the graph view header.
-func TestRenderGraphView_ShowsHeader(t *testing.T) {
-	v := newViewerForGraph(120, 40)
-	v.graphMode = true
-	v.graphState = GraphViewState{
-		Graph:   knowledge.NewGraph(),
-		Loaded:  true,
-		RootPath: "/tmp",
-	}
-	out := v.renderGraphView(38)
-	if !strings.Contains(out, "Graph View") {
-		t.Errorf("expected 'Graph View' header in output, got: %q", out)
-	}
-}
-
-// TestRenderGraphView_NoGraphShownWhenNotLoaded handles unloaded state.
-func TestRenderGraphView_NoGraphShownWhenNotLoaded(t *testing.T) {
-	v := newViewerForGraph(120, 40)
-	v.graphMode = true
-	v.graphState = GraphViewState{Loaded: false}
-	out := v.renderGraphView(38)
-	if !strings.Contains(out, "No graph") && !strings.Contains(out, "Graph View") {
-		t.Errorf("expected not-loaded message, got: %q", out)
-	}
-}
-
-// TestRenderGraphView_ShowsNodeCount renders node and edge counts.
-func TestRenderGraphView_ShowsNodeCount(t *testing.T) {
-	v := newViewerForGraph(120, 40)
+// TestNewGraphModel_LoadsSynchronously verifies the graph, NodeOrder, and a
+// default selection are all populated by the time NewGraphModel returns —
+// not deferred into Init() — so the very first View() render already shows
+// the loaded graph with no empty-graph flash frame.
+func TestNewGraphModel_LoadsSynchronously(t *testing.T) {
+	dir := t.TempDir()
 	g := newTestGraph(
 		[]knowledge.Node{
 			{ID: "a.md", Title: "A", Type: "document"},
@@ -522,41 +365,334 @@ func TestRenderGraphView_ShowsNodeCount(t *testing.T) {
 		},
 		[]knowledge.Edge{*makeEdge("a.md", "b.md")},
 	)
-	v.graphState = GraphViewState{
-		Graph:          g,
-		NodeOrder:      []string{"a.md", "b.md"},
-		SelectedNodeID: "a.md",
-		NodeLayout:     computeNodeLayout(g),
-		RootPath:       "/tmp",
-		Loaded:         true,
+	buildTestKnowledgeDB(t, dir, g)
+
+	m, err := NewGraphModel(dir, theme.NewTheme(), 120, 40)
+	if err != nil {
+		t.Fatalf("NewGraphModel: %v", err)
 	}
-	v.graphMode = true
-	out := v.renderGraphView(38)
-	// Should contain the graph canvas without crashing
-	if out == "" {
-		t.Error("expected non-empty renderGraphView output")
+	if !m.state.Loaded || m.state.Graph == nil {
+		t.Fatal("expected graph to be loaded synchronously by the constructor")
+	}
+	if len(m.state.NodeOrder) != 2 {
+		t.Errorf("expected 2 nodes in NodeOrder, got %d", len(m.state.NodeOrder))
+	}
+	if m.state.SelectedNodeID == "" {
+		t.Error("expected a default selected node after construction")
+	}
+	if cmd := m.Init(); cmd != nil {
+		t.Error("expected Init() to return nil — nothing left to do after a synchronous construction")
+	}
+	out := m.View()
+	if strings.Contains(out, "No graph loaded") {
+		t.Error("expected no empty-graph flash frame on the first render")
 	}
 }
 
-// TestRenderGraphView_FooterShowsSelectedNode shows selected node in footer.
-func TestRenderGraphView_FooterShowsSelectedNode(t *testing.T) {
-	v := newViewerForGraph(120, 40)
-	g := newTestGraph(
-		[]knowledge.Node{{ID: "readme.md", Title: "README", Type: "document"}},
-		nil,
-	)
-	v.graphState = GraphViewState{
-		Graph:          g,
-		NodeOrder:      []string{"readme.md"},
-		SelectedNodeID: "readme.md",
-		NodeLayout:     computeNodeLayout(g),
-		RootPath:       "/tmp",
-		Loaded:         true,
+// TestNewGraphModel_ErrorWhenRootPathInvalid returns a non-nil error (and nil
+// model) when the knowledge.db path cannot be opened, so the caller
+// (Viewer.Update's switchModeMsg{modeGraph} handler) can surface it without
+// switching modes.
+func TestNewGraphModel_ErrorWhenRootPathInvalid(t *testing.T) {
+	dir := t.TempDir()
+	// A regular file in place of what should be a directory makes
+	// knowledge.OpenDB's os.MkdirAll(filepath.Dir(dbPath)) fail.
+	notADir := filepath.Join(dir, "notadir")
+	if err := os.WriteFile(notADir, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
 	}
-	v.graphMode = true
-	out := v.renderGraphView(38)
+
+	m, err := NewGraphModel(notADir, theme.NewTheme(), 120, 40)
+	if err == nil {
+		t.Fatal("expected an error when the knowledge.db path is invalid")
+	}
+	if m != nil {
+		t.Error("expected a nil model on error")
+	}
+}
+
+// --- GraphModel.Update() — mode-transition handoff (ARCH-03, ARCH-05) -------
+
+func TestGraphModelUpdate_EscAndHEmitSwitchModeDirectory(t *testing.T) {
+	for _, key := range []tea.KeyMsg{
+		{Type: tea.KeyEsc},
+		{Type: tea.KeyRunes, Runes: []rune("h")},
+	} {
+		m := newTestGraphModel(120, 40, []knowledge.Node{
+			{ID: "a.md", Title: "A", Type: "document"},
+			{ID: "b.md", Title: "B", Type: "document"},
+			{ID: "c.md", Title: "C", Type: "document"},
+		}, nil)
+
+		_, cmd := m.Update(key)
+		msg := resolveCmd(t, cmd)
+		smm, ok := msg.(switchModeMsg)
+		if !ok {
+			t.Fatalf("key %v: expected switchModeMsg, got %T", key, msg)
+		}
+		if smm.mode != modeDirectory {
+			t.Errorf("key %v: expected mode=modeDirectory, got %v", key, smm.mode)
+		}
+		if smm.arg != m.state.RootPath {
+			t.Errorf("key %v: expected arg=%q (RootPath), got %q", key, m.state.RootPath, smm.arg)
+		}
+	}
+}
+
+func TestGraphModelUpdate_QuestionEmitsToggleHelp(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{{ID: "a.md", Title: "A", Type: "document"}}, nil)
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	msg := resolveCmd(t, cmd)
+	if _, ok := msg.(toggleHelpMsg); !ok {
+		t.Fatalf("expected toggleHelpMsg, got %T", msg)
+	}
+}
+
+func TestGraphModelUpdate_QuitsOnQAndCtrlC(t *testing.T) {
+	for _, key := range []tea.KeyMsg{
+		{Type: tea.KeyRunes, Runes: []rune("q")},
+		{Type: tea.KeyCtrlC},
+	} {
+		m := newTestGraphModel(120, 40, []knowledge.Node{{ID: "a.md", Title: "A", Type: "document"}}, nil)
+		_, cmd := m.Update(key)
+		if cmd == nil {
+			t.Fatalf("key %v: expected tea.Quit cmd", key)
+		}
+	}
+}
+
+func TestGraphModelUpdate_EnterAndLEmitOpenFileMsg(t *testing.T) {
+	for _, key := range []tea.KeyMsg{
+		{Type: tea.KeyEnter},
+		{Type: tea.KeyRunes, Runes: []rune("l")},
+	} {
+		m := newTestGraphModel(120, 40, []knowledge.Node{
+			{ID: "docs/readme.md", Title: "README", Type: "document"},
+		}, nil)
+		m.state.RootPath = "/tmp/docs"
+		m.state.SelectedNodeID = "docs/readme.md"
+
+		_, cmd := m.Update(key)
+		msg := resolveCmd(t, cmd)
+		ofm, ok := msg.(openFileMsg)
+		if !ok {
+			t.Fatalf("key %v: expected openFileMsg, got %T", key, msg)
+		}
+		wantPath := filepath.Join("/tmp/docs", "docs/readme.md")
+		if ofm.path != wantPath {
+			t.Errorf("key %v: expected path %q, got %q", key, wantPath, ofm.path)
+		}
+		if ofm.origin != originGraph {
+			t.Errorf("key %v: expected origin originGraph, got %v", key, ofm.origin)
+		}
+	}
+}
+
+func TestGraphModelUpdate_EnterDoesNothingWithNoSelection(t *testing.T) {
+	m := newTestGraphModel(120, 40, nil, nil)
+	m.state.Graph = knowledge.NewGraph()
+	m.state.SelectedNodeID = ""
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Error("expected nil cmd when nothing is selected")
+	}
+}
+
+// --- GraphModel.Update() — navigation (REL-01: NodeOrder wraparound) --------
+//
+// Phase 31 fixed Up/Down NodeOrder wraparound; these tests, retargeted from
+// the pre-refactor Viewer.updateGraph tests, guard against regressing it.
+
+func TestGraphModelUpdate_DownNavigates(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"},
+		{ID: "c.md", Title: "C", Type: "document"},
+	}, nil)
+	m.state.SelectedNodeID = "a.md"
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = model.(*GraphModel)
+	if m.state.SelectedNodeID != "b.md" {
+		t.Errorf("expected b.md selected after Down, got %q", m.state.SelectedNodeID)
+	}
+}
+
+func TestGraphModelUpdate_UpNavigates(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"},
+		{ID: "c.md", Title: "C", Type: "document"},
+	}, nil)
+	m.state.SelectedNodeID = "b.md"
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = model.(*GraphModel)
+	if m.state.SelectedNodeID != "a.md" {
+		t.Errorf("expected a.md selected after Up, got %q", m.state.SelectedNodeID)
+	}
+}
+
+func TestGraphModelUpdate_DownWraps(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"},
+		{ID: "c.md", Title: "C", Type: "document"},
+	}, nil)
+	m.state.SelectedNodeID = "c.md" // last
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = model.(*GraphModel)
+	if m.state.SelectedNodeID != "a.md" {
+		t.Errorf("expected wrap to a.md, got %q", m.state.SelectedNodeID)
+	}
+}
+
+func TestGraphModelUpdate_UpWraps(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"},
+		{ID: "c.md", Title: "C", Type: "document"},
+	}, nil)
+	m.state.SelectedNodeID = "a.md" // first
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = model.(*GraphModel)
+	if m.state.SelectedNodeID != "c.md" {
+		t.Errorf("expected wrap to c.md, got %q", m.state.SelectedNodeID)
+	}
+}
+
+func TestGraphModelUpdate_RightNavigatesChild(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"},
+	}, []knowledge.Edge{*makeEdge("a.md", "b.md")})
+	m.state.SelectedNodeID = "a.md"
+
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = model.(*GraphModel)
+	if m.state.SelectedNodeID != "b.md" {
+		t.Errorf("expected b.md selected after Right, got %q", m.state.SelectedNodeID)
+	}
+}
+
+func TestGraphModelUpdate_LeftNavigatesParent(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"},
+	}, []knowledge.Edge{*makeEdge("a.md", "b.md")})
+	m.state.SelectedNodeID = "b.md"
+
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = model.(*GraphModel)
+	if m.state.SelectedNodeID != "a.md" {
+		t.Errorf("expected a.md selected after Left, got %q", m.state.SelectedNodeID)
+	}
+}
+
+// --- GraphModel.Update() — zoom/pan ------------------------------------------
+
+func TestGraphModelUpdate_ZoomInClampedAt3(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{{ID: "a.md", Title: "A", Type: "document"}}, nil)
+	for i := 0; i < 10; i++ {
+		model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
+		m = model.(*GraphModel)
+	}
+	if m.state.ZoomLevel != 3 {
+		t.Errorf("expected zoom clamped at 3, got %d", m.state.ZoomLevel)
+	}
+}
+
+func TestGraphModelUpdate_ZoomOutClampedAtNeg2(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{{ID: "a.md", Title: "A", Type: "document"}}, nil)
+	for i := 0; i < 10; i++ {
+		model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("-")})
+		m = model.(*GraphModel)
+	}
+	if m.state.ZoomLevel != -2 {
+		t.Errorf("expected zoom clamped at -2, got %d", m.state.ZoomLevel)
+	}
+}
+
+func TestGraphModelUpdate_ZeroResetsZoomAndPan(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{{ID: "a.md", Title: "A", Type: "document"}}, nil)
+	m.state.ZoomLevel = 2
+	m.state.PanOffsetX = 5
+	m.state.PanOffsetY = -3
+
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("0")})
+	m = model.(*GraphModel)
+	if m.state.ZoomLevel != 0 || m.state.PanOffsetX != 0 || m.state.PanOffsetY != 0 {
+		t.Errorf("expected zoom/pan reset, got zoom=%d panX=%d panY=%d",
+			m.state.ZoomLevel, m.state.PanOffsetX, m.state.PanOffsetY)
+	}
+}
+
+// --- GraphModel.View() tests --------------------------------------------------
+
+// TestGraphModelView_ShowsHeader renders the graph view header.
+func TestGraphModelView_ShowsHeader(t *testing.T) {
+	m := newTestGraphModel(120, 40, nil, nil)
+	m.state.Graph = knowledge.NewGraph()
+	m.state.Loaded = true
+	out := m.View()
+	if !strings.Contains(out, "Graph View") {
+		t.Errorf("expected 'Graph View' header in output, got: %q", out)
+	}
+}
+
+// TestGraphModelView_NoGraphShownWhenNotLoaded handles unloaded state.
+func TestGraphModelView_NoGraphShownWhenNotLoaded(t *testing.T) {
+	m := &GraphModel{theme: theme.NewTheme(), width: 120, height: 40}
+	m.state = GraphViewState{Loaded: false}
+	out := m.View()
+	if !strings.Contains(out, "No graph") && !strings.Contains(out, "Graph View") {
+		t.Errorf("expected not-loaded message, got: %q", out)
+	}
+}
+
+// TestGraphModelView_ShowsNodeCount renders the graph canvas without crashing.
+func TestGraphModelView_ShowsNodeCount(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"},
+	}, []knowledge.Edge{*makeEdge("a.md", "b.md")})
+	out := m.View()
+	if out == "" {
+		t.Error("expected non-empty GraphModel.View() output")
+	}
+}
+
+// TestGraphModelView_FooterShowsSelectedNode shows selected node in footer.
+func TestGraphModelView_FooterShowsSelectedNode(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{{ID: "readme.md", Title: "README", Type: "document"}}, nil)
+	out := m.View()
 	if !strings.Contains(out, "README") {
 		t.Errorf("expected selected node name in footer, got: %q", out)
+	}
+}
+
+// TestGraphModelView_LockedBaselineLiterals locks the UI-SPEC.md
+// Copywriting Contract literals for graph view (header/empty-state/footer)
+// byte-for-byte against the pre-refactor renderGraphView output.
+func TestGraphModelView_LockedBaselineLiterals(t *testing.T) {
+	notLoaded := &GraphModel{theme: theme.NewTheme(), width: 120, height: 40}
+	notLoaded.state = GraphViewState{Loaded: false}
+	out := notLoaded.View()
+	if !strings.Contains(out, " Graph View: Document Dependencies") {
+		t.Errorf("expected locked header literal, got: %q", out)
+	}
+	if !strings.Contains(out, " No graph loaded. Press 'h' to return.") {
+		t.Errorf("expected locked empty-state literal, got: %q", out)
+	}
+
+	selected := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "readme.md", Title: "README", Type: "document"},
+	}, nil)
+	out = selected.View()
+	if !strings.Contains(out, " Selected: README") {
+		t.Errorf("expected locked selected-footer literal, got: %q", out)
+	}
+	if !strings.Contains(out, "[+/-]Zoom [h]Back [q]Quit") {
+		t.Errorf("expected locked footer key hints, got: %q", out)
 	}
 }
 
@@ -670,7 +806,7 @@ func TestForceDirectedLayout_TwoConnectedNodes(t *testing.T) {
 func TestForceDirectedLayout_AllPositionsInBounds(t *testing.T) {
 	g := knowledge.NewGraph()
 	for i := 0; i < 20; i++ {
-		id := string(rune('a' + i%26)) + ".md"
+		id := string(rune('a'+i%26)) + ".md"
 		_ = g.AddNode(&knowledge.Node{ID: id, Title: id})
 	}
 
@@ -701,7 +837,7 @@ func TestForceDirectedLayout_Deterministic(t *testing.T) {
 	g2 := knowledge.NewGraph()
 
 	for i := 0; i < 10; i++ {
-		id := string(rune('a' + i)) + ".md"
+		id := string(rune('a'+i)) + ".md"
 		_ = g1.AddNode(&knowledge.Node{ID: id, Title: id})
 		_ = g2.AddNode(&knowledge.Node{ID: id, Title: id})
 	}

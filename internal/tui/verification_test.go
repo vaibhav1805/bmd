@@ -600,15 +600,16 @@ func TestGraphView_GKeyFromDirectory(t *testing.T) {
 	})
 	v := newDirViewer(t, dir)
 
-	// 'g' should attempt to open graph. It will fail if no knowledge.db exists,
-	// which is expected in test env. What matters is the mode transition attempt.
+	// 'g' emits switchModeCmd(modeGraph, ...); NewGraphModel opens (or
+	// creates, per knowledge.OpenDB) knowledge.db under dir — no error is
+	// expected here even though `bmd index` was never run. What matters is
+	// the mode-transition handoff: activeChild becomes a *GraphModel and the
+	// paused DirectoryModel is no longer active. No panic either way.
 	v = pressKeys(v, "g")
 
-	// If graph loaded, graphMode should be true. If it failed, directoryMode should still be true.
-	// Either way, no panic.
-	if v.graphMode {
+	if gm, ok := v.activeChild.(*GraphModel); ok {
 		if dirModel(v) != nil {
-			t.Error("Expected directoryMode=false when graphMode=true")
+			t.Errorf("expected activeChild to be *GraphModel (got %T) with no DirectoryModel active", gm)
 		}
 	}
 }
@@ -639,48 +640,45 @@ func TestGraphView_CircularDeps(t *testing.T) {
 	}
 }
 
-// TestGraphView_NodeSelectionNavigation tests up/down/left/right in graph.
+// TestGraphView_NodeSelectionNavigation tests up/down/left/right in graph,
+// now routed through Viewer.activeChild's generic tea.Model dispatch
+// (ARCH-04: GraphModel owns navigation state, reached via activeChild).
 func TestGraphView_NodeSelectionNavigation(t *testing.T) {
 	v := New(&ast.Document{}, "test.md", theme.NewTheme(), 120)
 	v.Height = 40
 
-	g := knowledge.NewGraph()
-	_ = g.AddNode(&knowledge.Node{ID: "a.md", Title: "A", Type: "document"})
-	_ = g.AddNode(&knowledge.Node{ID: "b.md", Title: "B", Type: "document"})
-	e, _ := knowledge.NewEdge("a.md", "b.md", knowledge.EdgeReferences, 1.0, "")
-	_ = g.AddEdge(e)
-
-	v.graphMode = true
-	v.graphState = GraphViewState{
-		Graph:          g,
-		NodeOrder:      []string{"a.md", "b.md"},
-		SelectedNodeID: "a.md",
-		NodeLayout:     computeNodeLayout(g),
-		RootPath:       "/tmp",
-		Loaded:         true,
-	}
+	gm := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"},
+	}, []knowledge.Edge{*makeEdge("a.md", "b.md")})
+	gm.state.RootPath = "/tmp"
+	gm.state.SelectedNodeID = "a.md"
+	v.activeChild = gm
 
 	// Down: a -> b
-	model, _ := v.updateGraph(sendKey("down"))
-	result := model.(*Viewer)
-	if result.graphState.SelectedNodeID != "b.md" {
-		t.Errorf("Expected b.md after down, got %q", result.graphState.SelectedNodeID)
+	v = pressKeys(v, "down")
+	result, ok := v.activeChild.(*GraphModel)
+	if !ok {
+		t.Fatalf("expected activeChild to be *GraphModel, got %T", v.activeChild)
+	}
+	if result.state.SelectedNodeID != "b.md" {
+		t.Errorf("Expected b.md after down, got %q", result.state.SelectedNodeID)
 	}
 
 	// Right: a -> b (via edge)
-	v.graphState.SelectedNodeID = "a.md"
-	model, _ = v.updateGraph(sendKey("right"))
-	result = model.(*Viewer)
-	if result.graphState.SelectedNodeID != "b.md" {
-		t.Errorf("Expected b.md after right, got %q", result.graphState.SelectedNodeID)
+	result.state.SelectedNodeID = "a.md"
+	v = pressKeys(v, "right")
+	result = v.activeChild.(*GraphModel)
+	if result.state.SelectedNodeID != "b.md" {
+		t.Errorf("Expected b.md after right, got %q", result.state.SelectedNodeID)
 	}
 
 	// Left: b -> a (via incoming edge)
-	v.graphState.SelectedNodeID = "b.md"
-	model, _ = v.updateGraph(sendKey("left"))
-	result = model.(*Viewer)
-	if result.graphState.SelectedNodeID != "a.md" {
-		t.Errorf("Expected a.md after left, got %q", result.graphState.SelectedNodeID)
+	result.state.SelectedNodeID = "b.md"
+	v = pressKeys(v, "left")
+	result = v.activeChild.(*GraphModel)
+	if result.state.SelectedNodeID != "a.md" {
+		t.Errorf("Expected a.md after left, got %q", result.state.SelectedNodeID)
 	}
 }
 
