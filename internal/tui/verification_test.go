@@ -423,8 +423,8 @@ func TestCrossSearch_SlashFromDirectory(t *testing.T) {
 	v := newDirViewer(t, dir)
 
 	v = pressKeys(v, "/")
-	if !v.crossSearchMode {
-		t.Error("Expected crossSearchMode=true after '/'")
+	if csModel(v) == nil {
+		t.Error("Expected CrossSearchModel active after '/'")
 	}
 	if dirModel(v) != nil {
 		t.Error("Expected directoryMode=false after search activated")
@@ -444,8 +444,8 @@ func TestCrossSearch_CtrlFFromDirectory(t *testing.T) {
 	result := model.(*Viewer)
 	result = settleCmd(result, cmd)
 
-	if !result.crossSearchMode {
-		t.Error("Expected crossSearchMode=true after Ctrl+F from directory")
+	if csModel(result) == nil {
+		t.Error("Expected CrossSearchModel active after Ctrl+F from directory")
 	}
 }
 
@@ -458,18 +458,18 @@ func TestCrossSearch_ExecuteAndShowResults(t *testing.T) {
 	v := newDirViewer(t, dir)
 
 	// Enter search mode, type query, press enter
-	v.crossSearchMode = true
-	v.crossSearchInput = "authentication"
-	v.activeChild = nil
+	v.activeChild = newTestCrossSearchModel(dir, v.Width, v.Height)
+	csModel(v).input = "authentication"
 
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
 	model, _ := v.Update(enter)
 	v = model.(*Viewer)
 
-	if !v.crossSearchActive {
-		t.Error("Expected crossSearchActive=true after search")
+	m := csModel(v)
+	if m == nil || m.stage != csStageResults {
+		t.Error("Expected results stage after search")
 	}
-	if len(v.crossSearchResults) == 0 {
+	if m == nil || len(m.results) == 0 {
 		t.Error("Expected search results for 'authentication'")
 	}
 }
@@ -486,18 +486,19 @@ func TestCrossSearch_OpenResultWithEnter(t *testing.T) {
 
 	// Simulate active search results with a real path
 	absPath := filepath.Join(dir, "target.md")
-	v.crossSearchActive = true
-	v.crossSearchMode = false
-	v.crossSearchResults = []knowledge.SearchResult{
+	m := newTestCrossSearchModel(dir, v.Width, v.Height)
+	m.stage = csStageResults
+	m.results = []knowledge.SearchResult{
 		{RelPath: "target.md", Score: 5.0, Path: absPath},
 	}
-	v.crossSearchSelected = 0
+	m.selected = 0
+	v.activeChild = m
 
 	// Press Enter to open
 	v = pressKeys(v, "enter")
 
-	if v.crossSearchActive {
-		t.Error("Expected crossSearchActive=false after opening result")
+	if csModel(v) != nil {
+		t.Error("Expected CrossSearchModel no longer active after opening result")
 	}
 }
 
@@ -546,41 +547,40 @@ func TestSearchNav_NKeyFromResults(t *testing.T) {
 	dir := t.TempDir()
 	v := New(&ast.Document{}, filepath.Join(dir, "test.md"), theme.NewTheme(), 80)
 	v.Height = 24
-	v.crossSearchActive = true
-	v.crossSearchMode = false
-	v.crossSearchSelected = 0
-	v.crossSearchResults = []knowledge.SearchResult{
+	m := newTestCrossSearchModel(dir, v.Width, v.Height)
+	m.stage = csStageResults
+	m.selected = 0
+	m.results = []knowledge.SearchResult{
 		{RelPath: "a.md", Score: 5.0},
 		{RelPath: "b.md", Score: 4.0},
 		{RelPath: "c.md", Score: 3.0},
 	}
+	v.activeChild = m
 
 	// 'n' should not navigate in search results (n is for in-doc search)
 	// But 'j'/down should work
 	v = pressKeys(v, "j")
-	if v.crossSearchSelected != 1 {
-		t.Errorf("Expected selected=1 after j, got %d", v.crossSearchSelected)
+	if csModel(v).selected != 1 {
+		t.Errorf("Expected selected=1 after j, got %d", csModel(v).selected)
 	}
 	v = pressKeys(v, "j")
-	if v.crossSearchSelected != 2 {
-		t.Errorf("Expected selected=2 after j, got %d", v.crossSearchSelected)
+	if csModel(v).selected != 2 {
+		t.Errorf("Expected selected=2 after j, got %d", csModel(v).selected)
 	}
 }
 
 // TestSearchNav_RenderShowsSnippets verifies search results display includes snippets.
 func TestSearchNav_RenderShowsSnippets(t *testing.T) {
 	dir := t.TempDir()
-	v := New(&ast.Document{}, filepath.Join(dir, "test.md"), theme.NewTheme(), 80)
-	v.Height = 24
-	v.crossSearchActive = true
-	v.crossSearchMode = false
-	v.crossSearchQuery = "microservices"
-	v.crossSearchResults = []knowledge.SearchResult{
+	m := newTestCrossSearchModel(dir, 80, 24)
+	m.stage = csStageResults
+	m.query = "microservices"
+	m.results = []knowledge.SearchResult{
 		{RelPath: "services.md", Score: 8.5, Snippet: "...using microservices architecture..."},
 	}
-	v.crossSearchSelected = 0
+	m.selected = 0
 
-	out := v.renderCrossSearchResults(20)
+	out := m.View()
 	if !strings.Contains(out, "services.md") {
 		t.Error("Expected filename in search results render")
 	}
@@ -739,8 +739,9 @@ func TestIntegration_DirectoryToSearchAndBack(t *testing.T) {
 
 	// Enter search mode from directory
 	v = pressKeys(v, "/")
-	if !v.crossSearchMode {
-		t.Fatal("Expected crossSearchMode=true")
+	m := csModel(v)
+	if m == nil || m.stage != csStageInput {
+		t.Fatal("Expected CrossSearchModel active in input stage")
 	}
 	if dirModel(v) != nil {
 		t.Fatal("Expected directoryMode=false during search")
@@ -748,8 +749,8 @@ func TestIntegration_DirectoryToSearchAndBack(t *testing.T) {
 
 	// Cancel search
 	v = pressKeys(v, "esc")
-	if v.crossSearchMode {
-		t.Error("Expected crossSearchMode=false after Esc")
+	if csModel(v) != nil {
+		t.Error("Expected CrossSearchModel closed after Esc")
 	}
 }
 
@@ -765,19 +766,19 @@ func TestIntegration_SearchToFileAndBack(t *testing.T) {
 
 	// Set up search results directly
 	absPath := filepath.Join(dir, "api.md")
-	v.crossSearchActive = true
-	v.crossSearchMode = false
-	v.crossSearchQuery = "API"
-	v.crossSearchResults = []knowledge.SearchResult{
+	csm := newTestCrossSearchModel(dir, v.Width, v.Height)
+	csm.stage = csStageResults
+	csm.query = "API"
+	csm.results = []knowledge.SearchResult{
 		{RelPath: "api.md", Score: 5.0, Path: absPath},
 	}
-	v.crossSearchSelected = 0
-	v.activeChild = nil
+	csm.selected = 0
+	v.activeChild = csm
 
 	// Open result with 'l'
 	v = pressKeys(v, "l")
-	if v.crossSearchActive {
-		t.Error("Expected crossSearchActive=false after opening result")
+	if csModel(v) != nil {
+		t.Error("Expected CrossSearchModel no longer active after opening result")
 	}
 }
 
@@ -842,8 +843,8 @@ func TestIntegration_StateConsistency(t *testing.T) {
 	if v.searchMode {
 		t.Error("Expected searchMode=false after returning")
 	}
-	if v.crossSearchActive {
-		t.Error("Expected crossSearchActive=false after returning")
+	if csModel(v) != nil {
+		t.Error("Expected no CrossSearchModel active after returning")
 	}
 }
 
@@ -1054,15 +1055,14 @@ func TestEdge_DirectoryOpenAndReturnMultipleTimes(t *testing.T) {
 // TestEdge_SearchResultsEmptyRender doesn't crash on empty results render.
 func TestEdge_SearchResultsEmptyRender(t *testing.T) {
 	dir := t.TempDir()
-	v := New(&ast.Document{}, filepath.Join(dir, "test.md"), theme.NewTheme(), 80)
-	v.Height = 24
-	v.crossSearchActive = true
-	v.crossSearchQuery = "nothing"
-	v.crossSearchResults = []knowledge.SearchResult{}
-	v.crossSearchSelected = -1
+	m := newTestCrossSearchModel(dir, 80, 24)
+	m.stage = csStageResults
+	m.query = "nothing"
+	m.results = []knowledge.SearchResult{}
+	m.selected = -1
 
 	// Should not panic
-	out := v.renderCrossSearchResults(20)
+	out := m.View()
 	if !strings.Contains(out, "No matches") {
 		t.Error("Expected 'No matches' message")
 	}
@@ -1354,14 +1354,15 @@ func TestRegression_ViewRoutingPriority(t *testing.T) {
 		t.Error("Expected directory listing in View() for directory mode (either split or normal)")
 	}
 
-	// Cross-search active should take precedence over directory
-	v.crossSearchActive = true
-	v.crossSearchMode = false
-	v.crossSearchQuery = "test"
-	v.crossSearchResults = []knowledge.SearchResult{}
-	v.crossSearchSelected = -1
+	// Cross-search results should take precedence over directory
+	m := newTestCrossSearchModel(dir, v.Width, v.Height)
+	m.stage = csStageResults
+	m.query = "test"
+	m.results = []knowledge.SearchResult{}
+	m.selected = -1
+	v.activeChild = m
 	out = v.View()
 	if !strings.Contains(out, "Search Results") {
-		t.Error("Expected search results view when crossSearchActive=true")
+		t.Error("Expected search results view when a CrossSearchModel in results stage is active")
 	}
 }
