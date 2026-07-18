@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -15,7 +14,6 @@ import (
 	"github.com/bmd/bmd/internal/ast"
 	"github.com/bmd/bmd/internal/config"
 	"github.com/bmd/bmd/internal/editor"
-	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/nav"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/renderer"
@@ -136,10 +134,6 @@ type Viewer struct {
 	replaceMode  bool         // true when find/replace prompt is open
 	replaceState ReplaceState // find/replace query, options, and match state
 
-	// Graph view state
-	graphMode  bool           // true when graph view is active
-	graphState GraphViewState // state for graph visualization
-
 	// Double-tap detection for vim 'gg' (go to top)
 	lastGKeyTime time.Time // time of last 'g' keypress for double-tap detection
 	lastWasG     bool      // true if previous key was 'g' (for vim 'gg' detection)
@@ -161,7 +155,10 @@ type Viewer struct {
 
 	// Directory browser mode (DIR-01, ARCH-01): directory-listing state lives
 	// entirely in DirectoryModel (directory.go), reachable while browsing via
-	// activeChild. nil activeChild means plain file/edit view.
+	// activeChild. Cross-search (ARCH-02, cross_search.go) and graph-view
+	// (ARCH-04, graph.go) state live in CrossSearchModel/GraphModel the same
+	// way. nil activeChild means plain file/edit view — activeChild!=nil is
+	// the sole "a mode is active" signal; no per-mode bools remain.
 	activeChild tea.Model
 
 	// dirModelPaused holds the DirectoryModel instance while a file opened
@@ -209,34 +206,6 @@ type HeadingInfo struct {
 	Level   int    // 1-6 (H1 through H6)
 	Text    string // heading text content
 	LineIdx int    // line index in the document (for jumping)
-}
-
-// GraphViewState holds all state for graph visualization.
-type GraphViewState struct {
-	// Graph is the loaded knowledge graph from Phase 6.
-	Graph *knowledge.Graph
-
-	// NodeOrder is the sorted list of node IDs for display/navigation.
-	NodeOrder []string
-
-	// SelectedNodeID is the currently selected node.
-	SelectedNodeID string
-
-	// NodeLayout maps nodeID to (col, row) grid position for ASCII rendering.
-	NodeLayout map[string][2]int
-
-	// RootPath is the directory the graph was loaded from.
-	RootPath string
-
-	// Loaded indicates if a graph has been loaded.
-	Loaded bool
-
-	// ZoomLevel controls zoom in graph view (0=normal, 1=zoom in, -1=zoom out)
-	ZoomLevel int
-
-	// PanOffsetX, PanOffsetY are for panning the graph view
-	PanOffsetX int
-	PanOffsetY int
 }
 
 // New creates a new Viewer for the given document and file path.
@@ -376,52 +345,6 @@ func (v *Viewer) BackToSearchResults() (*Viewer, tea.Cmd) {
 	v.searchMode = false
 	v.searchInput = ""
 	return v, nil
-}
-
-// LoadGraph loads the Phase 6 knowledge graph from the database at rootPath.
-// If the database doesn't exist, attempts to build it first.
-// Returns an error if graph loading fails.
-func (v *Viewer) LoadGraph(rootPath string) error {
-	dbPath := filepath.Join(rootPath, "knowledge.db")
-	db, err := knowledge.OpenDB(dbPath)
-	if err != nil {
-		return fmt.Errorf("open knowledge db: %w", err)
-	}
-	defer db.Close()
-
-	g := knowledge.NewGraph()
-	if err := db.LoadGraph(g); err != nil {
-		return fmt.Errorf("load graph: %w", err)
-	}
-
-	v.graphState.Graph = g
-	v.graphState.RootPath = rootPath
-	v.graphState.Loaded = true
-
-	// Build node order: sort by in-degree descending, then alphabetically.
-	nodeIDs := make([]string, 0, len(g.Nodes))
-	for id := range g.Nodes {
-		nodeIDs = append(nodeIDs, id)
-	}
-	sort.Slice(nodeIDs, func(i, j int) bool {
-		inI := len(g.GetIncoming(nodeIDs[i]))
-		inJ := len(g.GetIncoming(nodeIDs[j]))
-		if inI != inJ {
-			return inI > inJ // descending in-degree
-		}
-		return nodeIDs[i] < nodeIDs[j]
-	})
-	v.graphState.NodeOrder = nodeIDs
-
-	// Select first node by default (highest in-degree).
-	if len(nodeIDs) > 0 {
-		v.graphState.SelectedNodeID = nodeIDs[0]
-	}
-
-	// Compute layout using topological level-based ordering.
-	v.graphState.NodeLayout = computeNodeLayout(g)
-
-	return nil
 }
 
 // UpdateTheme switches the viewer to a new theme and re-renders the document.
@@ -568,18 +491,17 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.currentView = "directory"
 			}
 		case modeGraph:
-			// INTERIM (Pitfall 2): GraphModel isn't migrated until a later
-			// plan, so this handler still sets the existing bool flag as its
-			// *implementation* of handling the message — the point is that
-			// no child ever writes graphMode itself, only this parent does.
-			if !v.graphState.Loaded {
-				if err := v.LoadGraph(msg.arg); err != nil {
-					v.errorMsg = fmt.Sprintf("Graph load error: %v", err)
-					return v, clearErrorAfter(statusTimeout)
-				}
+			// ARCH-04: construct the real GraphModel here (graduated from
+			// Plan 01's interim bool-set). NewGraphModel loads the graph
+			// synchronously (Pitfall 3 — no deferred Init() load, avoiding
+			// an empty-graph flash frame); GraphModel itself never writes a
+			// Viewer field, only this parent does (ARCH-05).
+			gm, err := NewGraphModel(msg.arg, v.Theme, v.Width, v.Height)
+			if err != nil {
+				v.errorMsg = fmt.Sprintf("Graph load error: %v", err)
+				return v, clearErrorAfter(statusTimeout)
 			}
-			v.activeChild = nil
-			v.graphMode = true
+			v.activeChild = gm
 		case modeCrossSearch:
 			if dm, ok := v.activeChild.(*DirectoryModel); ok {
 				// Stash so CrossSearchModel's own back-to-directory path
@@ -637,11 +559,6 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v.updateBrowser(msg)
 		}
 
-		// When graph view is open, route keys to graph handling
-		if v.graphMode {
-			return v.updateGraph(msg)
-		}
-
 		// When outline view is open, route keys to outline handling
 		if v.outlineMode {
 			return v.updateOutline(msg)
@@ -657,9 +574,10 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v.updateSearch(msg)
 		}
 
-		// When a child model (currently: DirectoryModel, CrossSearchModel) is
-		// active, route keys to it. Its returned tea.Cmd may resolve to
-		// openFileMsg, switchModeMsg, or toggleHelpMsg — all handled above.
+		// When a child model (DirectoryModel, CrossSearchModel, or
+		// GraphModel) is active, route keys to it. Its returned tea.Cmd may
+		// resolve to openFileMsg, switchModeMsg, or toggleHelpMsg — all
+		// handled above.
 		if v.activeChild != nil {
 			updated, cmd := v.activeChild.Update(msg)
 			v.activeChild = updated.(tea.Model)
@@ -850,17 +768,10 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v, nil
 
 		case "ctrl+g":
-			// Ctrl+G: Open graph view
+			// Ctrl+G: Open graph view. ARCH-05: route through switchModeCmd
+			// instead of setting graphMode + calling LoadGraph inline.
 			v.lastWasG = false // Reset double-tap state when using Ctrl+G
-			v.graphMode = true
-			if !v.graphState.Loaded {
-				if err := v.LoadGraph(v.startDir); err != nil {
-					v.graphMode = false
-					v.errorMsg = fmt.Sprintf("Graph load error: %v", err)
-					return v, clearErrorAfter(statusTimeout)
-				}
-			}
-			return v, nil
+			return v, switchModeCmd(modeGraph, v.startDir)
 
 		case "end", "G":
 			v.ClearSelection()
@@ -1824,8 +1735,12 @@ func (v Viewer) View() string {
 		return v.renderHeader() + "\n" + v.viewWithBrowser(contentHeight)
 	}
 
-	if v.graphMode {
-		return v.renderGraphView(contentHeight)
+	if gm, ok := v.activeChild.(*GraphModel); ok {
+		// Full-screen graph view: GraphModel.View() renders its own
+		// header/footer chrome directly (byte-identical to the pre-refactor
+		// renderGraphView), so it bypasses the generic
+		// renderHeader()/renderStatusBar() wrapper below (D-05).
+		return gm.View()
 	}
 
 	if csm, ok := v.activeChild.(*CrossSearchModel); ok {

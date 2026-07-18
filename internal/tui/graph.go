@@ -11,156 +11,278 @@ import (
 
 	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/renderer"
+	"github.com/bmd/bmd/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// updateGraph handles keyboard input when graph view mode is active.
-// Arrow keys move selection; 'l'/Enter opens selected node's file; 'h'/Esc goes back.
-func (v *Viewer) updateGraph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// GraphViewState holds all state for graph visualization. Owned privately by
+// GraphModel (ARCH-04) — moved off Viewer, which previously held it as a flat
+// field.
+type GraphViewState struct {
+	// Graph is the loaded knowledge graph from Phase 6.
+	Graph *knowledge.Graph
 
-	switch msg.String() {
+	// NodeOrder is the sorted list of node IDs for display/navigation.
+	NodeOrder []string
+
+	// SelectedNodeID is the currently selected node.
+	SelectedNodeID string
+
+	// NodeLayout maps nodeID to (col, row) grid position for ASCII rendering.
+	NodeLayout map[string][2]int
+
+	// RootPath is the directory the graph was loaded from.
+	RootPath string
+
+	// Loaded indicates if a graph has been loaded.
+	Loaded bool
+
+	// ZoomLevel controls zoom in graph view (0=normal, 1=zoom in, -1=zoom out)
+	ZoomLevel int
+
+	// PanOffsetX, PanOffsetY are for panning the graph view
+	PanOffsetX int
+	PanOffsetY int
+}
+
+// GraphModel is an independent tea.Model (ARCH-04) owning graph-view state —
+// the loaded knowledge graph, navigation/selection, layout, and zoom/pan —
+// with its own Update/View. It never holds a back-pointer to *Viewer (D-06):
+// cross-boundary transitions (open a node's file, go back to directory,
+// toggle help) are emitted as tea.Cmds via messages.go's shared vocabulary
+// (openFileCmd/switchModeCmd/toggleHelpCmd), never by calling a Viewer method
+// or writing a Viewer field directly.
+type GraphModel struct {
+	state  GraphViewState
+	theme  theme.Theme
+	width  int
+	height int
+
+	// errorMsg holds PNG-export status text (Open Question 2: a local,
+	// non-mode-transitioning side effect). Pre-refactor, graph-mode's View()
+	// bypassed the header/status-bar wrapper entirely and never rendered
+	// v.errorMsg, so this field is tracked for parity/testability but is
+	// intentionally not surfaced in View() — matching that (already
+	// invisible) behavior byte-for-byte rather than introducing a new,
+	// previously-absent status display.
+	errorMsg string
+}
+
+// NewGraphModel loads the Phase 6 knowledge graph from rootPath's
+// knowledge.db synchronously (a direct SQLite read) and builds
+// NodeOrder/NodeLayout, returning a fully ready-to-render GraphModel. This is
+// deliberately NOT deferred into Init() (Pitfall 3): deferring the load would
+// introduce a one-frame empty-graph flash and goroutine-timing test flakes.
+// Returns (nil, err) if the graph cannot be loaded.
+func NewGraphModel(rootPath string, th theme.Theme, width, height int) (*GraphModel, error) {
+	dbPath := filepath.Join(rootPath, "knowledge.db")
+	db, err := knowledge.OpenDB(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open knowledge db: %w", err)
+	}
+	defer db.Close()
+
+	g := knowledge.NewGraph()
+	if err := db.LoadGraph(g); err != nil {
+		return nil, fmt.Errorf("load graph: %w", err)
+	}
+
+	m := &GraphModel{
+		theme:  th,
+		width:  width,
+		height: height,
+	}
+	m.state.Graph = g
+	m.state.RootPath = rootPath
+	m.state.Loaded = true
+
+	// Build node order: sort by in-degree descending, then alphabetically.
+	nodeIDs := make([]string, 0, len(g.Nodes))
+	for id := range g.Nodes {
+		nodeIDs = append(nodeIDs, id)
+	}
+	sort.Slice(nodeIDs, func(i, j int) bool {
+		inI := len(g.GetIncoming(nodeIDs[i]))
+		inJ := len(g.GetIncoming(nodeIDs[j]))
+		if inI != inJ {
+			return inI > inJ // descending in-degree
+		}
+		return nodeIDs[i] < nodeIDs[j]
+	})
+	m.state.NodeOrder = nodeIDs
+
+	// Select first node by default (highest in-degree).
+	if len(nodeIDs) > 0 {
+		m.state.SelectedNodeID = nodeIDs[0]
+	}
+
+	// Compute layout using topological level-based ordering.
+	m.state.NodeLayout = computeNodeLayout(g)
+
+	return m, nil
+}
+
+// Init satisfies tea.Model. The graph is already loaded synchronously by
+// NewGraphModel, so there is nothing left to do here (Pitfall 3).
+func (m *GraphModel) Init() tea.Cmd { return nil }
+
+// Update handles keyboard input when graph view mode is active.
+// Arrow keys move selection; 'l'/Enter opens selected node's file; 'h'/Esc goes back.
+func (m *GraphModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+
+	switch keyMsg.String() {
 	case "q", "ctrl+c":
-		return v, tea.Quit
+		return m, tea.Quit
 
 	case "esc", "h":
-		v.graphMode = false
-		return v, nil
+		return m, switchModeCmd(modeDirectory, m.state.RootPath)
 
 	case "?":
-		v.helpOpen = true
-		return v, nil
+		return m, toggleHelpCmd()
 
-	// Up/Down cycles graphState.NodeOrder (all documents, sorted by
+	// Up/Down cycles state.NodeOrder (all documents, sorted by
 	// importance/in-degree) with wraparound at both ends. Left/Right, below,
 	// stay as edge-traversal (parent/child via this node's real incoming and
 	// outgoing links). These are two complementary navigation modes: Up/Down
 	// browses every document by importance, Left/Right follows this specific
 	// document's real links.
 	case "up", "k":
-		order := v.graphState.NodeOrder
+		order := m.state.NodeOrder
 		if len(order) > 0 {
-			idx := graphIndexOfNode(order, v.graphState.SelectedNodeID)
+			idx := graphIndexOfNode(order, m.state.SelectedNodeID)
 			if idx == -1 {
-				v.graphState.SelectedNodeID = order[0]
+				m.state.SelectedNodeID = order[0]
 			} else {
 				prev := (idx - 1 + len(order)) % len(order)
-				v.graphState.SelectedNodeID = graphNodeAtIndex(order, prev)
+				m.state.SelectedNodeID = graphNodeAtIndex(order, prev)
 			}
 		}
-		return v, nil
+		return m, nil
 
 	case "down", "j":
-		order := v.graphState.NodeOrder
+		order := m.state.NodeOrder
 		if len(order) > 0 {
-			idx := graphIndexOfNode(order, v.graphState.SelectedNodeID)
+			idx := graphIndexOfNode(order, m.state.SelectedNodeID)
 			if idx == -1 {
-				v.graphState.SelectedNodeID = order[0]
+				m.state.SelectedNodeID = order[0]
 			} else {
 				next := (idx + 1) % len(order)
-				v.graphState.SelectedNodeID = graphNodeAtIndex(order, next)
+				m.state.SelectedNodeID = graphNodeAtIndex(order, next)
 			}
 		}
-		return v, nil
+		return m, nil
 
 	case "left":
 		// Cycle to previous parent
-		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
-			incoming := v.graphState.Graph.GetIncoming(v.graphState.SelectedNodeID)
+		if m.state.Graph != nil && m.state.SelectedNodeID != "" {
+			incoming := m.state.Graph.GetIncoming(m.state.SelectedNodeID)
 			if len(incoming) > 0 {
-				v.graphState.SelectedNodeID = incoming[0].Source
+				m.state.SelectedNodeID = incoming[0].Source
 			}
 		}
-		return v, nil
+		return m, nil
 
 	case "right":
 		// Cycle to next child
-		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
-			outgoing := v.graphState.Graph.GetOutgoing(v.graphState.SelectedNodeID)
+		if m.state.Graph != nil && m.state.SelectedNodeID != "" {
+			outgoing := m.state.Graph.GetOutgoing(m.state.SelectedNodeID)
 			if len(outgoing) > 0 {
-				v.graphState.SelectedNodeID = outgoing[0].Target
+				m.state.SelectedNodeID = outgoing[0].Target
 			}
 		}
-		return v, nil
+		return m, nil
 
 	case "+", "=":
 		// Zoom in
-		if v.graphState.ZoomLevel < 3 {
-			v.graphState.ZoomLevel++
+		if m.state.ZoomLevel < 3 {
+			m.state.ZoomLevel++
 		}
-		return v, nil
+		return m, nil
 
 	case "-", "_":
 		// Zoom out
-		if v.graphState.ZoomLevel > -2 {
-			v.graphState.ZoomLevel--
+		if m.state.ZoomLevel > -2 {
+			m.state.ZoomLevel--
 		}
-		return v, nil
+		return m, nil
 
 	case "0":
 		// Reset zoom and pan
-		v.graphState.ZoomLevel = 0
-		v.graphState.PanOffsetX = 0
-		v.graphState.PanOffsetY = 0
+		m.state.ZoomLevel = 0
+		m.state.PanOffsetX = 0
+		m.state.PanOffsetY = 0
+		return m, nil
 
 	case "e", "E":
-		// Export graph as PNG (e.g., for viewing in image viewer)
-		if v.graphState.Graph != nil {
+		// Export graph as PNG (e.g., for viewing in image viewer). This
+		// status stays entirely local to the model (Open Question 2):
+		// GraphModel never writes a Viewer field directly (D-06).
+		if m.state.Graph != nil {
 			// Generate graph visualization as PNG
-			graphPNG, err := renderer.ExportGraphAsImage(v.graphState.Graph, v.Width, v.Height-3)
+			graphPNG, err := renderer.ExportGraphAsImage(m.state.Graph, m.width, m.height-3)
 			if err == nil && len(graphPNG) > 0 {
 				// Save to temp file
 				tmpPath, err := saveGraphImage(graphPNG, "bmd-graph")
 				if err == nil && tmpPath != "" {
-					v.errorMsg = fmt.Sprintf("✓ Graph saved: %s", filepath.Base(tmpPath))
-					return v, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+					m.errorMsg = fmt.Sprintf("✓ Graph saved: %s", filepath.Base(tmpPath))
+					return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
 						return clearErrorMsg{}
 					})
 				}
 			}
-			v.errorMsg = "Failed to export graph (graphviz not available?)"
-			return v, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			m.errorMsg = "Failed to export graph (graphviz not available?)"
+			return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
 				return clearErrorMsg{}
 			})
 		}
-		return v, nil
+		return m, nil
 
 	case "enter", "l":
 		// Open the file corresponding to the selected node.
 		// node.ID is a relative path; resolve it against the graph's rootPath.
-		if v.graphState.Graph != nil && v.graphState.SelectedNodeID != "" {
-			node := v.graphState.Graph.Nodes[v.graphState.SelectedNodeID]
+		if m.state.Graph != nil && m.state.SelectedNodeID != "" {
+			node := m.state.Graph.Nodes[m.state.SelectedNodeID]
 			if node != nil && node.ID != "" {
-				absPath := filepath.Join(v.graphState.RootPath, node.ID)
-				v.graphMode = false
-				return v.loadFile(absPath)
+				absPath := filepath.Join(m.state.RootPath, node.ID)
+				return m, openFileCmd(absPath, originGraph)
 			}
 		}
-		return v, nil
+		return m, nil
 	}
-	return v, nil
+	return m, nil
 }
 
-// renderGraphView renders the graph visualization view.
-func (v Viewer) renderGraphView(contentHeight int) string {
+// View renders the graph visualization view. Byte-identical to the
+// pre-refactor renderGraphView(contentHeight) output: it renders its own
+// header/footer chrome directly rather than being wrapped by Viewer's
+// generic renderHeader()/renderStatusBar() (D-05 — graph view owns its full
+// screen, matching CrossSearchModel's results-stage full-screen pattern).
+func (m *GraphModel) View() string {
+	contentHeight := m.height - 2 // header + status bar (reserved by the caller pre-refactor)
+
 	var sb strings.Builder
 
 	// Header
 	headerStr := " Graph View: Document Dependencies"
 	runes := []rune(headerStr)
-	if len(runes) < v.Width {
-		headerStr = headerStr + strings.Repeat(" ", v.Width-len(runes))
-	} else if len(runes) > v.Width {
-		headerStr = string(runes[:v.Width])
+	if len(runes) < m.width {
+		headerStr = headerStr + strings.Repeat(" ", m.width-len(runes))
+	} else if len(runes) > m.width {
+		headerStr = string(runes[:m.width])
 	}
 	sb.WriteString("\x1b[48;5;17m\x1b[1;38;5;51m" + headerStr + "\x1b[0m\n")
 
-	if !v.graphState.Loaded || v.graphState.Graph == nil {
+	if !m.state.Loaded || m.state.Graph == nil {
 		sb.WriteString("\x1b[38;5;244m No graph loaded. Press 'h' to return.\x1b[0m\n")
 		sb.WriteString("\x1b[38;5;244m [h/Esc] Back  [q] Quit\x1b[0m")
 		return sb.String()
 	}
 
-	g := v.graphState.Graph
+	g := m.state.Graph
 
 	// Render ASCII art or list fallback.
 	graphHeight := contentHeight - 2 // header + footer
@@ -170,38 +292,38 @@ func (v Viewer) renderGraphView(contentHeight int) string {
 
 	if len(g.Nodes) == 0 {
 		// Empty graph - show placeholder
-		sb.WriteString(renderGraphEmptyFallback(v.Width))
-	} else if v.graphState.SelectedNodeID != "" {
+		sb.WriteString(renderGraphEmptyFallback(m.width))
+	} else if m.state.SelectedNodeID != "" {
 		// Focused sub-graph view: show only selected node and adjacent nodes
-		sb.WriteString(renderFocusedSubgraph(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
+		sb.WriteString(renderFocusedSubgraph(g, m.state.SelectedNodeID, m.width, graphHeight))
 	} else {
 		// No node selected, show first node as focus
-		if len(v.graphState.NodeOrder) > 0 {
-			v.graphState.SelectedNodeID = v.graphState.NodeOrder[0]
-			sb.WriteString(renderFocusedSubgraph(g, v.graphState.SelectedNodeID, v.Width, graphHeight))
+		if len(m.state.NodeOrder) > 0 {
+			m.state.SelectedNodeID = m.state.NodeOrder[0]
+			sb.WriteString(renderFocusedSubgraph(g, m.state.SelectedNodeID, m.width, graphHeight))
 		}
 	}
 
 	// Footer: show selected node details and key hints.
 	var footerContent string
 	zoomStr := ""
-	if v.graphState.ZoomLevel != 0 {
-		zoomStr = fmt.Sprintf("  [Zoom: %+d]", v.graphState.ZoomLevel)
+	if m.state.ZoomLevel != 0 {
+		zoomStr = fmt.Sprintf("  [Zoom: %+d]", m.state.ZoomLevel)
 	}
 
-	if v.graphState.SelectedNodeID != "" {
-		node := g.Nodes[v.graphState.SelectedNodeID]
+	if m.state.SelectedNodeID != "" {
+		node := g.Nodes[m.state.SelectedNodeID]
 		label := nodeLabel(node)
-		inCount := len(g.GetIncoming(v.graphState.SelectedNodeID))
-		outCount := len(g.GetOutgoing(v.graphState.SelectedNodeID))
+		inCount := len(g.GetIncoming(m.state.SelectedNodeID))
+		outCount := len(g.GetOutgoing(m.state.SelectedNodeID))
 		footerContent = fmt.Sprintf(" Selected: %-15s  in:%-2d out:%-2d%s  [+/-]Zoom [h]Back [q]Quit",
 			truncateStr(label, 15), inCount, outCount, zoomStr)
 	} else {
 		footerContent = fmt.Sprintf(" [↑/↓]Navigate [l]Open [+/-]Zoom [0]Reset%s [h]Back [q]Quit", zoomStr)
 	}
 	runes = []rune(footerContent)
-	if len(runes) > v.Width {
-		footerContent = string(runes[:v.Width])
+	if len(runes) > m.width {
+		footerContent = string(runes[:m.width])
 	}
 	sb.WriteString("\x1b[38;5;244m" + footerContent + "\x1b[0m")
 
