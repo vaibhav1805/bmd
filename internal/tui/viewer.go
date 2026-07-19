@@ -10,7 +10,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	osc52 "github.com/aymanbagabas/go-osc52/v2"
 	"github.com/bmd/bmd/internal/ast"
 	"github.com/bmd/bmd/internal/config"
 	"github.com/bmd/bmd/internal/editor"
@@ -683,21 +682,26 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// If there's a selection, copy selected text
 			if v.HasSelection() {
 				text := v.SelectedText()
-				_, _ = osc52.New(text).WriteTo(os.Stderr)
+				if _, err := copyWithFallback(text); err != nil {
+					v.errorMsg = "Clipboard unavailable"
+				} else {
+					v.errorMsg = "Selection copied"
+				}
 				v.ClearSelection()
-				v.errorMsg = "Selection copied"
 				return v, clearErrorAfter(statusTimeout)
 			}
 
 			// If there's a committed cursor, copy the current line
 			if v.hasCursor {
-				// Copy the plain text of the committed cursor line to clipboard via OSC 52.
+				// Copy the plain text of the committed cursor line to the clipboard.
 				if v.cursorRow >= 0 && v.cursorRow < len(v.Lines) {
 					plainLine := v.Lines[v.cursorRow]
-					// Write via OSC52 to stderr (terminal clipboard channel).
-					_, _ = osc52.New(plainLine).WriteTo(os.Stderr)
-					// Show confirmation in status bar briefly.
-					v.errorMsg = "Copied line to clipboard"
+					if _, err := copyWithFallback(plainLine); err != nil {
+						v.errorMsg = "Clipboard unavailable"
+					} else {
+						// Show confirmation in status bar briefly.
+						v.errorMsg = "Copied line to clipboard"
+					}
 					return v, clearErrorAfter(statusTimeout)
 				}
 			}

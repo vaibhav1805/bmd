@@ -2,10 +2,8 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"time"
 
-	osc52 "github.com/aymanbagabas/go-osc52/v2"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -86,37 +84,50 @@ func (v *Viewer) updateEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Copy selected text or current line; do not quit in edit mode
 		if v.editBuffer.HasSelection() {
 			text := v.editBuffer.GetSelectedText()
-			_, _ = osc52.New(text).WriteTo(os.Stderr)
 			v.editEditClipboard = text
-			v.errorMsg = fmt.Sprintf("Copied %d chars", len([]rune(text)))
+			if _, err := copyWithFallback(text); err != nil {
+				v.errorMsg = "Clipboard unavailable"
+			} else {
+				v.errorMsg = fmt.Sprintf("Copied %d chars", len([]rune(text)))
+			}
 		} else {
 			lines := v.editBuffer.GetLines()
 			line := ""
 			if v.editBuffer.CursorLine() < len(lines) {
 				line = lines[v.editBuffer.CursorLine()]
 			}
-			_, _ = osc52.New(line).WriteTo(os.Stderr)
 			v.editEditClipboard = line
-			v.errorMsg = fmt.Sprintf("Copied line (%d chars)", len([]rune(line)))
+			if _, err := copyWithFallback(line); err != nil {
+				v.errorMsg = "Clipboard unavailable"
+			} else {
+				v.errorMsg = fmt.Sprintf("Copied line (%d chars)", len([]rune(line)))
+			}
 		}
 		return v, clearErrorAfter(statusTimeout)
 	case tea.KeyCtrlX:
 		// Cut selected text (or current line if no selection)
 		if v.editBuffer.HasSelection() {
 			text := v.editBuffer.GetSelectedText()
-			_, _ = osc52.New(text).WriteTo(os.Stderr)
 			v.editEditClipboard = text
+			_, cbErr := copyWithFallback(text)
 			v.editBuffer.DeleteSelection()
-			v.errorMsg = fmt.Sprintf("Cut %d chars", len([]rune(text)))
+			if cbErr != nil {
+				v.errorMsg = "Clipboard unavailable"
+			} else {
+				v.errorMsg = fmt.Sprintf("Cut %d chars", len([]rune(text)))
+			}
 		} else {
 			lines := v.editBuffer.GetLines()
 			line := ""
 			if v.editBuffer.CursorLine() < len(lines) {
 				line = lines[v.editBuffer.CursorLine()]
 			}
-			_, _ = osc52.New(line).WriteTo(os.Stderr)
 			v.editEditClipboard = line
-			v.errorMsg = "Cut line"
+			if _, err := copyWithFallback(line); err != nil {
+				v.errorMsg = "Clipboard unavailable"
+			} else {
+				v.errorMsg = "Cut line"
+			}
 		}
 		return v, clearErrorAfter(statusTimeout)
 	case tea.KeyCtrlV:
