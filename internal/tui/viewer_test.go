@@ -10,6 +10,7 @@ import (
 
 	"github.com/bmd/bmd/internal/ast"
 	"github.com/bmd/bmd/internal/editor"
+	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -1564,5 +1565,281 @@ func TestOutlineNavigationUpDown(t *testing.T) {
 	result2 := model2.(*Viewer)
 	if result2.outlineSelection != 0 {
 		t.Errorf("expected selection=0 after Up, got %d", result2.outlineSelection)
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TestViewerEndToEnd* — Plan 32-04 (D-08, ARCH-03 full, ARCH-05 integration
+// half): Viewer-level integration tests that drive Viewer.Update() through
+// full key-sequences and assert on final *Viewer state, independent of
+// internal model structure. These are the regression oracle proving the
+// message-passing contract (messages.go + activeChild dispatch, established
+// in Plan 01 and reused unchanged by Plans 02/03) works end to end once
+// DirectoryModel/CrossSearchModel/GraphModel are wired together — not just
+// per-model in isolation (which directory_test.go/crosssearch_test.go/
+// graph_test.go already cover).
+//
+// "Program step" resolution: every key press below goes through
+// pressKeySettled (directory_test.go), which sends the tea.KeyMsg to
+// v.Update() and resolves any single returned tea.Cmd into its tea.Msg,
+// feeding it back into v.Update() exactly once (settleCmd). This is
+// deliberately single-hop, not a resolution loop — see settleCmd's doc
+// comment for why (a resolved statusMsg handler always schedules a real
+// tea.Tick timer that must not be invoked synchronously in a test). Every
+// transition exercised in this section (openFileMsg, switchModeMsg,
+// toggleHelpMsg) fully applies its state mutation on the first hop, so
+// single-hop resolution is sufficient to drive each sequence to
+// quiescence — confirmed by asserting the expected terminal state after
+// each step below, not just after the final one.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// runeKey is a small convenience wrapper for constructing a single-rune
+// tea.KeyMsg, matching the tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+// convention already used throughout directory_test.go/graph_test.go.
+func runeKey(s string) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+}
+
+// newE2EGraphDir builds a temp directory containing two real markdown files
+// (a.md, b.md) plus a knowledge.db (via graph_test.go's buildTestKnowledgeDB
+// helper) whose two nodes' IDs are exactly those two relative filenames — so
+// NewGraphModel's synchronous SQLite-read constructor (Plan 03) and
+// DirectoryModel's file scan (Plan 01) both operate on a consistent fixture.
+func newE2EGraphDir(t *testing.T) string {
+	t.Helper()
+	dir := makeTempDir(t, map[string]string{
+		"a.md": "# A\nFirst document.",
+		"b.md": "# B\nSecond document.",
+	})
+	g := newTestGraph([]knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"},
+	}, nil)
+	buildTestKnowledgeDB(t, dir, g)
+	return dir
+}
+
+// enterCrossSearchResults drives directory -> '/' -> type query -> enter
+// through to the cross-search results stage, returning the settled Viewer.
+// Shared by the open-result sequence test and the help-from-cross-search-
+// results test to avoid duplicating the setup.
+func enterCrossSearchResults(t *testing.T, v *Viewer, query string) *Viewer {
+	t.Helper()
+	v = pressKeySettled(v, runeKey("/"))
+	if csModel(v) == nil || csModel(v).stage != csStageInput {
+		t.Fatalf("expected CrossSearchModel input stage active after '/', got %#v", csModel(v))
+	}
+	for _, ch := range query {
+		v = pressKeySettled(v, runeKey(string(ch)))
+	}
+	if csModel(v).input != query {
+		t.Fatalf("expected input=%q after typing, got %q", query, csModel(v).input)
+	}
+	v = pressKeySettled(v, tea.KeyMsg{Type: tea.KeyEnter})
+	if csModel(v) == nil || csModel(v).stage != csStageResults {
+		t.Fatalf("expected CrossSearchModel results stage active after Enter, got %#v", csModel(v))
+	}
+	return v
+}
+
+// TestViewerEndToEnd_DirectoryToCrossSearchToOpenResult drives the full
+// key-sequence: directory -> '/' -> type query -> enter -> select result ->
+// file opens (VALIDATION.md Wave 0, sequence 1).
+func TestViewerEndToEnd_DirectoryToCrossSearchToOpenResult(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"auth.md": "# Authentication\nJWT tokens and OAuth flow for auth.",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 100)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+	if v.currentView != "directory" || dirModel(v) == nil {
+		t.Fatalf("expected directory mode active at start, currentView=%q dirModel=%v", v.currentView, dirModel(v))
+	}
+
+	v = enterCrossSearchResults(t, v, "authentication")
+	if len(csModel(v).results) == 0 {
+		t.Fatal("expected at least 1 search result for 'authentication'")
+	}
+
+	// Select the first (only) result and open it.
+	v = pressKeySettled(v, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if v.currentView != "file" {
+		t.Errorf("expected currentView='file', got %q", v.currentView)
+	}
+	if filepath.Base(v.FilePath) != "auth.md" {
+		t.Errorf("expected FilePath basename 'auth.md', got %q", v.FilePath)
+	}
+	if !v.openedFromSearch {
+		t.Error("expected openedFromSearch=true")
+	}
+	if v.activeChild != nil {
+		t.Errorf("expected activeChild=nil after file open, got %T", v.activeChild)
+	}
+}
+
+// TestViewerEndToEnd_DirectoryToGraphToOpenNode drives the full
+// key-sequence: directory -> 'g' -> graph -> navigate -> enter -> node file
+// opens (VALIDATION.md Wave 0, sequence 2).
+func TestViewerEndToEnd_DirectoryToGraphToOpenNode(t *testing.T) {
+	dir := newE2EGraphDir(t)
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 100)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	v = pressKeySettled(v, runeKey("g"))
+	gm, ok := v.activeChild.(*GraphModel)
+	if !ok {
+		t.Fatalf("expected activeChild=*GraphModel after 'g', got %T", v.activeChild)
+	}
+	if !gm.state.Loaded {
+		t.Fatal("expected graph to be loaded")
+	}
+	if gm.state.SelectedNodeID != "a.md" {
+		t.Fatalf("expected default selection 'a.md' (alphabetically first, tied in-degree), got %q", gm.state.SelectedNodeID)
+	}
+
+	// Navigate to the second node.
+	v = pressKeySettled(v, tea.KeyMsg{Type: tea.KeyDown})
+	gm = v.activeChild.(*GraphModel)
+	if gm.state.SelectedNodeID != "b.md" {
+		t.Fatalf("expected selection 'b.md' after Down, got %q", gm.state.SelectedNodeID)
+	}
+
+	// Open the selected node's file.
+	v = pressKeySettled(v, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if v.currentView != "file" {
+		t.Errorf("expected currentView='file', got %q", v.currentView)
+	}
+	wantPath := filepath.Join(dir, "b.md")
+	if v.FilePath != wantPath {
+		t.Errorf("expected FilePath=%q, got %q", wantPath, v.FilePath)
+	}
+	if v.activeChild != nil {
+		t.Errorf("expected activeChild=nil after file open, got %T", v.activeChild)
+	}
+	// origin=originGraph sets neither openedFromDirectory nor openedFromSearch.
+	if v.openedFromDirectory || v.openedFromSearch {
+		t.Errorf("expected both openedFromDirectory/openedFromSearch=false for a graph-origin open, got dir=%v search=%v",
+			v.openedFromDirectory, v.openedFromSearch)
+	}
+}
+
+// TestViewerEndToEnd_HelpFromDirectory drives: directory -> '?' -> help ->
+// esc -> back to directory (VALIDATION.md Wave 0, sequence 3, directory leg).
+// Also asserts the focused Pitfall-5 property: while help is open, a key
+// that would normally mutate the originating child (Down, in directory mode)
+// is absorbed by help handling instead of leaking through to the child.
+func TestViewerEndToEnd_HelpFromDirectory(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{"a.md": "# A", "b.md": "# B"})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 100)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+
+	v = pressKeySettled(v, runeKey("?"))
+	if !v.helpOpen {
+		t.Fatal("expected helpOpen=true after '?'")
+	}
+	if dirModel(v) == nil {
+		t.Fatal("expected DirectoryModel to remain the active child while help is open")
+	}
+
+	// Pitfall 5: a child-specific key (Down) must not leak through to
+	// DirectoryModel while help is open — helpOpen is checked first.
+	v = pressKeySettled(v, tea.KeyMsg{Type: tea.KeyDown})
+	if !v.helpOpen {
+		t.Error("expected helpOpen to remain true after an unrelated key while help is open")
+	}
+	if dirModel(v).state.SelectedIndex != 0 {
+		t.Errorf("expected DirectoryModel selection unchanged (absorbed by help), got %d", dirModel(v).state.SelectedIndex)
+	}
+
+	v = pressKeySettled(v, tea.KeyMsg{Type: tea.KeyEsc})
+	if v.helpOpen {
+		t.Error("expected helpOpen=false after esc")
+	}
+	if dirModel(v) == nil {
+		t.Error("expected DirectoryModel (originating mode) active again after closing help")
+	}
+}
+
+// TestViewerEndToEnd_HelpFromCrossSearchResults drives: cross-search results
+// -> '?' -> help -> esc -> back to cross-search results (VALIDATION.md Wave
+// 0, sequence 3, cross-search leg). CrossSearchModel's results-navigation
+// stage was missing a '?' case (a gap discovered writing this test — see
+// SUMMARY Deviations); fixed in cross_search.go as part of this plan.
+func TestViewerEndToEnd_HelpFromCrossSearchResults(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"auth.md": "# Authentication\nJWT tokens and OAuth flow for auth.",
+	})
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 100)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+	v = enterCrossSearchResults(t, v, "authentication")
+
+	v = pressKeySettled(v, runeKey("?"))
+	if !v.helpOpen {
+		t.Fatal("expected helpOpen=true after '?' from cross-search results")
+	}
+	if csModel(v) == nil || csModel(v).stage != csStageResults {
+		t.Fatal("expected CrossSearchModel to remain the active child (results stage) while help is open")
+	}
+
+	v = pressKeySettled(v, tea.KeyMsg{Type: tea.KeyEsc})
+	if v.helpOpen {
+		t.Error("expected helpOpen=false after esc")
+	}
+	if csModel(v) == nil || csModel(v).stage != csStageResults {
+		t.Error("expected cross-search results (originating mode) active again after closing help")
+	}
+}
+
+// TestViewerEndToEnd_HelpFromGraph drives: graph -> '?' -> help -> esc ->
+// back to graph (VALIDATION.md Wave 0, sequence 3, graph leg).
+func TestViewerEndToEnd_HelpFromGraph(t *testing.T) {
+	dir := newE2EGraphDir(t)
+	defer os.RemoveAll(dir)
+
+	v := NewDirectoryViewer(dir, theme.NewTheme(), 100)
+	v.Height = 24
+	if err := v.LoadDirectory(dir); err != nil {
+		t.Fatalf("LoadDirectory error: %v", err)
+	}
+	v = pressKeySettled(v, runeKey("g"))
+	if _, ok := v.activeChild.(*GraphModel); !ok {
+		t.Fatalf("expected activeChild=*GraphModel after 'g', got %T", v.activeChild)
+	}
+
+	v = pressKeySettled(v, runeKey("?"))
+	if !v.helpOpen {
+		t.Fatal("expected helpOpen=true after '?' from graph view")
+	}
+	if _, ok := v.activeChild.(*GraphModel); !ok {
+		t.Fatal("expected GraphModel to remain the active child while help is open")
+	}
+
+	v = pressKeySettled(v, tea.KeyMsg{Type: tea.KeyEsc})
+	if v.helpOpen {
+		t.Error("expected helpOpen=false after esc")
+	}
+	if _, ok := v.activeChild.(*GraphModel); !ok {
+		t.Error("expected GraphModel (originating mode) active again after closing help")
 	}
 }

@@ -171,6 +171,13 @@ func (m *CrossSearchModel) updateResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, switchModeCmd(modeNone, "")
 
+	case "?":
+		// D-04: help must be reachable from every mode. DirectoryModel and
+		// GraphModel both wire '?' to toggleHelpCmd(); the results-navigation
+		// stage here was missing it (the input stage intentionally omits this
+		// — '?' is a valid query character while typing).
+		return m, toggleHelpCmd()
+
 	case "q":
 		return m, tea.Quit
 
