@@ -36,18 +36,11 @@ type GraphViewState struct {
 
 	// Loaded indicates if a graph has been loaded.
 	Loaded bool
-
-	// ZoomLevel controls zoom in graph view (0=normal, 1=zoom in, -1=zoom out)
-	ZoomLevel int
-
-	// PanOffsetX, PanOffsetY are for panning the graph view
-	PanOffsetX int
-	PanOffsetY int
 }
 
 // GraphModel is an independent tea.Model (ARCH-04) owning graph-view state —
-// the loaded knowledge graph, navigation/selection, layout, and zoom/pan —
-// with its own Update/View. It never holds a back-pointer to *Viewer (D-06):
+// the loaded knowledge graph, navigation/selection, and layout — with its
+// own Update/View. It never holds a back-pointer to *Viewer (D-06):
 // cross-boundary transitions (open a node's file, go back to directory,
 // toggle help) are emitted as tea.Cmds via messages.go's shared vocabulary
 // (openFileCmd/switchModeCmd/toggleHelpCmd), never by calling a Viewer method
@@ -196,27 +189,6 @@ func (m *GraphModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "+", "=":
-		// Zoom in
-		if m.state.ZoomLevel < 3 {
-			m.state.ZoomLevel++
-		}
-		return m, nil
-
-	case "-", "_":
-		// Zoom out
-		if m.state.ZoomLevel > -2 {
-			m.state.ZoomLevel--
-		}
-		return m, nil
-
-	case "0":
-		// Reset zoom and pan
-		m.state.ZoomLevel = 0
-		m.state.PanOffsetX = 0
-		m.state.PanOffsetY = 0
-		return m, nil
-
 	case "e", "E":
 		// Export graph as PNG (e.g., for viewing in image viewer). This
 		// status stays entirely local to the model (Open Question 2):
@@ -306,20 +278,15 @@ func (m *GraphModel) View() string {
 
 	// Footer: show selected node details and key hints.
 	var footerContent string
-	zoomStr := ""
-	if m.state.ZoomLevel != 0 {
-		zoomStr = fmt.Sprintf("  [Zoom: %+d]", m.state.ZoomLevel)
-	}
-
 	if m.state.SelectedNodeID != "" {
 		node := g.Nodes[m.state.SelectedNodeID]
 		label := nodeLabel(node)
 		inCount := len(g.GetIncoming(m.state.SelectedNodeID))
 		outCount := len(g.GetOutgoing(m.state.SelectedNodeID))
-		footerContent = fmt.Sprintf(" Selected: %-15s  in:%-2d out:%-2d%s  [+/-]Zoom [h]Back [q]Quit",
-			truncateStr(label, 15), inCount, outCount, zoomStr)
+		footerContent = fmt.Sprintf(" Selected: %-15s  in:%-2d out:%-2d  [h]Back [q]Quit",
+			truncateStr(label, 15), inCount, outCount)
 	} else {
-		footerContent = fmt.Sprintf(" [↑/↓]Navigate [l]Open [+/-]Zoom [0]Reset%s [h]Back [q]Quit", zoomStr)
+		footerContent = " [↑/↓]Navigate [l]Open [h]Back [q]Quit"
 	}
 	runes = []rune(footerContent)
 	if len(runes) > m.width {

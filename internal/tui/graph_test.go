@@ -588,44 +588,6 @@ func TestGraphModelUpdate_LeftNavigatesParent(t *testing.T) {
 	}
 }
 
-// --- GraphModel.Update() — zoom/pan ------------------------------------------
-
-func TestGraphModelUpdate_ZoomInClampedAt3(t *testing.T) {
-	m := newTestGraphModel(120, 40, []knowledge.Node{{ID: "a.md", Title: "A", Type: "document"}}, nil)
-	for i := 0; i < 10; i++ {
-		model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
-		m = model.(*GraphModel)
-	}
-	if m.state.ZoomLevel != 3 {
-		t.Errorf("expected zoom clamped at 3, got %d", m.state.ZoomLevel)
-	}
-}
-
-func TestGraphModelUpdate_ZoomOutClampedAtNeg2(t *testing.T) {
-	m := newTestGraphModel(120, 40, []knowledge.Node{{ID: "a.md", Title: "A", Type: "document"}}, nil)
-	for i := 0; i < 10; i++ {
-		model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("-")})
-		m = model.(*GraphModel)
-	}
-	if m.state.ZoomLevel != -2 {
-		t.Errorf("expected zoom clamped at -2, got %d", m.state.ZoomLevel)
-	}
-}
-
-func TestGraphModelUpdate_ZeroResetsZoomAndPan(t *testing.T) {
-	m := newTestGraphModel(120, 40, []knowledge.Node{{ID: "a.md", Title: "A", Type: "document"}}, nil)
-	m.state.ZoomLevel = 2
-	m.state.PanOffsetX = 5
-	m.state.PanOffsetY = -3
-
-	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("0")})
-	m = model.(*GraphModel)
-	if m.state.ZoomLevel != 0 || m.state.PanOffsetX != 0 || m.state.PanOffsetY != 0 {
-		t.Errorf("expected zoom/pan reset, got zoom=%d panX=%d panY=%d",
-			m.state.ZoomLevel, m.state.PanOffsetX, m.state.PanOffsetY)
-	}
-}
-
 // --- GraphModel.View() tests --------------------------------------------------
 
 // TestGraphModelView_ShowsHeader renders the graph view header.
@@ -671,8 +633,13 @@ func TestGraphModelView_FooterShowsSelectedNode(t *testing.T) {
 }
 
 // TestGraphModelView_LockedBaselineLiterals locks the UI-SPEC.md
-// Copywriting Contract literals for graph view (header/empty-state/footer)
-// byte-for-byte against the pre-refactor renderGraphView output.
+// Copywriting Contract literals for graph view (header/empty-state/footer).
+// The zoom/pan footer hints ("[+/-]Zoom [0]Reset") were removed: ZoomLevel/
+// PanOffsetX/PanOffsetY were tracked in state and rendered as a "[Zoom: +N]"
+// footer indicator, but were never wired into the actual graph renderer
+// (renderFocusedSubgraph takes no zoom/pan parameter, in this code or the
+// pre-refactor original) — pressing +/- had no visible effect on the graph,
+// so the dead UI affordance was removed rather than kept as a misleading hint.
 func TestGraphModelView_LockedBaselineLiterals(t *testing.T) {
 	notLoaded := &GraphModel{theme: theme.NewTheme(), width: 120, height: 40}
 	notLoaded.state = GraphViewState{Loaded: false}
@@ -691,8 +658,11 @@ func TestGraphModelView_LockedBaselineLiterals(t *testing.T) {
 	if !strings.Contains(out, " Selected: README") {
 		t.Errorf("expected locked selected-footer literal, got: %q", out)
 	}
-	if !strings.Contains(out, "[+/-]Zoom [h]Back [q]Quit") {
+	if !strings.Contains(out, "[h]Back [q]Quit") {
 		t.Errorf("expected locked footer key hints, got: %q", out)
+	}
+	if strings.Contains(out, "Zoom") {
+		t.Errorf("expected no zoom hint in footer (feature removed, was never wired to rendering), got: %q", out)
 	}
 }
 
