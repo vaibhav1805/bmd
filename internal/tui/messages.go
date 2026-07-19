@@ -82,3 +82,9 @@ type statusMsg struct {
 func statusCmd(text string) tea.Cmd {
 	return func() tea.Msg { return statusMsg{text: text} }
 }
+
+// fileChangedMsg is delivered once the debounce timer fires for a coalesced
+// burst of fsnotify events on the currently-watched file (RELOAD-01, D-07).
+type fileChangedMsg struct {
+	path string
+}

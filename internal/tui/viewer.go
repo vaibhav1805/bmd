@@ -188,6 +188,12 @@ type Viewer struct {
 
 	// Word count modal (Ctrl+I): displays document statistics overlay.
 	wordCountVisible bool // true when word count modal is open
+
+	// Live-reload state (RELOAD-01): reloadCh receives the currently-open
+	// file's path once a debounced fsnotify event fires; waitForFileChange
+	// (reload.go) blocks on it and Update() re-issues that tea.Cmd every time
+	// fileChangedMsg is handled, keeping the listener alive for the session.
+	reloadCh chan string
 }
 
 // FileMetadata holds metadata for a single markdown file discovered during directory scan.
@@ -432,6 +438,15 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Not in edit mode: reschedule the tick so it fires again when editing resumes.
 		return v, v.scheduleAutoSave()
+
+	case fileChangedMsg:
+		if v.editMode {
+			// D-09: never clobber unsaved edit-buffer state — drop the
+			// reload, just keep listening for the next change.
+			return v, waitForFileChange(v.reloadCh)
+		}
+		vv, _ := v.reloadFile(msg.path)
+		return vv, waitForFileChange(v.reloadCh)
 
 	case openFileMsg:
 		// ARCH-03: the parent Viewer is the only place that calls loadFile().
