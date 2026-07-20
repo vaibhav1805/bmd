@@ -20,6 +20,7 @@ import (
 	"github.com/bmd/bmd/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/fsnotify/fsnotify"
 )
 
 // statusTimeout is how long an error message stays visible in the status bar.
@@ -193,7 +194,14 @@ type Viewer struct {
 	// file's path once a debounced fsnotify event fires; waitForFileChange
 	// (reload.go) blocks on it and Update() re-issues that tea.Cmd every time
 	// fileChangedMsg is handled, keeping the listener alive for the session.
-	reloadCh chan string
+	// watcher is a single long-lived *fsnotify.Watcher for the whole session
+	// (RESEARCH.md Open Question 1), redirected via startWatching whenever
+	// v.FilePath's directory changes; watchedDir tracks which directory it
+	// currently has open so Remove/Add bookkeeping never accumulates stale
+	// watches (Pitfall 2).
+	reloadCh   chan string
+	watcher    *fsnotify.Watcher
+	watchedDir string
 }
 
 // FileMetadata holds metadata for a single markdown file discovered during directory scan.
@@ -236,7 +244,7 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer 
 
 	cfg, _ := config.Load()
 
-	return &Viewer{
+	v := &Viewer{
 		Doc:              doc,
 		rendered:         strings.Join(lines, "\n"),
 		rawLines:         rawLines,
@@ -257,6 +265,19 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer 
 		autoSaveEnabled:  cfg.AutoSaveEnabled,
 		autoSavePath:     autoSaveFilePath(absPath),
 	}
+
+	// Prime the live-reload watcher (RELOAD-01): this entry point sets
+	// FilePath directly without ever calling loadFile/loadFileNoHistory, so
+	// Init() (value receiver, can't create the watcher itself) needs
+	// v.reloadCh already populated to hand bubbletea a waitForFileChange
+	// cmd (Pitfall 1). The returned cmd is intentionally discarded here —
+	// Init() constructs its own waitForFileChange(v.reloadCh) once bubbletea
+	// starts running commands.
+	if absPath != "" {
+		v.startWatching(absPath)
+	}
+
+	return v
 }
 
 // NewDirectoryViewer creates a Viewer configured for directory browsing mode.
@@ -414,10 +435,22 @@ func (v *Viewer) RestoreSession(s *config.SessionState) {
 
 // Init satisfies bubbletea.Model — no I/O on startup.
 func (v Viewer) Init() tea.Cmd {
+	var cmds []tea.Cmd
 	if v.autoSaveEnabled {
-		return v.scheduleAutoSave()
+		cmds = append(cmds, v.scheduleAutoSave())
 	}
-	return nil
+	// RELOAD-01: v.reloadCh is already populated when this Viewer was
+	// constructed via New() with a non-empty FilePath (Init has a value
+	// receiver and cannot create the watcher itself — see New()). Hand
+	// bubbletea its own waitForFileChange cmd so the channel-drain loop
+	// enters the runtime.
+	if v.reloadCh != nil {
+		cmds = append(cmds, waitForFileChange(v.reloadCh))
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles messages: WindowSizeMsg, KeyMsg for scroll/quit, MouseMsg.
@@ -2155,7 +2188,12 @@ func (v *Viewer) loadFile(path string) (*Viewer, tea.Cmd) {
 	// Check for crash recovery: if an autosave file exists and is newer than the main file.
 	v.checkAutoSaveRecovery(path)
 
-	return v, nil
+	// (Re)point the live-reload watcher at this file (RELOAD-01, Pitfall 1 —
+	// loadFile/loadFileNoHistory are the sole choke points for v.FilePath
+	// changes, so watcher lifecycle lives here, not in Init()).
+	watchCmd := v.startWatching(path)
+
+	return v, watchCmd
 }
 
 // loadFileNoHistory loads a file without pushing it onto history (used for
@@ -2189,7 +2227,11 @@ func (v *Viewer) loadFileNoHistory(path string) (*Viewer, tea.Cmd) {
 	v.links = BuildRegistry(v.rawLines)
 	v.virtualMode = len(v.Lines) > virtualThreshold
 
-	return v, nil
+	// (Re)point the live-reload watcher at this file — loadFileNoHistory is
+	// the other sole choke point for v.FilePath changes (Pitfall 1).
+	watchCmd := v.startWatching(path)
+
+	return v, watchCmd
 }
 
 // followLink resolves a URL from the link registry and navigates to it.

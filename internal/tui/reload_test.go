@@ -154,6 +154,59 @@ func TestReloadFile_EditModeGuard(t *testing.T) {
 	}
 }
 
+// waitForEventOrTimeout blocks on ch for a debounced reload path, failing
+// the test instead of hanging the suite if nothing arrives within timeout
+// (Pitfall 5 — never a bare time.Sleep for fsnotify-driven assertions).
+func waitForEventOrTimeout(t *testing.T, ch <-chan string, timeout time.Duration) string {
+	t.Helper()
+	select {
+	case path := <-ch:
+		return path
+	case <-time.After(timeout):
+		t.Fatalf("timed out after %s waiting for a file-change event", timeout)
+		return ""
+	}
+}
+
+// TestFileWatcher_Integration exercises the real fsnotify watcher end to
+// end: startWatching on a temp file, an external write to that file, and
+// exactly one debounced path arriving on reloadCh (D-07, D-08, Pitfall 1/2).
+func TestFileWatcher_Integration(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "watched.md")
+	initial := manyParagraphs(3)
+	if err := os.WriteFile(path, []byte(initial), 0o644); err != nil {
+		t.Fatalf("write initial file: %v", err)
+	}
+
+	doc, err := parser.ParseMarkdown(initial)
+	if err != nil {
+		t.Fatalf("parse initial file: %v", err)
+	}
+	v := New(doc, path, theme.NewTheme(), 80)
+	if v.watcher == nil {
+		t.Fatalf("expected New() to start the watcher for a non-empty FilePath")
+	}
+	defer v.watcher.Close()
+
+	updated := manyParagraphs(4)
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		t.Fatalf("write updated file: %v", err)
+	}
+
+	got := waitForEventOrTimeout(t, v.reloadCh, 2*time.Second)
+	if got != path {
+		t.Fatalf("expected reload event for %q, got %q", path, got)
+	}
+
+	select {
+	case extra := <-v.reloadCh:
+		t.Fatalf("expected exactly one coalesced reload event, got a second: %q", extra)
+	case <-time.After(2 * reloadDebounce):
+		// no second event arrived — correct.
+	}
+}
+
 // TestDebounce_CoalescesBurst verifies D-07: invoking debounce N times in
 // rapid succession within the wait window fires the callback exactly once,
 // after the window elapses following the LAST call (not the first).
