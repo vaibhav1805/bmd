@@ -232,6 +232,9 @@ func (m *DirectoryModel) View() string {
 // renderDirectoryListing renders the interactive file listing for directory mode.
 // Shows header with directory path, scrollable file list with metadata, and footer hints.
 func (m *DirectoryModel) renderDirectoryListing(contentHeight int) string {
+	if m.width < 3 {
+		return ""
+	}
 	ds := m.state
 	files := ds.Files
 
@@ -325,6 +328,9 @@ func (m *DirectoryModel) renderDirectoryListing(contentHeight int) string {
 
 			// Build the line: "  filename.md              [12 KB, 234 lines]"
 			nameMaxWidth := m.width - len(meta) - len(prefix) - 3
+			if nameMaxWidth < 1 {
+				nameMaxWidth = 1
+			}
 			displayName := f.Name
 			nameRunes := []rune(displayName)
 			if len(nameRunes) > nameMaxWidth {

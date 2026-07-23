@@ -326,6 +326,35 @@ func TestTruncateStr_Long(t *testing.T) {
 	}
 }
 
+// --- CR-02 regression: truncateLabel narrow-width guard ----------------------
+
+// TestTruncateLabel_NegativeMaxWidthNoPanic is the CR-02 regression test
+// (32-REVIEW.md): renderFocusedSubgraph calls truncateLabel with
+// width-derived maxWidth values (lineWidth-4, lineWidth-8) that go negative
+// for narrow graph views, which used to bypass the len<=maxWidth guard (a
+// positive length is never <= a negative number) and panic on a negative
+// slice bound.
+func TestTruncateLabel_NegativeMaxWidthNoPanic(t *testing.T) {
+	for _, maxWidth := range []int{-10, -1, 0, 1, 2, 3, 4, 10} {
+		got := truncateLabel("a reasonably long node title", maxWidth)
+		if maxWidth < 1 && got != "" {
+			t.Errorf("maxWidth=%d: expected empty string, got %q", maxWidth, got)
+		}
+		if len([]rune(got)) > maxWidth && maxWidth >= 1 {
+			t.Errorf("maxWidth=%d: expected result within maxWidth, got %q (%d runes)", maxWidth, got, len([]rune(got)))
+		}
+	}
+}
+
+// TestTruncateLabel_ShortMaxWidthNoEllipsisOverflow verifies the 1<=maxWidth<3
+// branch returns exactly maxWidth runes (no room for a 3-rune "..." suffix).
+func TestTruncateLabel_ShortMaxWidthNoEllipsisOverflow(t *testing.T) {
+	got := truncateLabel("hello", 2)
+	if len([]rune(got)) != 2 {
+		t.Errorf("expected 2 runes, got %q (%d runes)", got, len([]rune(got)))
+	}
+}
+
 // --- Task 2: graphIndexOfNode tests ------------------------------------------
 
 // TestGraphIndexOfNode_Found returns correct index.

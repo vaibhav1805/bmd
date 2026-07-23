@@ -386,6 +386,32 @@ func TestDirectoryModelView_HeaderAndFooterBaseline(t *testing.T) {
 	}
 }
 
+// TestDirectoryModelView_NarrowWidthNoPanic is the CR-02 regression test
+// (32-REVIEW.md): renderDirectoryListing's header truncation (m.width < 3)
+// and its per-row filename truncation (nameMaxWidth going negative once a
+// long filename's metadata suffix outweighs a narrow width) both used to
+// panic with a negative slice bound. Exercises the full width>=1 range with
+// a filename long enough to trigger the per-row path, not just the header.
+func TestDirectoryModelView_NarrowWidthNoPanic(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{
+		"a-very-long-markdown-filename-that-is-quite-long.md": "# content\nsome content here to bump size and lines\n",
+	})
+	defer os.RemoveAll(dir)
+
+	for _, width := range []int{1, 2, 3, 4, 5, 10, 20, 30, 79} {
+		dm := newTestDirectoryModel(t, dir, width, 24)
+		dm.splitMode = false
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("View() panicked at width=%d: %v", width, r)
+				}
+			}()
+			dm.View()
+		}()
+	}
+}
+
 func TestDirectoryModelView_SplitPaneBaseline(t *testing.T) {
 	dir := makeTempDir(t, map[string]string{"readme.md": "# Readme\nBody text."})
 	defer os.RemoveAll(dir)

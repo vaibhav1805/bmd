@@ -1056,9 +1056,15 @@ func renderFocusedSubgraph(g *knowledge.Graph, selectedNodeID string, width, hei
 
 // truncateLabel shortens a label to fit within max width.
 func truncateLabel(label string, maxWidth int) string {
+	if maxWidth < 1 {
+		return ""
+	}
 	runes := []rune(label)
 	if len(runes) <= maxWidth {
 		return label
+	}
+	if maxWidth < 3 {
+		return string(runes[:maxWidth])
 	}
 	return string(runes[:maxWidth-3]) + "..."
 }
