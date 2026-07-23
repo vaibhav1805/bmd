@@ -546,6 +546,9 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if dm, err := NewDirectoryModel(msg.arg, v.Theme, v.Width, v.Height); err == nil {
 				v.activeChild = dm
 				v.currentView = "directory"
+			} else {
+				v.errorMsg = fmt.Sprintf("Directory load error: %v", err)
+				return v, clearErrorAfter(statusTimeout)
 			}
 		case modeGraph:
 			// ARCH-04: construct the real GraphModel here (graduated from
