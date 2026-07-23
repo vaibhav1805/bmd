@@ -346,6 +346,11 @@ func (v *Viewer) BackToDirectory() (*Viewer, tea.Cmd) {
 	v.searchState = NewSearchState()
 	v.searchMode = false
 	v.searchInput = ""
+	// CR-01: clear the file-view link registry and cursor so they can never
+	// outlive the file they were built for and be matched against a stale
+	// screen row while a child model is active.
+	v.links = LinkRegistry{}
+	v.hasCursor = false
 	return v, nil
 }
 
@@ -370,6 +375,11 @@ func (v *Viewer) BackToSearchResults() (*Viewer, tea.Cmd) {
 	v.searchState = NewSearchState()
 	v.searchMode = false
 	v.searchInput = ""
+	// CR-01: clear the file-view link registry and cursor so they can never
+	// outlive the file they were built for and be matched against a stale
+	// screen row while a child model is active.
+	v.links = LinkRegistry{}
+	v.hasCursor = false
 	return v, nil
 }
 
@@ -951,6 +961,17 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
+		// Route to the active child model the same way tea.KeyMsg/
+		// tea.WindowSizeMsg already are (ARCH-05, CR-01 fix), instead of
+		// falling through to file-view mouse handling: v.links/v.hasCursor
+		// belong to the last file that was open in file-view mode, and
+		// reusing them here while a child is active can trigger a click on
+		// directory/search/graph content silently reloading a stale file.
+		if v.activeChild != nil {
+			updated, cmd := v.activeChild.Update(msg)
+			v.activeChild = updated.(tea.Model)
+			return v, cmd
+		}
 		return v.updateMouse(msg)
 	}
 

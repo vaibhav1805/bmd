@@ -86,15 +86,6 @@ func (v *Viewer) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseActionPress:
 		if msg.Button == tea.MouseButtonLeft {
-			// In split-pane mode, ignore clicks on the right pane (preview) to prevent corruption
-			if dm, ok := v.activeChild.(*DirectoryModel); ok && dm.splitMode {
-				leftWidth, _, ok := splitPaneWidths(v.Width)
-				if ok && msg.X > leftWidth {
-					// Click is on the right pane preview - ignore it
-					return v, nil
-				}
-			}
-
 			// Ignore clicks on header (Y=0) or status bar (Y >= Height-1).
 			if msg.Y == 0 || msg.Y >= v.Height-1 {
 				return v, nil
