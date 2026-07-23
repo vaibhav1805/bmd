@@ -68,7 +68,7 @@ type GraphModel struct {
 // introduce a one-frame empty-graph flash and goroutine-timing test flakes.
 // Returns (nil, err) if the graph cannot be loaded.
 func NewGraphModel(rootPath string, th theme.Theme, width, height int) (*GraphModel, error) {
-	dbPath := filepath.Join(rootPath, "knowledge.db")
+	dbPath := knowledge.DefaultDBPath(rootPath)
 	db, err := knowledge.OpenDB(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open knowledge db: %w", err)

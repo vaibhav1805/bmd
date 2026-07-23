@@ -58,12 +58,13 @@ func newTestGraphModel(width, height int, nodes []knowledge.Node, edges []knowle
 	return m
 }
 
-// buildTestKnowledgeDB creates a knowledge.db at dir/knowledge.db containing
-// g, for exercising NewGraphModel's real synchronous SQLite-read constructor
-// path (Pitfall 3) without requiring `bmd index`.
+// buildTestKnowledgeDB creates a knowledge.db at dir's default DB path
+// (.bmd/knowledge.db, matching `bmd index`'s and cross-search's convention)
+// containing g, for exercising NewGraphModel's real synchronous SQLite-read
+// constructor path (Pitfall 3) without requiring `bmd index`.
 func buildTestKnowledgeDB(t *testing.T, dir string, g *knowledge.Graph) {
 	t.Helper()
-	db, err := knowledge.OpenDB(filepath.Join(dir, "knowledge.db"))
+	db, err := knowledge.OpenDB(knowledge.DefaultDBPath(dir))
 	if err != nil {
 		t.Fatalf("OpenDB: %v", err)
 	}

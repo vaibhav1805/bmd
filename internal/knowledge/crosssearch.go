@@ -153,7 +153,7 @@ func SearchAllDocuments(rootPath, query string, topK int) ([]SearchResult, error
 		topK = 50
 	}
 
-	dbPath := defaultDBPath(rootPath)
+	dbPath := DefaultDBPath(rootPath)
 	db, err := openOrBuildIndex(rootPath, dbPath)
 	if err != nil {
 		return nil, err

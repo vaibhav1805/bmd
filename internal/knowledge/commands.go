@@ -334,7 +334,7 @@ func CmdQuery(args []string) error {
 		return fmt.Errorf("query: resolve dir: %w", err)
 	}
 
-	dbPath := defaultDBPath(absDir)
+	dbPath := DefaultDBPath(absDir)
 	db, err := openOrBuildIndex(absDir, dbPath)
 	if err != nil {
 		if isJSON {
@@ -455,7 +455,7 @@ func CmdGraph(args []string) error {
 		return fmt.Errorf("graph: resolve dir: %w", err)
 	}
 
-	dbPath := defaultDBPath(absDir)
+	dbPath := DefaultDBPath(absDir)
 	db, err := openOrBuildIndex(absDir, dbPath)
 	if err != nil {
 		if isJSON {
@@ -617,8 +617,8 @@ func isBoolFlag(name string) bool {
 	return boolFlags[name]
 }
 
-// defaultDBPath returns the default database path for a given directory.
-func defaultDBPath(dir string) string {
+// DefaultDBPath returns the default database path for a given directory.
+func DefaultDBPath(dir string) string {
 	return filepath.Join(dir, ".bmd", "knowledge.db")
 }
 
