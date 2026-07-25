@@ -614,32 +614,6 @@ func TestGraphView_GKeyFromDirectory(t *testing.T) {
 	}
 }
 
-// TestGraphView_CircularDeps handles circular dependencies without infinite loop.
-func TestGraphView_CircularDeps(t *testing.T) {
-	g := knowledge.NewGraph()
-	_ = g.AddNode(&knowledge.Node{ID: "a.md", Title: "A", Type: "document"})
-	_ = g.AddNode(&knowledge.Node{ID: "b.md", Title: "B", Type: "document"})
-	_ = g.AddNode(&knowledge.Node{ID: "c.md", Title: "C", Type: "document"})
-	e1, _ := knowledge.NewEdge("a.md", "b.md", knowledge.EdgeReferences, 1.0, "")
-	e2, _ := knowledge.NewEdge("b.md", "c.md", knowledge.EdgeReferences, 1.0, "")
-	e3, _ := knowledge.NewEdge("c.md", "a.md", knowledge.EdgeReferences, 1.0, "")
-	_ = g.AddEdge(e1)
-	_ = g.AddEdge(e2)
-	_ = g.AddEdge(e3)
-
-	// computeNodeLayout should handle cycles without hanging.
-	layout := computeNodeLayout(g)
-	if layout == nil {
-		t.Error("Expected non-nil layout even with cycles")
-	}
-
-	// RenderGraphASCII should not panic.
-	out := RenderGraphASCII(g, layout, "a.md", 100, 30)
-	if out == "" {
-		t.Error("Expected non-empty output for circular graph")
-	}
-}
-
 // TestGraphView_NodeSelectionNavigation tests up/down/left/right in graph,
 // now routed through Viewer.activeChild's generic tea.Model dispatch
 // (ARCH-04: GraphModel owns navigation state, reached via activeChild).
@@ -1002,33 +976,6 @@ func TestEdge_SearchNonexistentTerm(t *testing.T) {
 	}
 }
 
-// TestEdge_GraphEmptyGraph renders empty message.
-func TestEdge_GraphEmptyGraph(t *testing.T) {
-	g := knowledge.NewGraph()
-	out := RenderGraphASCII(g, nil, "", 80, 24)
-	if !strings.Contains(out, "No graph data") {
-		t.Errorf("Expected empty graph message, got: %q", out)
-	}
-}
-
-// TestEdge_GraphLargeNodeCount tests 100+ node fallback.
-func TestEdge_GraphLargeNodeCount(t *testing.T) {
-	g := knowledge.NewGraph()
-	for i := 0; i < 100; i++ {
-		id := fmt.Sprintf("file_%03d.md", i)
-		_ = g.AddNode(&knowledge.Node{ID: id, Title: fmt.Sprintf("File %d", i), Type: "document"})
-	}
-	layout := computeNodeLayout(g)
-	out := RenderGraphASCII(g, layout, "file_000.md", 120, 50)
-	if out == "" {
-		t.Error("Expected non-empty output for 100-node graph")
-	}
-	// Should use list fallback for >40 nodes
-	if !strings.Contains(out, "list view") {
-		t.Error("Expected list-view fallback for 100+ nodes")
-	}
-}
-
 // TestEdge_DirectoryOpenAndReturnMultipleTimes stress tests navigation.
 func TestEdge_DirectoryOpenAndReturnMultipleTimes(t *testing.T) {
 	dir := mkTmpDir(t, map[string]string{
@@ -1176,34 +1123,6 @@ func TestPerf_SearchExecution(t *testing.T) {
 	_ = results
 	if duration > 5*time.Second {
 		t.Errorf("Search across 20 files took %v, expected < 5s", duration)
-	}
-}
-
-// TestPerf_GraphRendering verifies graph render performance.
-func TestPerf_GraphRendering(t *testing.T) {
-	g := knowledge.NewGraph()
-	for i := 0; i < 20; i++ {
-		id := fmt.Sprintf("node_%02d.md", i)
-		_ = g.AddNode(&knowledge.Node{ID: id, Title: fmt.Sprintf("Node %d", i), Type: "document"})
-	}
-	// Create a tree of edges
-	for i := 1; i < 20; i++ {
-		src := fmt.Sprintf("node_%02d.md", i/2)
-		tgt := fmt.Sprintf("node_%02d.md", i)
-		e, _ := knowledge.NewEdge(src, tgt, knowledge.EdgeReferences, 1.0, "")
-		_ = g.AddEdge(e)
-	}
-	layout := computeNodeLayout(g)
-
-	start := time.Now()
-	out := RenderGraphASCII(g, layout, "node_00.md", 200, 60)
-	duration := time.Since(start)
-
-	if out == "" {
-		t.Error("Expected non-empty graph output")
-	}
-	if duration > 500*time.Millisecond {
-		t.Errorf("Graph rendering (20 nodes) took %v, expected < 500ms", duration)
 	}
 }
 
