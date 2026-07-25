@@ -50,10 +50,10 @@ func TestScanDirectory_BasicMarkdownFiles(t *testing.T) {
 
 func TestScanDirectory_SkipsHiddenDirectories(t *testing.T) {
 	root := createTestTree(t, map[string]string{
-		"visible.md":       "# Visible",
-		".git/HEAD":        "ref: refs/heads/main",
-		".hidden/note.md":  "# Hidden",
-		".dotfile.md":      "# Dot file", // hidden file — should still be scanned
+		"visible.md":      "# Visible",
+		".git/HEAD":       "ref: refs/heads/main",
+		".hidden/note.md": "# Hidden",
+		".dotfile.md":     "# Dot file", // hidden file — should still be scanned
 	})
 
 	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
@@ -84,8 +84,8 @@ func TestScanDirectory_SkipsHiddenDirectories(t *testing.T) {
 
 func TestScanDirectory_SkipsKnownVendorDirs(t *testing.T) {
 	root := createTestTree(t, map[string]string{
-		"readme.md":              "# Readme",
-		"node_modules/pkg.md":   "# Pkg",
+		"readme.md":           "# Readme",
+		"node_modules/pkg.md": "# Pkg",
 	})
 
 	docs, err := ScanDirectory(root, ScanConfig{UseDefaultIgnores: true})
@@ -204,12 +204,12 @@ func TestScanDirectory_PerformanceBaseline(t *testing.T) {
 
 func TestScanConfig_SkipsHiddenDirsByDefault(t *testing.T) {
 	root := createTestTree(t, map[string]string{
-		"visible/readme.md":    "# Visible",
-		".git/config.md":       "# Git config",
-		".venv/lib/note.md":    "# Venv",
-		".cache/data.md":       "# Cache",
-		".hidden/secret.md":    "# Hidden dir",
-		"public.md":            "# Public",
+		"visible/readme.md": "# Visible",
+		".git/config.md":    "# Git config",
+		".venv/lib/note.md": "# Venv",
+		".cache/data.md":    "# Cache",
+		".hidden/secret.md": "# Hidden dir",
+		"public.md":         "# Public",
 	})
 
 	config := ScanConfig{
@@ -290,14 +290,14 @@ func TestScanConfig_IncludesHiddenDirsWithFlag(t *testing.T) {
 
 func TestScanConfig_IgnoresDefaultPatterns(t *testing.T) {
 	root := createTestTree(t, map[string]string{
-		"readme.md":              "# Readme",
-		"vendor/pkg.md":          "# Vendor package",
-		"node_modules/dep.md":    "# Node dep",
-		"__pycache__/cache.md":   "# Python cache",
-		".gradle/build.md":       "# Gradle",
-		"build/artifact.md":      "# Build artifact",
-		"dist/output.md":         "# Distribution",
-		"src/main.md":            "# Source",
+		"readme.md":            "# Readme",
+		"vendor/pkg.md":        "# Vendor package",
+		"node_modules/dep.md":  "# Node dep",
+		"__pycache__/cache.md": "# Python cache",
+		".gradle/build.md":     "# Gradle",
+		"build/artifact.md":    "# Build artifact",
+		"dist/output.md":       "# Distribution",
+		"src/main.md":          "# Source",
 	})
 
 	config := ScanConfig{
@@ -340,11 +340,11 @@ func TestScanConfig_IgnoresDefaultPatterns(t *testing.T) {
 
 func TestScanConfig_CustomIgnoreDirs(t *testing.T) {
 	root := createTestTree(t, map[string]string{
-		"src/code.md":       "# Source",
-		"custom/note.md":    "# Custom",
-		"local/data.md":     "# Local",
-		"vendor/lib.md":     "# Vendor",
-		"test/spec.md":      "# Test",
+		"src/code.md":    "# Source",
+		"custom/note.md": "# Custom",
+		"local/data.md":  "# Local",
+		"vendor/lib.md":  "# Vendor",
+		"test/spec.md":   "# Test",
 	})
 
 	config := ScanConfig{
@@ -388,14 +388,13 @@ func TestScanConfig_CustomIgnoreDirs(t *testing.T) {
 
 func TestScanConfig_IgnoreFilesPatterns(t *testing.T) {
 	root := createTestTree(t, map[string]string{
-		"readme.md":        "# Readme",
-		"draft.md":         "# Draft",
-		"DRAFT.md":         "# Draft uppercase",
-		"config.backup":    "backup",
-		"settings.lock":    "lock",
-		"script.py":        "python",
-		"src/main.md":      "# Source",
-		"src/test.backup":  "test backup",
+		"readme.md":       "# Readme",
+		"draft.md":        "# Draft",
+		"config.backup":   "backup",
+		"settings.lock":   "lock",
+		"script.py":       "python",
+		"src/main.md":     "# Source",
+		"src/test.backup": "test backup",
 	})
 
 	config := ScanConfig{
@@ -416,9 +415,6 @@ func TestScanConfig_IgnoreFilesPatterns(t *testing.T) {
 		}
 		if doc.RelPath == "settings.lock" {
 			t.Errorf("*.lock should be ignored: %q", doc.RelPath)
-		}
-		if doc.RelPath == "DRAFT.md" {
-			t.Errorf("DRAFT.md should be ignored: %q", doc.RelPath)
 		}
 		if doc.RelPath == "src/test.backup" {
 			t.Errorf("*.backup in subdirs should be ignored: %q", doc.RelPath)
@@ -446,20 +442,47 @@ func TestScanConfig_IgnoreFilesPatterns(t *testing.T) {
 		t.Error("readme.md should be included")
 	}
 	if !draftFound {
-		t.Error("draft.md (lowercase) should be included, only DRAFT.md is ignored")
+		t.Error("draft.md (lowercase) should be included, an unrelated-case pattern (DRAFT.md) must not match it")
 	}
 	if !srcMainFound {
 		t.Error("src/main.md should be included")
 	}
 }
 
+// TestScanConfig_IgnoreFilesPatterns_CaseSensitiveExactMatch verifies an
+// IgnoreFiles pattern matches the on-disk filename case-sensitively. This is
+// deliberately its own test with a tree containing only "DRAFT.md" (bmd-eh6):
+// creating both "draft.md" and "DRAFT.md" via createTestTree's map[string]string
+// in a single call is flaky on case-insensitive-but-case-preserving
+// filesystems (default macOS APFS/HFS+) — the two paths collide onto one
+// directory entry, and Go's randomized map iteration order nondeterministically
+// decides which name survives, flipping whether the ignore pattern matches.
+func TestScanConfig_IgnoreFilesPatterns_CaseSensitiveExactMatch(t *testing.T) {
+	root := createTestTree(t, map[string]string{
+		"DRAFT.md": "# Draft uppercase",
+	})
+
+	docs, err := ScanDirectory(root, ScanConfig{
+		IgnoreFiles:       []string{"DRAFT.md"},
+		UseDefaultIgnores: true,
+	})
+	if err != nil {
+		t.Fatalf("ScanDirectory: %v", err)
+	}
+	for _, doc := range docs {
+		if doc.RelPath == "DRAFT.md" {
+			t.Errorf("DRAFT.md should be ignored by an exact-case pattern match: %q", doc.RelPath)
+		}
+	}
+}
+
 func TestScanConfig_CombinedCustomAndDefaults(t *testing.T) {
 	root := createTestTree(t, map[string]string{
-		"readme.md":         "# Readme",
-		"vendor/pkg.md":     "# Vendor (default ignored)",
-		"custom/note.md":    "# Custom (custom ignored)",
-		"src/main.md":       "# Source",
-		"test.backup":       "# Test (file ignored)",
+		"readme.md":      "# Readme",
+		"vendor/pkg.md":  "# Vendor (default ignored)",
+		"custom/note.md": "# Custom (custom ignored)",
+		"src/main.md":    "# Source",
+		"test.backup":    "# Test (file ignored)",
 	})
 
 	config := ScanConfig{
