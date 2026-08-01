@@ -278,18 +278,34 @@ func (r *Renderer) renderImage(img *ast.Image) string {
 
 	// Render using terminal image protocol.
 	//
-	// Block-art rendering (ProtocolUnicode) has a hard resolution ceiling
-	// no width increase can fix — small printed text in a screenshot never
-	// becomes legible this way regardless of column count, since each
-	// dot/cell can only ever approximate, not resolve, fine detail. Given
-	// that, size it the same as native protocols: a document-proportional
-	// preview, not a legibility attempt.
-	imageWidth := (r.termWidth * 60) / 100
-	if imageWidth < 20 {
-		imageWidth = 20
-	}
-	if imageWidth > 100 {
-		imageWidth = 100
+	// Block-art rendering (ProtocolUnicode) gets a smaller target width
+	// than native protocols: for Kitty/iTerm2/Sixel, width is just a
+	// cell-sizing hint for a real raster image, so a larger box only ever
+	// helps. But block-art's dithered dot pattern actually reads *more*
+	// cleanly at a smaller size — like halftone newsprint, the pattern
+	// becomes less perceptible and the shape reads more smoothly — and a
+	// large render mostly just adds scroll-heavy document real estate
+	// without adding legibility (it has a hard resolution ceiling no
+	// width increase can fix for anything with fine detail, e.g. a page
+	// of body text). A document-proportional thumbnail suits its role as
+	// a rough shape/photo preview better than a large render.
+	var imageWidth int
+	if DetectImageProtocol() == ProtocolUnicode {
+		imageWidth = (r.termWidth * 40) / 100
+		if imageWidth < 20 {
+			imageWidth = 20
+		}
+		if imageWidth > 50 {
+			imageWidth = 50
+		}
+	} else {
+		imageWidth = (r.termWidth * 60) / 100
+		if imageWidth < 20 {
+			imageWidth = 20
+		}
+		if imageWidth > 100 {
+			imageWidth = 100
+		}
 	}
 	imageHeight := (imageWidth * 2) / 3 // Rough aspect ratio for images
 

@@ -225,16 +225,16 @@ func TestRenderImage_PlainImagesFallback(t *testing.T) {
 	}
 }
 
-// TestRenderImage_UnicodeProtocolStaysDocumentProportional verifies the
-// block-art (ProtocolUnicode) fallback is sized the same as native image
-// protocols — a document-proportional preview, not stretched toward the
-// full terminal width. An earlier version of this code widened
-// block-art specifically for legibility, but per user testing on a real
-// dense textbook page, no width increase makes small printed text legible
-// through this technique (a hard resolution ceiling — see renderImage's
-// comment), so the wider render only made the image disproportionately
-// large in the document for no real benefit.
-func TestRenderImage_UnicodeProtocolStaysDocumentProportional(t *testing.T) {
+// TestRenderImage_UnicodeProtocolIsThumbnailSized verifies the block-art
+// (ProtocolUnicode) fallback renders as a compact thumbnail — smaller than
+// native image protocols get — rather than stretched toward the full
+// terminal width or matching the native-protocol sizing. Per user
+// testing, a dithered dot pattern reads more cleanly at a smaller size
+// (like halftone print), and since block-art has a hard resolution
+// ceiling no width increase can fix for fine detail anyway (see
+// renderImage's comment), a large render just adds scroll-heavy document
+// real estate without adding legibility.
+func TestRenderImage_UnicodeProtocolIsThumbnailSized(t *testing.T) {
 	t.Setenv("TERM", "xterm-256color")
 	t.Setenv("TERM_PROGRAM", "")
 	t.Setenv("ITERM_PROGRAM", "")
@@ -256,12 +256,12 @@ func TestRenderImage_UnicodeProtocolStaysDocumentProportional(t *testing.T) {
 	out := r.renderImage(img)
 
 	rows := strings.Count(out, "\n")
-	// A square image renders roughly (targetWidth/2) rows. At the
-	// document-proportional 60%-of-180-clamped-to-100 sizing, that's ~50
-	// rows — well short of what a near-full-terminal-width render (176
-	// cols) would produce (~88 rows).
-	if rows > 55 {
-		t.Errorf("expected a document-proportional render (~50 rows) at termWidth=%d, got %d rows — image is stretched too wide", termWidth, rows)
+	// A square image renders roughly (targetWidth/2) rows. At the new
+	// 40%-of-180-clamped-to-50 thumbnail sizing, that's ~25 rows — well
+	// short of the ~50 rows the native-protocol 60%/100-col sizing (or
+	// the ~88 rows a near-full-terminal-width render) would produce.
+	if rows > 30 {
+		t.Errorf("expected a compact thumbnail render (~25 rows) at termWidth=%d, got %d rows — image is larger than intended", termWidth, rows)
 	}
 }
 
