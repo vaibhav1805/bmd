@@ -2,6 +2,8 @@
 .planning/
 .claude/
 .continue-here.md
+AGENTS.md
+CLAUDE.md
 
 # IDE & Editor
 .DS_Store
@@ -27,6 +29,8 @@ bmd-test
 *.bmd-index.json
 .bmd-registry.json
 .bmd-llm-extractions.json
+.bmd-relationships-discovered.yaml
+.bmd-relationships.yaml
 
 # BMD artifacts directory (PageIndex trees, temp files)
 .bmd/
@@ -42,6 +46,8 @@ node_modules/
 knowledge.db
 .planning/
 
-# Beads / Dolt files (added by bd init)
+# Beads / Dolt files (added by bd init) — issue data lives in the Dolt remote,
+# not git; run `bd init` on a fresh clone to regenerate local config/hooks.
 .dolt/
 .beads-credential-key
+.beads/
