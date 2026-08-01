@@ -59,28 +59,6 @@ bmd query "topic" --dir ./docs  # Fast keyword search
 - **[Commands](./docs/commands.md)** — Full command reference
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Technical design
 
-## Quick Examples
-
-### For Humans
-
-```bash
-# View with pretty formatting
-bmd docs/README.md
-
-# Search within a file
-bmd docs/README.md
-# Press '/' then type search term
-
-# Edit a file
-bmd file.md
-# Press 'e' to enter edit mode, Esc to exit
-
-# Browse directory with split-pane
-bmd
-# Press 's' to toggle split-pane, ↑/↓ to navigate, Enter to open
-```
-
-
 ## Key Capabilities
 
 ### Search & Discovery
