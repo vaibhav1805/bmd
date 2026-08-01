@@ -167,7 +167,8 @@ func ImageToITerm2(imageData []byte, width, height int) string {
 }
 
 // ImageToKitty encodes image data as a Kitty graphics protocol sequence.
-// This protocol works in Kitty, Alacritty (with Kitty support), and WezTerm.
+// This protocol works in Kitty, WezTerm, and other terminals that
+// implement it (notably not mainline Alacritty — see DetectImageProtocol).
 // Returns an ANSI sequence that compatible terminals will render as an inline image.
 func ImageToKitty(imageData []byte, width, height int) string {
 	if len(imageData) == 0 {
@@ -176,18 +177,24 @@ func ImageToKitty(imageData []byte, width, height int) string {
 
 	encoded := base64.StdEncoding.EncodeToString(imageData)
 
-	// Kitty graphics protocol - minimal working format:
-	// \x1b_Ga=T,f=100,m=0:base64data\x1b\\
-	// - a=T: action transmit
+	// Kitty graphics protocol format (per the spec: "All graphics escape
+	// codes are of the form: <ESC>_G<control data>;<payload><ESC>\"):
+	// \x1b_Ga=T,f=100,m=0;base64data\x1b\\
+	// - a=T: action transmit-and-display
 	// - f=100: format PNG
 	// - m=0: no more chunks
+	// The control data and payload are separated by a semicolon, NOT a
+	// colon — using a colon here silently produced no image at all in a
+	// real Kitty terminal, since the terminal never finds the expected
+	// separator and the whole command fails to parse.
 	//
-	// Note: For graph images, we don't need to specify width/height as Alacritty
-	// will scale to fit the terminal based on the PNG's intrinsic dimensions
-	// and the current terminal cell size.
+	// We don't constrain display size (Kitty's c=/r= placement keys) even
+	// though width/height are available — the terminal renders at the
+	// PNG's natural size (intrinsic pixel dimensions divided by the
+	// current cell size) instead.
 
 	payload := fmt.Sprintf(
-		"\x1b_Ga=T,f=100,m=0:%s\x1b\\",
+		"\x1b_Ga=T,f=100,m=0;%s\x1b\\",
 		encoded,
 	)
 

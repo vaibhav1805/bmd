@@ -304,6 +304,35 @@ func TestDetectImageProtocol_XtermTermWithoutTermProgram_NoProtocolGuessed(t *te
 	}
 }
 
+// TestImageToKitty_UsesSemicolonSeparator is a regression test for a real
+// bug found via manual testing: opening an image doc in an actual Kitty
+// terminal produced no image at all (not even a text fallback) because
+// ImageToKitty separated its control data from the base64 payload with a
+// colon (':') instead of the protocol's actual semicolon (';') separator
+// — per the Kitty graphics protocol spec, "All graphics escape codes are
+// of the form: <ESC>_G<control data>;<payload><ESC>\". With the wrong
+// separator, the terminal never finds the control-data boundary it
+// expects and the whole command silently fails to parse.
+func TestImageToKitty_UsesSemicolonSeparator(t *testing.T) {
+	data := []byte{0x89, 0x50, 0x4E, 0x47, 1, 2, 3}
+	seq := ImageToKitty(data, 40, 20)
+
+	const wantPrefix = "\x1b_Ga=T,f=100,m=0;"
+	if !strings.HasPrefix(seq, wantPrefix) {
+		t.Fatalf("expected control data terminated by ';', got: %q", seq)
+	}
+	if !strings.HasSuffix(seq, "\x1b\\") {
+		t.Errorf("expected the sequence to end with the ST terminator (\\x1b\\\\), got: %q", seq)
+	}
+	// The colon must not appear as a stand-in separator anywhere before
+	// the payload — assert the exact control-data prefix above catches
+	// this, but also guard against a colon sneaking in right at the
+	// control-data/payload boundary.
+	if strings.Contains(seq, "m=0:") {
+		t.Errorf("found the old, wrong colon separator in the Kitty escape sequence: %q", seq)
+	}
+}
+
 // TestSixelAvailable checks if Sixel availability detection works.
 func TestSixelAvailable(t *testing.T) {
 	available := SixelAvailable()

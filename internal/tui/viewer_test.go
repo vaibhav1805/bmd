@@ -1880,10 +1880,10 @@ func TestViewWithBrowser_InlineImage_NoRawEscapeLeak(t *testing.T) {
 // TestView_KittyProtocolImage_NoWrapCorruption is a regression test for a
 // real bug found via manual testing: the main (non-split-pane) viewer's
 // wrapLineToWidth() only recognized CSI escape sequences (\x1b[...m).
-// Kitty's graphics protocol uses APC (\x1b_Ga=T,...:<base64>\x1b\\), which
+// Kitty's graphics protocol uses APC (\x1b_Ga=T,...;<base64>\x1b\\), which
 // wrapLineToWidth treated as literal text — worse, its embedded base64
 // payload incidentally contains the literal byte 'm' near the very start
-// ("f=100,m=0:..."), so even the CSI-only stripANSI() used to decide
+// ("f=100,m=0;..."), so even the CSI-only stripANSI() used to decide
 // whether wrapping was needed stopped scanning there and mis-measured the
 // line as enormous, triggering a hard wrap that split the sequence (and
 // the rest of the payload) across many lines of visible garbage instead
@@ -1903,7 +1903,7 @@ func TestView_KittyProtocolImage_NoWrapCorruption(t *testing.T) {
 	v := newTestFileViewer(t, dir, "readme.md", "# Test\n\n![img](./big.png)\n", 80, 24)
 	out := v.View()
 
-	const prefix = "\x1b_Ga=T,f=100,m=0:"
+	const prefix = "\x1b_Ga=T,f=100,m=0;"
 	start := strings.Index(out, prefix)
 	if start == -1 {
 		t.Fatalf("expected the Kitty graphics protocol escape prefix intact in output, got: %.200q...", out)
