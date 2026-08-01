@@ -276,14 +276,34 @@ func (r *Renderer) renderImage(img *ast.Image) string {
 		return theme.FgCode(r.theme.LinkColor()) + "[img: " + alt + "]" + theme.Reset
 	}
 
-	// Render using terminal image protocol
-	// Use reasonable dimensions: 60% of terminal width, aspect-ratio-preserved height
-	imageWidth := (r.termWidth * 60) / 100
-	if imageWidth < 20 {
-		imageWidth = 20
-	}
-	if imageWidth > 100 {
-		imageWidth = 100
+	// Render using terminal image protocol.
+	//
+	// Block-art rendering (ProtocolUnicode) gets a much larger width than
+	// native image protocols: for Kitty/iTerm2/Sixel, "width" is just a
+	// character-cell sizing hint for a real raster image the terminal
+	// scales itself, so a conservative 60%-of-width/100-col cap is fine.
+	// But block-art's resolution IS the terminal column count — each
+	// dot/cell only covers as many source pixels as the width leaves
+	// unsampled, so a small width guarantees illegible output for
+	// anything with fine detail (e.g. a page of body text). Use nearly
+	// the full terminal width there instead.
+	var imageWidth int
+	if DetectImageProtocol() == ProtocolUnicode {
+		imageWidth = r.termWidth - 4
+		if imageWidth < 20 {
+			imageWidth = 20
+		}
+		if imageWidth > 400 {
+			imageWidth = 400
+		}
+	} else {
+		imageWidth = (r.termWidth * 60) / 100
+		if imageWidth < 20 {
+			imageWidth = 20
+		}
+		if imageWidth > 100 {
+			imageWidth = 100
+		}
 	}
 	imageHeight := (imageWidth * 2) / 3 // Rough aspect ratio for images
 

@@ -225,6 +225,46 @@ func TestRenderImage_PlainImagesFallback(t *testing.T) {
 	}
 }
 
+// TestRenderImage_UnicodeProtocolUsesWiderRenderThanPixelProtocols verifies
+// the block-art (ProtocolUnicode) fallback renders at nearly the full
+// terminal width rather than the conservative 60%/100-column cap used for
+// native image protocols (Kitty/iTerm2/Sixel, where width is just a
+// cell-sizing hint for a real raster image). Block-art's actual resolution
+// IS the column count, so a small width guarantees illegible output for
+// anything with fine detail — this was the fix for real feedback that a
+// dense textbook-page screenshot was unreadable even after the dithering
+// fix, confirmed to meaningfully help once rendered at a wider column
+// count.
+func TestRenderImage_UnicodeProtocolUsesWiderRenderThanPixelProtocols(t *testing.T) {
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("TERM_PROGRAM", "")
+	t.Setenv("ITERM_PROGRAM", "")
+	t.Setenv("ITERM2_SHOULDMANAGEPASTEBOARD", "")
+	t.Setenv("KITTY_WINDOW_ID", "")
+	t.Setenv("COLORTERM", "")
+	if got := DetectImageProtocol(); got != ProtocolUnicode {
+		t.Fatalf("expected ProtocolUnicode in this environment, got %v", got)
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "sample.png"), makeTestPNG(t, 400, 400), 0o644); err != nil {
+		t.Fatalf("write test image: %v", err)
+	}
+
+	termWidth := 180
+	r := NewRenderer(theme.NewThemeForScheme(theme.Dark), termWidth).WithDocDir(dir)
+	img := &ast.Image{URL: "sample.png", Alt: "Sample"}
+	out := r.renderImage(img)
+
+	rows := strings.Count(out, "\n")
+	// A square image renders roughly (targetWidth/2) rows. At the old
+	// 60%-of-180-clamped-to-100 logic that's ~50 rows; at nearly the full
+	// terminal width (180-4=176) it should be closer to ~88.
+	if rows < 60 {
+		t.Errorf("expected a much wider/taller render at termWidth=%d (ProtocolUnicode should use ~full width, not the 100-col pixel-protocol cap), got %d rows in output of length %d", termWidth, rows, len(out))
+	}
+}
+
 // TestImageProtocolDetection verifies image protocol detection works.
 func TestImageProtocolDetection(t *testing.T) {
 	protocol := DetectImageProtocol()
