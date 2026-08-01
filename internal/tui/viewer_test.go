@@ -1903,17 +1903,35 @@ func TestView_KittyProtocolImage_NoWrapCorruption(t *testing.T) {
 	v := newTestFileViewer(t, dir, "readme.md", "# Test\n\n![img](./big.png)\n", 80, 24)
 	out := v.View()
 
-	const prefix = "\x1b_Ga=T,f=100,m=0;"
-	start := strings.Index(out, prefix)
-	if start == -1 {
+	// A 50000-byte image needs chunking (see bmd-wt6), so the first chunk
+	// is marked m=1 (more chunks follow), not m=0.
+	const prefix = "\x1b_Ga=T,f=100,m=1;"
+	if !strings.Contains(out, prefix) {
 		t.Fatalf("expected the Kitty graphics protocol escape prefix intact in output, got: %.200q...", out)
 	}
-	end := strings.Index(out[start:], "\x1b\\")
-	if end == -1 {
-		t.Fatalf("expected the Kitty graphics protocol terminator (ST) present after the prefix")
+
+	// Every chunked escape sequence (\x1b_G...\x1b\\) must survive as one
+	// contiguous run with no embedded newline splitting it.
+	rest := out
+	chunks := 0
+	for {
+		idx := strings.Index(rest, "\x1b_G")
+		if idx == -1 {
+			break
+		}
+		rest = rest[idx:]
+		end := strings.Index(rest, "\x1b\\")
+		if end == -1 {
+			t.Fatalf("chunk %d: no ST terminator found", chunks)
+		}
+		segment := rest[:end]
+		if strings.Contains(segment, "\n") {
+			t.Errorf("chunk %d: Kitty escape sequence was split by a newline (wrap corruption) — %d-byte segment contains an embedded newline", chunks, len(segment))
+		}
+		rest = rest[end+len("\x1b\\"):]
+		chunks++
 	}
-	segment := out[start : start+end]
-	if strings.Contains(segment, "\n") {
-		t.Errorf("Kitty escape sequence was split by a newline (wrap corruption) — %d-byte segment contains an embedded newline", len(segment))
+	if chunks < 2 {
+		t.Fatalf("expected multiple chunked escape sequences for a 50000-byte image, got %d", chunks)
 	}
 }

@@ -1,6 +1,7 @@
 package renderer
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -330,6 +331,79 @@ func TestImageToKitty_UsesSemicolonSeparator(t *testing.T) {
 	// control-data/payload boundary.
 	if strings.Contains(seq, "m=0:") {
 		t.Errorf("found the old, wrong colon separator in the Kitty escape sequence: %q", seq)
+	}
+}
+
+// TestImageToKitty_ChunksLargePayloads is a regression test for a second
+// real bug found via manual testing (after fixing the ':' vs ';'
+// separator): a large image (base64-encoded well over 4096 bytes, which
+// any real photo/screenshot always is) still produced no image at all in
+// a real Kitty terminal. Root cause: the Kitty graphics protocol has a
+// hard 4096-byte limit on base64 payload PER CHUNK — any larger transfer
+// must be split across multiple escape sequences (m=1 on every chunk but
+// the last, m=0 on the final one), with only the first chunk carrying the
+// full control-data set. ImageToKitty previously sent the entire payload,
+// however large, as a single m=0 ("final, no more chunks") chunk,
+// violating that limit — the terminal never finds a validly-sized single
+// command and drops it.
+func TestImageToKitty_ChunksLargePayloads(t *testing.T) {
+	// 10000 raw bytes -> ~13336 base64 chars -> should split into 4 chunks
+	// of kittyChunkSize (4096) plus a final shorter one.
+	data := make([]byte, 10000)
+	for i := range data {
+		data[i] = byte(i % 256)
+	}
+	seq := ImageToKitty(data, 40, 20)
+
+	encoded := base64.StdEncoding.EncodeToString(data)
+	wantChunks := (len(encoded) + kittyChunkSize - 1) / kittyChunkSize
+	if wantChunks < 2 {
+		t.Fatalf("test setup error: expected the encoded payload to need multiple chunks, got %d", wantChunks)
+	}
+
+	gotChunks := strings.Count(seq, "\x1b_G")
+	if gotChunks != wantChunks {
+		t.Errorf("expected %d chunked escape sequences for a %d-byte encoded payload, got %d", wantChunks, len(encoded), gotChunks)
+	}
+
+	// Every chunk but the last must be marked m=1 (more chunks follow);
+	// only the last must be m=0.
+	if strings.Count(seq, "m=1;") != wantChunks-1 {
+		t.Errorf("expected exactly %d chunks marked m=1 (all but the last), got %d in: %.200q...", wantChunks-1, strings.Count(seq, "m=1;"), seq)
+	}
+	if strings.Count(seq, "m=0;") != 1 {
+		t.Errorf("expected exactly 1 chunk marked m=0 (the final one), got %d", strings.Count(seq, "m=0;"))
+	}
+
+	// Only the first chunk should carry the full control-data set.
+	if strings.Count(seq, "a=T,f=100,") != 1 {
+		t.Errorf("expected the full control-data set (a=T,f=100,...) exactly once (first chunk only), got %d occurrences", strings.Count(seq, "a=T,f=100,"))
+	}
+
+	// Reassembling the payload from all chunks (in order) must exactly
+	// reproduce the original base64 string.
+	var reassembled strings.Builder
+	rest := seq
+	for {
+		idx := strings.Index(rest, "\x1b_G")
+		if idx == -1 {
+			break
+		}
+		rest = rest[idx+len("\x1b_G"):]
+		semi := strings.Index(rest, ";")
+		if semi == -1 {
+			t.Fatalf("malformed chunk: no ';' separator found")
+		}
+		rest = rest[semi+1:]
+		term := strings.Index(rest, "\x1b\\")
+		if term == -1 {
+			t.Fatalf("malformed chunk: no ST terminator found")
+		}
+		reassembled.WriteString(rest[:term])
+		rest = rest[term+len("\x1b\\"):]
+	}
+	if reassembled.String() != encoded {
+		t.Errorf("reassembled chunk payloads don't match the original base64 data (lengths: got %d, want %d)", reassembled.Len(), len(encoded))
 	}
 }
 

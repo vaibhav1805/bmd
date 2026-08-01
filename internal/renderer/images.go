@@ -166,6 +166,15 @@ func ImageToITerm2(imageData []byte, width, height int) string {
 		len(imageData), width, height, encoded)
 }
 
+// kittyChunkSize is the Kitty graphics protocol's hard limit on
+// base64-encoded payload bytes per escape-sequence chunk. Per the spec:
+// "the base64 encoded image data ... must be no larger than 4096 bytes"
+// per chunk, with non-final chunks required to be a multiple of 4 bytes
+// (so they don't split a base64 quantum, which would corrupt decoding).
+// 4096 is itself a multiple of 4, so slicing at exactly this size for
+// every non-final chunk satisfies that requirement automatically.
+const kittyChunkSize = 4096
+
 // ImageToKitty encodes image data as a Kitty graphics protocol sequence.
 // This protocol works in Kitty, WezTerm, and other terminals that
 // implement it (notably not mainline Alacritty — see DetectImageProtocol).
@@ -182,23 +191,45 @@ func ImageToKitty(imageData []byte, width, height int) string {
 	// \x1b_Ga=T,f=100,m=0;base64data\x1b\\
 	// - a=T: action transmit-and-display
 	// - f=100: format PNG
-	// - m=0: no more chunks
+	// - m=0/m=1: final/more-chunks-follow
 	// The control data and payload are separated by a semicolon, NOT a
 	// colon — using a colon here silently produced no image at all in a
 	// real Kitty terminal, since the terminal never finds the expected
 	// separator and the whole command fails to parse.
 	//
+	// Any payload over kittyChunkSize bytes MUST be split across multiple
+	// escape sequences (m=1 on every chunk but the last, m=0 on the
+	// final one) — sending it all as a single "final" chunk, as this
+	// function previously did unconditionally, exceeds the protocol's
+	// hard per-chunk limit and the terminal fails to parse the command
+	// at all, silently dropping the image (any real photo/screenshot is
+	// almost always well over 4096 bytes once base64-encoded).
+	//
+	// Only the first chunk carries the full control-data set (a=/f=/etc);
+	// subsequent chunks carry only m= (and optionally q=), per the spec.
+	//
 	// We don't constrain display size (Kitty's c=/r= placement keys) even
 	// though width/height are available — the terminal renders at the
 	// PNG's natural size (intrinsic pixel dimensions divided by the
 	// current cell size) instead.
+	var sb strings.Builder
+	for i := 0; i < len(encoded); i += kittyChunkSize {
+		end := i + kittyChunkSize
+		if end > len(encoded) {
+			end = len(encoded)
+		}
+		more := 0
+		if end < len(encoded) {
+			more = 1
+		}
+		if i == 0 {
+			fmt.Fprintf(&sb, "\x1b_Ga=T,f=100,m=%d;%s\x1b\\", more, encoded[i:end])
+		} else {
+			fmt.Fprintf(&sb, "\x1b_Gm=%d;%s\x1b\\", more, encoded[i:end])
+		}
+	}
 
-	payload := fmt.Sprintf(
-		"\x1b_Ga=T,f=100,m=0;%s\x1b\\",
-		encoded,
-	)
-
-	return payload
+	return sb.String()
 }
 
 // ImageToSixel converts image data to Sixel format using ImageMagick's convert command.
