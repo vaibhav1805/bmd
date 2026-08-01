@@ -198,24 +198,64 @@ func highlightTextRangeWithStripped(displayLine, strippedLine string, start, end
 	return before + "\x1b[48;5;238m" + selected + "\x1b[m" + after
 }
 
+// ansiEscapeRuneLen returns the number of runes spanned by the escape
+// sequence starting at runes[i] (runes[i] must be '\x1b'), covering every
+// format this codebase emits or embeds:
+//   - CSI (\x1b[...<letter>) — e.g. SGR color/style codes
+//   - OSC (\x1b]...terminated by BEL \x07 or ST \x1b\\) — iTerm2's inline
+//     image protocol
+//   - APC (\x1b_...terminated by ST) — Kitty's graphics protocol
+//   - DCS (\x1bP...terminated by ST) — Sixel graphics
+//
+// Treating OSC/APC/DCS as unrecognized (as CSI-only escape scanning does)
+// is actively dangerous, not just cosmetically wrong: their embedded
+// base64 image payload can incidentally contain the CSI terminator ('m')
+// or opening bracket, so a CSI-only scanner stops early and treats the
+// (potentially hundreds-of-KB) remainder as literal visible text — which
+// then gets hard-wrapped or truncated mid-sequence, corrupting the escape
+// and, for OSC/APC/DCS, leaking raw image data as garbage text.
+func ansiEscapeRuneLen(runes []rune, i int) int {
+	if i+1 >= len(runes) {
+		return 1
+	}
+	switch runes[i+1] {
+	case '[':
+		j := i + 2
+		for j < len(runes) && !((runes[j] >= 'A' && runes[j] <= 'Z') || (runes[j] >= 'a' && runes[j] <= 'z')) {
+			j++
+		}
+		if j < len(runes) {
+			j++
+		}
+		return j - i
+	case ']', '_', 'P':
+		j := i + 2
+		for j < len(runes) {
+			if runes[j] == '\x07' {
+				return j + 1 - i
+			}
+			if runes[j] == '\x1b' && j+1 < len(runes) && runes[j+1] == '\\' {
+				return j + 2 - i
+			}
+			j++
+		}
+		return j - i // unterminated: consume to end rather than looping forever
+	default:
+		return 2
+	}
+}
+
 // stripANSI removes all ANSI escape sequences from a string.
 func stripANSI(s string) string {
 	var result strings.Builder
+	runes := []rune(s)
 	i := 0
-	for i < len(s) {
-		if s[i] == '\x1b' {
-			// Find the end of this escape sequence
-			j := i + 1
-			for j < len(s) && s[j] != 'm' {
-				j++
-			}
-			if j < len(s) {
-				j++ // include the 'm'
-			}
-			i = j
+	for i < len(runes) {
+		if runes[i] == '\x1b' {
+			i += ansiEscapeRuneLen(runes, i)
 			continue
 		}
-		result.WriteByte(s[i])
+		result.WriteRune(runes[i])
 		i++
 	}
 	return result.String()

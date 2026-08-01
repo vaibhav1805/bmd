@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/bmd/bmd/internal/ast"
 	"github.com/bmd/bmd/internal/config"
@@ -2352,43 +2351,29 @@ func scanMdFiles(startDir string) []string {
 	return files
 }
 
-// stripInlineImageEscapes replaces any OSC-based inline terminal image
-// escape sequence (e.g. iTerm2's OSC 1337 protocol) embedded in line with a
-// short plain placeholder. These sequences carry a base64 payload and can
-// run to hundreds of KB; letting one reach a column truncation step (as
-// happens when squeezing content into a narrower sub-pane) truncates it
-// mid-stream and leaves an unterminated escape that corrupts the
-// surrounding terminal display.
+// stripInlineImageEscapes replaces any OSC/APC/DCS-based inline terminal
+// image escape sequence (iTerm2's OSC 1337 protocol, Kitty's APC graphics
+// protocol, or Sixel's DCS format) embedded in line with a short plain
+// placeholder. These sequences carry a base64 payload and can run to
+// hundreds of KB; letting one reach a column truncation step (as happens
+// when squeezing content into a narrower sub-pane) truncates it mid-stream
+// and leaves an unterminated escape that corrupts the surrounding
+// terminal display.
 func stripInlineImageEscapes(line string) string {
-	const oscPrefix = "\x1b]"
-	if !strings.Contains(line, oscPrefix) {
+	if !strings.ContainsRune(line, '\x1b') {
 		return line
 	}
+	runes := []rune(line)
 	var b strings.Builder
 	i := 0
-	for i < len(line) {
-		if strings.HasPrefix(line[i:], oscPrefix) {
-			end := -1
-			for j := i + 2; j < len(line); j++ {
-				if line[j] == '\x07' {
-					end = j + 1
-					break
-				}
-				if line[j] == '\x1b' && j+1 < len(line) && line[j+1] == '\\' {
-					end = j + 2
-					break
-				}
-			}
+	for i < len(runes) {
+		if runes[i] == '\x1b' && i+1 < len(runes) && (runes[i+1] == ']' || runes[i+1] == '_' || runes[i+1] == 'P') {
+			escLen := ansiEscapeRuneLen(runes, i)
 			b.WriteString("[image]")
-			if end == -1 {
-				// No terminator found: drop the remainder rather than emit
-				// a dangling, unterminated escape.
-				break
-			}
-			i = end
+			i += escLen
 			continue
 		}
-		b.WriteByte(line[i])
+		b.WriteRune(runes[i])
 		i++
 	}
 	return b.String()
@@ -2403,17 +2388,14 @@ func ansiPadOrTruncate(s string, width int) string {
 	runes := []rune(s)
 	i := 0
 	for i < len(runes) && visible < width {
-		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
-			// Copy the entire escape sequence as-is.
-			j := i + 2
-			for j < len(runes) && !((runes[j] >= 'A' && runes[j] <= 'Z') || (runes[j] >= 'a' && runes[j] <= 'z')) {
-				j++
-			}
-			if j < len(runes) {
-				j++ // include the terminator letter
-			}
-			b.WriteString(string(runes[i:j]))
-			i = j
+		if runes[i] == '\x1b' {
+			// Copy the entire escape sequence as-is (CSI/OSC/APC/DCS — see
+			// ansiEscapeRuneLen; a CSI-only check would treat an embedded
+			// inline-image payload as literal text and truncate it
+			// mid-sequence).
+			escLen := ansiEscapeRuneLen(runes, i)
+			b.WriteString(string(runes[i : i+escLen]))
+			i += escLen
 		} else {
 			b.WriteRune(runes[i])
 			visible++
@@ -2932,23 +2914,15 @@ func wrapLineToWidth(line string, maxWidth int) []string {
 	for i < len(lineRunes) {
 		r := lineRunes[i]
 
-		// Check if we're at the start of an ANSI escape code
-		if r == '\x1b' && i+1 < len(lineRunes) && lineRunes[i+1] == '[' {
-			// Find end of escape code
-			j := i + 2
-			for j < len(lineRunes) && lineRunes[j] != 'm' {
-				j++
-			}
-			// Add entire escape code without incrementing visualPos
-			if j < len(lineRunes) {
-				currentLine.WriteRune(r)
-				i++
-				for i <= j && i < len(lineRunes) {
-					currentLine.WriteRune(lineRunes[i])
-					i++
-				}
-				continue
-			}
+		// Check if we're at the start of an escape sequence (CSI/OSC/APC/DCS
+		// — see ansiEscapeRuneLen; a CSI-only check here would treat an
+		// inline-image protocol's embedded base64 payload as literal text
+		// and hard-wrap it every maxWidth runes, corrupting the sequence).
+		if r == '\x1b' {
+			escLen := ansiEscapeRuneLen(lineRunes, i)
+			currentLine.WriteString(string(lineRunes[i : i+escLen]))
+			i += escLen
+			continue
 		}
 
 		// Regular character: check if we need to wrap
@@ -2988,38 +2962,29 @@ func insertCursorAtVisual(line string, visualCol int) string {
 	// We rebuild the line with cursor at the right visual position
 	var result strings.Builder
 	visualPos := 0
-	lineIdx := 0
+	lineRunes := []rune(line)
+	i := 0
 
-	for lineIdx < len(line) {
-		if line[lineIdx] == '\x1b' {
-			// Found ANSI escape sequence: copy it as-is
-			j := lineIdx + 1
-			for j < len(line) && line[j] != 'm' {
-				j++
-			}
-			if j < len(line) {
-				j++ // include the 'm'
-			}
-			result.WriteString(line[lineIdx:j])
-			lineIdx = j
+	for i < len(lineRunes) {
+		if lineRunes[i] == '\x1b' {
+			// Found an escape sequence (CSI/OSC/APC/DCS — see
+			// ansiEscapeRuneLen; a CSI-only check would treat an embedded
+			// inline-image payload as literal text and corrupt it): copy
+			// it as-is.
+			escLen := ansiEscapeRuneLen(lineRunes, i)
+			result.WriteString(string(lineRunes[i : i+escLen]))
+			i += escLen
 		} else {
 			// Regular character: check if this is where cursor should be
 			if visualPos == visualCol {
-				// Insert cursor here
 				result.WriteString("\x1b[7m")
-				// Find and copy the rune
-				r, size := utf8.DecodeRuneInString(line[lineIdx:])
-				result.WriteRune(r)
+				result.WriteRune(lineRunes[i])
 				result.WriteString("\x1b[m")
-				lineIdx += size
-				visualPos++
 			} else {
-				// Copy regular character
-				r, size := utf8.DecodeRuneInString(line[lineIdx:])
-				result.WriteRune(r)
-				lineIdx += size
-				visualPos++
+				result.WriteRune(lineRunes[i])
 			}
+			i++
+			visualPos++
 		}
 	}
 
