@@ -14,11 +14,11 @@ import (
 type ImageProtocol int
 
 const (
-	ProtocolNone ImageProtocol = iota // No image support; use alt text
-	ProtocolITerm2                      // iTerm2 inline images
-	ProtocolKitty                       // Kitty graphics protocol
-	ProtocolSixel                       // Sixel image format
-	ProtocolUnicode                     // Unicode block characters (emoji)
+	ProtocolNone    ImageProtocol = iota // No image support; use alt text
+	ProtocolITerm2                       // iTerm2 inline images
+	ProtocolKitty                        // Kitty graphics protocol
+	ProtocolSixel                        // Sixel image format
+	ProtocolUnicode                      // Unicode block characters (emoji)
 )
 
 // DetectImageProtocol checks terminal capabilities and returns the best-supported protocol.
@@ -78,17 +78,17 @@ func DetectImageProtocol() ImageProtocol {
 		return ProtocolKitty
 	}
 
-	// xterm-256color on macOS likely means Terminal.app (which doesn't support images)
+	// A bare "xterm"-family TERM with no other identifying signal is
+	// ambiguous — it could be real Terminal.app (already handled above via
+	// TERM_PROGRAM=="Apple_Terminal"), or it could be Alacritty/another
+	// modern terminal configured with TERM=xterm-256color for broad
+	// compatibility (e.g. over SSH, where an "alacritty" terminfo entry may
+	// not be installed on the remote host). Checking whether Terminal.app
+	// is merely *installed* on disk proves nothing about which terminal is
+	// actually running — it's present on virtually every Mac regardless —
+	// so guess Kitty-protocol support here just as on non-macOS, rather
+	// than assuming no image support at all.
 	if strings.Contains(term, "xterm") {
-		// Check if running on macOS
-		if _, err := os.Stat("/System/Applications/Utilities/Terminal.app"); err == nil {
-			// macOS Terminal.app doesn't support iTerm2 inline images, Kitty, or Sixel
-			// Fall back to showing image paths/alt text
-			// fmt.Fprintf(os.Stderr, "[DEBUG] → macOS xterm (Terminal.app - no image support, using alt text)\n")
-			return ProtocolNone
-		}
-
-		// On other systems, xterm-256color might support Kitty (Alacritty, etc)
 		// fmt.Fprintf(os.Stderr, "[DEBUG] → xterm-256color (Kitty fallback)\n")
 		return ProtocolKitty
 	}

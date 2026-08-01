@@ -234,6 +234,30 @@ func TestImageProtocolDetection(t *testing.T) {
 	}
 }
 
+// TestDetectImageProtocol_XtermTermWithoutTermProgram_NotAssumedTerminalApp
+// guards against a real-world misdetection found via manual testing:
+// Alacritty (and other modern terminals) are often configured with
+// TERM=xterm-256color for broad/SSH compatibility, without setting
+// TERM_PROGRAM to anything this function recognizes. The old logic treated
+// any such xterm-family TERM on macOS as proof of running inside
+// Terminal.app (via os.Stat on Terminal.app's install path — which is
+// present on virtually every Mac regardless of the running terminal) and
+// wrongly reported ProtocolNone, permanently disabling inline images for
+// terminals that actually support the Kitty graphics protocol.
+func TestDetectImageProtocol_XtermTermWithoutTermProgram_NotAssumedTerminalApp(t *testing.T) {
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("TERM_PROGRAM", "")
+	t.Setenv("ITERM_PROGRAM", "")
+	t.Setenv("ITERM2_SHOULDMANAGEPASTEBOARD", "")
+	t.Setenv("KITTY_WINDOW_ID", "")
+	t.Setenv("COLORTERM", "")
+
+	got := DetectImageProtocol()
+	if got != ProtocolKitty {
+		t.Errorf("expected ProtocolKitty for an unrecognized xterm-family terminal, got %v", got)
+	}
+}
+
 // TestSixelAvailable checks if Sixel availability detection works.
 func TestSixelAvailable(t *testing.T) {
 	available := SixelAvailable()
