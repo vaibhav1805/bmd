@@ -225,17 +225,16 @@ func TestRenderImage_PlainImagesFallback(t *testing.T) {
 	}
 }
 
-// TestRenderImage_UnicodeProtocolUsesWiderRenderThanPixelProtocols verifies
-// the block-art (ProtocolUnicode) fallback renders at nearly the full
-// terminal width rather than the conservative 60%/100-column cap used for
-// native image protocols (Kitty/iTerm2/Sixel, where width is just a
-// cell-sizing hint for a real raster image). Block-art's actual resolution
-// IS the column count, so a small width guarantees illegible output for
-// anything with fine detail — this was the fix for real feedback that a
-// dense textbook-page screenshot was unreadable even after the dithering
-// fix, confirmed to meaningfully help once rendered at a wider column
-// count.
-func TestRenderImage_UnicodeProtocolUsesWiderRenderThanPixelProtocols(t *testing.T) {
+// TestRenderImage_UnicodeProtocolStaysDocumentProportional verifies the
+// block-art (ProtocolUnicode) fallback is sized the same as native image
+// protocols — a document-proportional preview, not stretched toward the
+// full terminal width. An earlier version of this code widened
+// block-art specifically for legibility, but per user testing on a real
+// dense textbook page, no width increase makes small printed text legible
+// through this technique (a hard resolution ceiling — see renderImage's
+// comment), so the wider render only made the image disproportionately
+// large in the document for no real benefit.
+func TestRenderImage_UnicodeProtocolStaysDocumentProportional(t *testing.T) {
 	t.Setenv("TERM", "xterm-256color")
 	t.Setenv("TERM_PROGRAM", "")
 	t.Setenv("ITERM_PROGRAM", "")
@@ -257,11 +256,12 @@ func TestRenderImage_UnicodeProtocolUsesWiderRenderThanPixelProtocols(t *testing
 	out := r.renderImage(img)
 
 	rows := strings.Count(out, "\n")
-	// A square image renders roughly (targetWidth/2) rows. At the old
-	// 60%-of-180-clamped-to-100 logic that's ~50 rows; at nearly the full
-	// terminal width (180-4=176) it should be closer to ~88.
-	if rows < 60 {
-		t.Errorf("expected a much wider/taller render at termWidth=%d (ProtocolUnicode should use ~full width, not the 100-col pixel-protocol cap), got %d rows in output of length %d", termWidth, rows, len(out))
+	// A square image renders roughly (targetWidth/2) rows. At the
+	// document-proportional 60%-of-180-clamped-to-100 sizing, that's ~50
+	// rows — well short of what a near-full-terminal-width render (176
+	// cols) would produce (~88 rows).
+	if rows > 55 {
+		t.Errorf("expected a document-proportional render (~50 rows) at termWidth=%d, got %d rows — image is stretched too wide", termWidth, rows)
 	}
 }
 
