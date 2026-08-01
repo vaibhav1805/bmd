@@ -41,24 +41,32 @@ func DetectImageProtocol() ImageProtocol {
 		return ProtocolKitty
 	}
 
-	// macOS checks (Terminal.app AND iTerm2)
-	if termProgram == "Apple_Terminal" {
-		// fmt.Fprintf(os.Stderr, "[DEBUG] → macOS Terminal.app (iTerm2 protocol)\n")
-		return ProtocolITerm2
-	}
+	// Real iTerm2 supports its own inline-image protocol.
 	if termProgram == "iTerm.app" || iterm != "" || iterm2 != "" {
 		// fmt.Fprintf(os.Stderr, "[DEBUG] → iTerm2 (ITERM_PROGRAM or ITERM2_* set)\n")
 		return ProtocolITerm2
 	}
+
+	// macOS Terminal.app has no native image protocol at all (confirmed:
+	// no iTerm2, Kitty, or Sixel support — see arewesixelyet.com). Route it
+	// to the real half-block ANSI-art renderer instead of guessing a
+	// protocol it can't display.
+	if termProgram == "Apple_Terminal" {
+		// fmt.Fprintf(os.Stderr, "[DEBUG] → macOS Terminal.app (half-block fallback)\n")
+		return ProtocolUnicode
+	}
 	if strings.Contains(termProgram, "Terminal") && strings.Contains(termProgram, "Mac") {
-		// fmt.Fprintf(os.Stderr, "[DEBUG] → macOS Terminal (iTerm2 fallback)\n")
-		return ProtocolITerm2
+		// fmt.Fprintf(os.Stderr, "[DEBUG] → macOS Terminal (half-block fallback)\n")
+		return ProtocolUnicode
 	}
 
-	// Alacritty detection (multiple checks)
+	// Alacritty detection (multiple checks). Mainline Alacritty has no
+	// native image protocol either (no Sixel, Kitty, or iTerm2 support —
+	// see alacritty/alacritty#910, open since 2021) — route to the
+	// half-block renderer rather than a protocol it can't display.
 	if strings.Contains(term, "alacritty") || strings.Contains(strings.ToLower(os.Getenv("COLORTERM")), "alacritty") {
-		// fmt.Fprintf(os.Stderr, "[DEBUG] → Alacritty (Kitty protocol)\n")
-		return ProtocolKitty
+		// fmt.Fprintf(os.Stderr, "[DEBUG] → Alacritty (half-block fallback)\n")
+		return ProtocolUnicode
 	}
 
 	// WezTerm
@@ -79,16 +87,13 @@ func DetectImageProtocol() ImageProtocol {
 	}
 
 	// A bare "xterm"-family TERM with no other identifying signal is
-	// genuinely ambiguous: it could be real Terminal.app (already handled
-	// above via TERM_PROGRAM=="Apple_Terminal"), or Alacritty/another
-	// terminal configured with TERM=xterm-256color for broad compatibility
-	// (e.g. over SSH, where an "alacritty" terminfo entry may not be
-	// installed on the remote host) — Alacritty does not itself support the
-	// Kitty graphics protocol, so guessing Kitty here previously printed a
-	// raw, unrendered escape sequence as literal garbage text instead of an
-	// image. With no reliable signal either way, fall through to the safe
-	// default at the bottom of this function (alt text, no protocol-specific
-	// escape emitted) rather than gambling on a specific protocol.
+	// genuinely ambiguous: it could be real Terminal.app or Alacritty
+	// configured with TERM=xterm-256color for broad compatibility (e.g. over
+	// SSH, where an "alacritty" terminfo entry may not be installed on the
+	// remote host), or something else entirely. With no reliable native
+	// protocol signal either way, don't gamble on one — fall through to the
+	// half-block renderer at the bottom of this function, which needs
+	// nothing but truecolor ANSI text support to work.
 
 	// screen/tmux: Try Kitty protocol
 	if strings.Contains(term, "screen") || strings.Contains(term, "tmux") {
@@ -234,9 +239,17 @@ func SixelAvailable() bool {
 	return cmd.Run() == nil
 }
 
-// ImageToUnicode generates a Unicode block character representation of the image.
-// This is a fallback that works in any terminal; the result is ASCII/Unicode art.
+// ImageToUnicode generates a Unicode half-block character representation of
+// the image (the same technique pixterm/viu/chafa use as a terminal-agnostic
+// fallback — see renderHalfBlockImage). This is the real fallback that works
+// in any terminal supporting ANSI truecolor text, needed for terminals like
+// Alacritty and macOS Terminal.app that have no native image protocol at
+// all. Falls back to a plain alt-text placeholder if the image can't be
+// decoded (e.g. an unsupported format).
 func ImageToUnicode(imageData []byte, altText string, width int) string {
+	if art, err := renderHalfBlockImage(imageData, width); err == nil {
+		return art
+	}
 	if altText != "" {
 		return "[Image: " + altText + "]"
 	}
@@ -266,7 +279,13 @@ func ImageToTerminal(imageData []byte, imagePath, altText string, width, height 
 	case ProtocolSixel:
 		return ImageToSixel(imageData, width, height)
 	case ProtocolUnicode:
-		// Try to save image to a temp file and show path
+		// Real half-block ANSI-art rendering first — this is the actual
+		// image, not a text placeholder, and works in any terminal with
+		// truecolor text support (Alacritty, Terminal.app, etc). Only fall
+		// back to save-temp-file+alt-text if the image can't be decoded.
+		if art, err := renderHalfBlockImage(imageData, width); err == nil {
+			return art
+		}
 		tempPath := SaveImageTemp(imageData, altText)
 		if tempPath != "" {
 			return "[Image: " + altText + " - saved to " + tempPath + "]"
@@ -305,16 +324,16 @@ func ProtocolCapabilities() string {
 
 	switch protocol {
 	case ProtocolKitty:
-		return "Kitty graphics protocol (best for Kitty, Alacritty, WezTerm)"
+		return "Kitty graphics protocol (native Kitty, WezTerm)"
 	case ProtocolITerm2:
-		return "iTerm2 inline images (native macOS Terminal and iTerm2)"
+		return "iTerm2 inline images (native iTerm2)"
 	case ProtocolSixel:
 		if SixelAvailable() {
 			return "Sixel graphics (with ImageMagick convert)"
 		}
 		return "Sixel terminal detected (but ImageMagick 'convert' not found - install imagemagick)"
 	case ProtocolUnicode:
-		return "Unicode/emoji fallback (works everywhere, limited quality)"
+		return "Half-block ANSI art (works in any terminal with truecolor text support, e.g. Alacritty, Terminal.app)"
 	case ProtocolNone:
 		return "No image support (text fallback only)"
 	default:
