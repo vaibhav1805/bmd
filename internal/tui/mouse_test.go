@@ -218,3 +218,47 @@ func TestView_MouseHoverCursor_SurvivesBackNavigation_NoRawEscapeLeak(t *testing
 		t.Errorf("expected the link's color escape sequence to survive intact, got %q", afterLine)
 	}
 }
+
+// TestSelection_CopiedTextHasNoRawAnsiFragments guards against a real-world
+// bug found via manual testing: dragging a text selection across a
+// bullet/link line and copying it (Ctrl+C) produced literal raw ANSI escape
+// fragments in the copied clipboard text (e.g. observed:
+// "[38;5;141m• [0mSee [4m[38;5;141move" instead of "• See overview.md for
+// system context"). Root cause: getSelectedText() sliced Viewer.Lines —
+// which still carries the renderer's full ANSI color/underline codes, only
+// link sentinels are stripped — using visual/screen column indices as if
+// they were raw rune indices into that ANSI-laden string, landing
+// mid-escape-sequence.
+func TestSelection_CopiedTextHasNoRawAnsiFragments(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestFileViewer(t, dir, "auth.md",
+		"# Auth\n\n- See [overview.md](overview.md) for system context\n", 100, 24)
+	if err := os.WriteFile(filepath.Join(dir, "overview.md"), []byte("# Overview\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	line := linkLine(t, v, "overview.md")
+	plain := stripANSI(v.Lines[line])
+	plainRunes := []rune(plain)
+	if len(plainRunes) < 30 {
+		t.Fatalf("bullet line too short for test range: %q", plain)
+	}
+	wantText := string(plainRunes[2:30])
+
+	m, _ := v.updateMouse(tea.MouseMsg{Y: line + 1, X: 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	v = m.(*Viewer)
+	m, _ = v.updateMouse(tea.MouseMsg{Y: line + 1, X: 30, Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft})
+	v = m.(*Viewer)
+
+	if !v.HasSelection() {
+		t.Fatalf("expected an active selection after drag")
+	}
+	text := v.SelectedText()
+
+	if strings.Contains(text, "\x1b") {
+		t.Errorf("copied text contains a raw ESC byte: %q", text)
+	}
+	if text != wantText {
+		t.Errorf("copied text does not match the plain-text slice at the same visual columns: got %q, want %q", text, wantText)
+	}
+}

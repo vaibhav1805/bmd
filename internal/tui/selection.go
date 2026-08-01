@@ -25,8 +25,13 @@ func NormalizeSelection(start, end SelectionPoint) (SelectionPoint, SelectionPoi
 	return end, start
 }
 
-// getSelectedText extracts text between start and end points from the lines slice.
-// Lines should be stripped of ANSI codes for accurate text extraction.
+// getSelectedText extracts text between start and end points from the lines
+// slice. start/end column indices are visual (plain-text) column positions,
+// as produced by mouse clicks — so each line is ANSI-stripped here before
+// indexing into it; lines passed in may still carry the renderer's color
+// codes (e.g. Viewer.Lines does), and indexing those directly by a visual
+// column would land mid-escape-sequence, leaking raw escape bytes into the
+// extracted text.
 func getSelectedText(lines []string, start, end SelectionPoint) string {
 	start, end = NormalizeSelection(start, end)
 
@@ -35,7 +40,7 @@ func getSelectedText(lines []string, start, end SelectionPoint) string {
 		if start.LineIndex >= len(lines) {
 			return ""
 		}
-		line := lines[start.LineIndex]
+		line := stripANSI(lines[start.LineIndex])
 		runes := []rune(line)
 		endCol := end.ColumnIndex
 		if endCol > len(runes) {
@@ -54,7 +59,7 @@ func getSelectedText(lines []string, start, end SelectionPoint) string {
 	if start.LineIndex >= len(lines) {
 		return ""
 	}
-	line := lines[start.LineIndex]
+	line := stripANSI(lines[start.LineIndex])
 	runes := []rune(line)
 	if start.ColumnIndex < len(runes) {
 		result.WriteString(string(runes[start.ColumnIndex:]))
@@ -64,14 +69,14 @@ func getSelectedText(lines []string, start, end SelectionPoint) string {
 	// Middle lines: entire lines
 	for i := start.LineIndex + 1; i < end.LineIndex; i++ {
 		if i < len(lines) {
-			result.WriteString(lines[i])
+			result.WriteString(stripANSI(lines[i]))
 			result.WriteRune('\n')
 		}
 	}
 
 	// Last line: from start to end column
 	if end.LineIndex < len(lines) {
-		endLine := lines[end.LineIndex]
+		endLine := stripANSI(lines[end.LineIndex])
 		endRunes := []rune(endLine)
 		endCol := end.ColumnIndex
 		if endCol > len(endRunes) {

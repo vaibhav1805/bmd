@@ -765,7 +765,7 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if v.hasCursor {
 				// Copy the plain text of the committed cursor line to the clipboard.
 				if v.cursorRow >= 0 && v.cursorRow < len(v.Lines) {
-					plainLine := v.Lines[v.cursorRow]
+					plainLine := stripANSI(v.Lines[v.cursorRow])
 					if _, err := copyWithFallback(plainLine); err != nil {
 						v.errorMsg = "Clipboard unavailable"
 					} else {
