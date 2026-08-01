@@ -79,6 +79,12 @@ func (v *Viewer) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if v.isSelecting && v.selectionStart != nil {
 			docLine := msg.Y - 1 + v.Offset
 			if docLine >= 0 && docLine < len(v.Lines) {
+				if docLine != v.selectionStart.LineIndex || msg.X != v.selectionStart.ColumnIndex {
+					// The mouse has moved off the press point: this is a
+					// drag-select, not a click, so cancel any pending
+					// link-follow queued by mouse-down (bmd-zag).
+					v.mouseDragged = true
+				}
 				v.ExtendSelection(docLine, msg.X)
 			}
 		}
@@ -92,11 +98,17 @@ func (v *Viewer) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 			// Y=1 is the first content row; subtract 1 for header offset.
 			clickLine := msg.Y - 1 + v.Offset
-			// Check if any link is registered at this line.
+			v.mouseDragged = false
+
+			// If a link is registered at this line, queue the follow instead
+			// of navigating immediately (bmd-zag): a click-drag gesture that
+			// starts on a link line must be able to become a text selection
+			// rather than always jumping away on mouse-down.
+			v.pendingLinkURL = ""
 			for _, entry := range v.links.Links {
 				if entry.LineIndex == clickLine {
-					v.ClearSelection()
-					return v.followLink(entry.URL)
+					v.pendingLinkURL = entry.URL
+					break
 				}
 			}
 
@@ -118,6 +130,20 @@ func (v *Viewer) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 			return v, nil
 		}
+
+	case tea.MouseActionRelease:
+		// A pending link-follow only fires if the mouse never moved off the
+		// press point (a real click); any drag in between cancels it and
+		// leaves the in-progress text selection as the result (bmd-zag).
+		if v.pendingLinkURL != "" {
+			url := v.pendingLinkURL
+			v.pendingLinkURL = ""
+			if !v.mouseDragged {
+				v.ClearSelection()
+				return v.followLink(url)
+			}
+		}
+		return v, nil
 	}
 
 	return v, nil

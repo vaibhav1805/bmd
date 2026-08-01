@@ -112,6 +112,15 @@ type Viewer struct {
 	selectionEnd   *SelectionPoint
 	selectedText   string
 
+	// Deferred link-follow: a mouse-down on a link line only queues the
+	// follow (pendingLinkURL) instead of navigating immediately, so a
+	// click-drag gesture that starts on a link line can still become a text
+	// selection. The queued follow fires on mouse-up only if the release
+	// point matches the press point (mouseDragged stays false); any motion
+	// to a different point cancels it in favor of the in-progress selection.
+	pendingLinkURL string
+	mouseDragged   bool
+
 	// Virtual rendering optimisation
 	virtualMode bool // true when len(Lines) > virtualThreshold
 
@@ -1929,7 +1938,7 @@ func (v Viewer) View() string {
 					// v.mouseRow is 0-based screen row; Y=0 is header, Y=1 is first content row.
 					// So content index i corresponds to screen row i+1.
 					if v.mouseRow == i+1 {
-						wrappedLine = insertCursorAt(wrappedLine, v.mouseCol)
+						wrappedLine = insertCursorAtVisual(wrappedLine, v.mouseCol)
 					}
 					sb.WriteString(wrappedLine)
 				}
@@ -2197,6 +2206,14 @@ func (v *Viewer) loadFile(path string) (*Viewer, tea.Cmd) {
 	v.searchState = NewSearchState()
 	v.searchMode = false
 	v.searchInput = ""
+	// bmd-zag: clear cursor/selection state too — like CR-01's fix for
+	// BackToDirectory, these reference line/column coordinates that lose
+	// meaning once the document underneath them changes, and stale ones can
+	// corrupt rendering of the newly-loaded file.
+	v.hasCursor = false
+	v.ClearSelection()
+	v.pendingLinkURL = ""
+	v.mouseDragged = false
 
 	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels().WithDocDir(filepath.Dir(v.FilePath))
 	rendered := r.Render(doc)
@@ -2242,6 +2259,14 @@ func (v *Viewer) loadFileNoHistory(path string) (*Viewer, tea.Cmd) {
 	v.searchState = NewSearchState()
 	v.searchMode = false
 	v.searchInput = ""
+	// bmd-zag: clear cursor/selection state too — like CR-01's fix for
+	// BackToDirectory, these reference line/column coordinates that lose
+	// meaning once the document underneath them changes, and stale ones can
+	// corrupt rendering of the newly-loaded file.
+	v.hasCursor = false
+	v.ClearSelection()
+	v.pendingLinkURL = ""
+	v.mouseDragged = false
 
 	r := renderer.NewRenderer(v.Theme, v.Width).WithLinkSentinels().WithDocDir(filepath.Dir(v.FilePath))
 	rendered := r.Render(doc)
@@ -2584,23 +2609,6 @@ func clamp(val, min, max int) int {
 		return max
 	}
 	return val
-}
-
-// insertCursorAt injects a reverse-video ANSI sequence around the rune at
-// byte column col in line. This is an approximation — ANSI escape sequences
-// embedded in the line will shift byte offsets, but it is acceptable for
-// Phase 4 mouse cursor display.
-func insertCursorAt(line string, col int) string {
-	runes := []rune(line)
-	if col >= len(runes) {
-		// Column past end of line: append a cursor block as a space.
-		return line + "\x1b[7m \x1b[m"
-	}
-	// Reconstruct: everything before col, reverse-video char, reset, rest.
-	before := string(runes[:col])
-	char := string(runes[col : col+1])
-	after := string(runes[col+1:])
-	return before + "\x1b[7m" + char + "\x1b[m" + after
 }
 
 // renderEditMode returns a string representation of the document in edit mode
