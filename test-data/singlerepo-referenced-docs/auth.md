@@ -1,6 +1,6 @@
 # User Authentication
 
-## Overview
+## Overview 2
 
 This module handles all authentication concerns. It integrates with the [Notification System](alerts.md) to send login alerts.
 
