@@ -79,19 +79,16 @@ func DetectImageProtocol() ImageProtocol {
 	}
 
 	// A bare "xterm"-family TERM with no other identifying signal is
-	// ambiguous — it could be real Terminal.app (already handled above via
-	// TERM_PROGRAM=="Apple_Terminal"), or it could be Alacritty/another
-	// modern terminal configured with TERM=xterm-256color for broad
-	// compatibility (e.g. over SSH, where an "alacritty" terminfo entry may
-	// not be installed on the remote host). Checking whether Terminal.app
-	// is merely *installed* on disk proves nothing about which terminal is
-	// actually running — it's present on virtually every Mac regardless —
-	// so guess Kitty-protocol support here just as on non-macOS, rather
-	// than assuming no image support at all.
-	if strings.Contains(term, "xterm") {
-		// fmt.Fprintf(os.Stderr, "[DEBUG] → xterm-256color (Kitty fallback)\n")
-		return ProtocolKitty
-	}
+	// genuinely ambiguous: it could be real Terminal.app (already handled
+	// above via TERM_PROGRAM=="Apple_Terminal"), or Alacritty/another
+	// terminal configured with TERM=xterm-256color for broad compatibility
+	// (e.g. over SSH, where an "alacritty" terminfo entry may not be
+	// installed on the remote host) — Alacritty does not itself support the
+	// Kitty graphics protocol, so guessing Kitty here previously printed a
+	// raw, unrendered escape sequence as literal garbage text instead of an
+	// image. With no reliable signal either way, fall through to the safe
+	// default at the bottom of this function (alt text, no protocol-specific
+	// escape emitted) rather than gambling on a specific protocol.
 
 	// screen/tmux: Try Kitty protocol
 	if strings.Contains(term, "screen") || strings.Contains(term, "tmux") {

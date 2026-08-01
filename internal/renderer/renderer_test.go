@@ -234,17 +234,23 @@ func TestImageProtocolDetection(t *testing.T) {
 	}
 }
 
-// TestDetectImageProtocol_XtermTermWithoutTermProgram_NotAssumedTerminalApp
-// guards against a real-world misdetection found via manual testing:
-// Alacritty (and other modern terminals) are often configured with
-// TERM=xterm-256color for broad/SSH compatibility, without setting
-// TERM_PROGRAM to anything this function recognizes. The old logic treated
-// any such xterm-family TERM on macOS as proof of running inside
-// Terminal.app (via os.Stat on Terminal.app's install path — which is
-// present on virtually every Mac regardless of the running terminal) and
-// wrongly reported ProtocolNone, permanently disabling inline images for
-// terminals that actually support the Kitty graphics protocol.
-func TestDetectImageProtocol_XtermTermWithoutTermProgram_NotAssumedTerminalApp(t *testing.T) {
+// TestDetectImageProtocol_XtermTermWithoutTermProgram_NoProtocolGuessed
+// guards against two real-world misdetections found via manual testing,
+// both for the same ambiguous case (TERM=xterm-256color, no recognized
+// TERM_PROGRAM — Alacritty configured for broad/SSH compatibility hits
+// this, since it bypasses the explicit "alacritty" TERM/COLORTERM check):
+//
+//  1. The original logic assumed any such xterm-family TERM on macOS meant
+//     Terminal.app (via os.Stat on Terminal.app's install path — present on
+//     virtually every Mac regardless of the running terminal) and reported
+//     ProtocolNone, permanently disabling images.
+//  2. A first fix instead guessed ProtocolKitty unconditionally — but
+//     Alacritty does not support the Kitty graphics protocol, so this
+//     printed the raw, unrendered escape sequence as literal garbage text.
+//
+// With no reliable signal either way, detection must not gamble on a
+// specific protocol and should fall through to the safe alt-text default.
+func TestDetectImageProtocol_XtermTermWithoutTermProgram_NoProtocolGuessed(t *testing.T) {
 	t.Setenv("TERM", "xterm-256color")
 	t.Setenv("TERM_PROGRAM", "")
 	t.Setenv("ITERM_PROGRAM", "")
@@ -253,8 +259,8 @@ func TestDetectImageProtocol_XtermTermWithoutTermProgram_NotAssumedTerminalApp(t
 	t.Setenv("COLORTERM", "")
 
 	got := DetectImageProtocol()
-	if got != ProtocolKitty {
-		t.Errorf("expected ProtocolKitty for an unrecognized xterm-family terminal, got %v", got)
+	if got != ProtocolUnicode {
+		t.Errorf("expected the safe ProtocolUnicode fallback (alt text, no protocol-specific escape emitted) for an unrecognized xterm-family terminal, got %v", got)
 	}
 }
 
