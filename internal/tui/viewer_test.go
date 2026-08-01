@@ -11,6 +11,7 @@ import (
 	"github.com/bmd/bmd/internal/ast"
 	"github.com/bmd/bmd/internal/editor"
 	"github.com/bmd/bmd/internal/knowledge"
+	"github.com/bmd/bmd/internal/renderer"
 	"github.com/bmd/bmd/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -1841,5 +1842,37 @@ func TestViewerEndToEnd_HelpFromGraph(t *testing.T) {
 	}
 	if _, ok := v.activeChild.(*GraphModel); !ok {
 		t.Error("expected GraphModel (originating mode) active again after closing help")
+	}
+}
+
+// TestViewWithBrowser_InlineImage_NoRawEscapeLeak is the bmd-uc6 regression
+// test: the legacy in-viewer file-browser split (v.browserOpen) truncates
+// its main content column to a fixed width. A document containing an
+// inline image embeds the full OSC 1337 escape sequence (base64 payload
+// included) directly in that line; truncating it blindly — as the old
+// padOrTruncate did — leaves an unterminated escape that corrupts the
+// terminal, the same failure mode bmd-fbq fixed for the split-pane
+// directory browser.
+func TestViewWithBrowser_InlineImage_NoRawEscapeLeak(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	if renderer.DetectImageProtocol() == renderer.ProtocolNone {
+		t.Skip("no inline image protocol detected in this environment")
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "sample.png"), []byte("not a real png but non-empty binary-ish content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v := newTestFileViewer(t, dir, "readme.md", "# Image Test\n\n![Sample](./sample.png)\n", 100, 24)
+	v.browserOpen = true
+	v.browserFiles = []string{filepath.Join(dir, "readme.md")}
+
+	out := v.View()
+
+	if strings.Contains(out, "\x1b]1337") {
+		t.Errorf("viewWithBrowser leaked a raw inline-image escape sequence: %q", out)
+	}
+	if !strings.Contains(out, "[image]") {
+		t.Errorf("expected the inline-image placeholder '[image]' in browser-split output, got: %q", out)
 	}
 }

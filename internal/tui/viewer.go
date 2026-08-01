@@ -1979,8 +1979,13 @@ func (v Viewer) viewWithBrowser(contentHeight int) string {
 		if i < len(visible) {
 			mainLine = visible[i]
 		}
-		// Truncate to mainWidth (approximate — ANSI codes make exact truncation hard)
-		mainLine = padOrTruncate(mainLine, mainWidth)
+		// Neutralize any embedded inline-image escape sequence before
+		// truncating (bmd-uc6): these carry a base64 payload that can run to
+		// hundreds of KB, and truncating one mid-stream leaves an
+		// unterminated escape that corrupts the terminal — the same failure
+		// mode fixed for the split-pane directory preview in bmd-fbq.
+		mainLine = stripInlineImageEscapes(mainLine)
+		mainLine = ansiPadOrTruncate(mainLine, mainWidth)
 
 		// Browser column
 		var browserLine string
@@ -2347,21 +2352,51 @@ func scanMdFiles(startDir string) []string {
 	return files
 }
 
-// padOrTruncate returns s padded or truncated to exactly width bytes.
-// This is an approximation — it doesn't account for multi-byte runes or ANSI
-// escape sequences embedded in the string; it is good enough for layout.
-func padOrTruncate(s string, width int) string {
-	// Strip ANSI codes for length calculation, then keep original
-	// For simplicity, just truncate raw bytes; the visual result will be close.
-	if len(s) >= width {
-		return s[:width]
+// stripInlineImageEscapes replaces any OSC-based inline terminal image
+// escape sequence (e.g. iTerm2's OSC 1337 protocol) embedded in line with a
+// short plain placeholder. These sequences carry a base64 payload and can
+// run to hundreds of KB; letting one reach a column truncation step (as
+// happens when squeezing content into a narrower sub-pane) truncates it
+// mid-stream and leaves an unterminated escape that corrupts the
+// surrounding terminal display.
+func stripInlineImageEscapes(line string) string {
+	const oscPrefix = "\x1b]"
+	if !strings.Contains(line, oscPrefix) {
+		return line
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	var b strings.Builder
+	i := 0
+	for i < len(line) {
+		if strings.HasPrefix(line[i:], oscPrefix) {
+			end := -1
+			for j := i + 2; j < len(line); j++ {
+				if line[j] == '\x07' {
+					end = j + 1
+					break
+				}
+				if line[j] == '\x1b' && j+1 < len(line) && line[j+1] == '\\' {
+					end = j + 2
+					break
+				}
+			}
+			b.WriteString("[image]")
+			if end == -1 {
+				// No terminator found: drop the remainder rather than emit
+				// a dangling, unterminated escape.
+				break
+			}
+			i = end
+			continue
+		}
+		b.WriteByte(line[i])
+		i++
+	}
+	return b.String()
 }
 
 // ansiPadOrTruncate truncates or pads s so that its visible width (excluding
-// ANSI escape sequences) equals exactly width. Unlike padOrTruncate it
-// preserves embedded ANSI codes and resets styling after truncation.
+// ANSI escape sequences) equals exactly width, preserving embedded ANSI
+// codes and resetting styling after truncation.
 func ansiPadOrTruncate(s string, width int) string {
 	var b strings.Builder
 	visible := 0
