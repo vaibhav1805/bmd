@@ -13,44 +13,47 @@ import (
 // terminalCellAspect approximates the height:width ratio of a monospace
 // terminal character cell (e.g. an 8x16px font is 2:1). Used to scale a
 // decoded image so block-art rendering preserves its visual proportions.
+// This ratio determines the output row count regardless of how many dot
+// samples each cell is subdivided into internally — subdividing further
+// (quadrants, braille) adds detail within each row/column, not more of
+// them, so this constant doesn't change across techniques.
 const terminalCellAspect = 2.0
 
-// quadrantGlyphs maps a 4-bit mask (bit0=top-left, bit1=top-right,
-// bit2=bottom-left, bit3=bottom-right; a set bit means that quadrant
-// belongs to the "foreground" color cluster) to the Unicode Block Elements
-// glyph covering exactly that set of quadrants. All 16 combinations are
-// covered by long-standing, universally-supported codepoints (Unicode 1.0
-// Block Elements), unlike newer sextant/octant glyphs that risk missing
-// from some monospace fonts.
-var quadrantGlyphs = [16]rune{
-	0b0000: ' ', // none
-	0b0001: '▘', // top-left
-	0b0010: '▝', // top-right
-	0b0011: '▀', // top-left + top-right
-	0b0100: '▖', // bottom-left
-	0b0101: '▌', // top-left + bottom-left
-	0b0110: '▞', // top-right + bottom-left
-	0b0111: '▛', // top-left + top-right + bottom-left
-	0b1000: '▗', // bottom-right
-	0b1001: '▚', // top-left + bottom-right
-	0b1010: '▐', // top-right + bottom-right
-	0b1011: '▜', // top-left + top-right + bottom-right
-	0b1100: '▄', // bottom-left + bottom-right
-	0b1101: '▙', // top-left + bottom-left + bottom-right
-	0b1110: '▟', // top-right + bottom-left + bottom-right
-	0b1111: '█', // all four
+// brailleDotsWide and brailleDotsTall are the sample-grid dimensions
+// encoded by a single Unicode Braille Pattern character (U+2800-U+28FF):
+// 2 columns x 4 rows of independently-settable dots per cell. This gives
+// double the vertical detail of a 2x2 quadrant-block cell for the same
+// terminal row/column count, and Braille Patterns (Unicode since 1.0, in
+// active use since long before graphical terminals) have far more
+// consistent monospace font coverage than newer sextant/octant glyphs.
+const (
+	brailleDotsWide = 2
+	brailleDotsTall = 4
+)
+
+// brailleBit maps a (row, col) position in the 2x4 dot grid to its bit
+// index in the Braille Pattern codepoint offset (U+2800 + mask), per the
+// standard Unicode dot numbering (columns fill rows 0-2 first, then row 3
+// is appended at bits 6-7).
+var brailleBit = [brailleDotsTall][brailleDotsWide]uint{
+	{0, 3},
+	{1, 4},
+	{2, 5},
+	{6, 7},
 }
 
-// rgb is a simple 8-bit color sample used for quadrant clustering.
+// rgb is a simple 8-bit color sample used for cell color clustering.
 type rgb struct{ r, g, b uint8 }
 
 // renderHalfBlockImage decodes imageData (PNG/JPEG/GIF) and renders it as
-// Unicode block-art at targetCols terminal columns wide. Each terminal cell
-// encodes a 2x2 grid of pixel samples (quadrants), matched to the closest
-// pair of a "foreground" and "background" color and rendered with the
-// corresponding Block Elements glyph — the same general technique used by
-// chafa/timg's higher-quality symbol modes, doubling the effective detail
-// of a plain top/bottom half-block over the same terminal cell grid.
+// Unicode Braille-pattern ANSI art at targetCols terminal columns wide.
+// Each terminal cell encodes an 8-dot (2 wide x 4 tall) grid of pixel
+// samples, clustered into a "foreground" (dots on) and "background" (dots
+// off) color pair, and rendered as the single Braille character matching
+// that dot pattern — the same general terminal-agnostic technique used by
+// tools like img2braille/chafa's braille symbol mode for detailed,
+// text/line-art-heavy content, at twice the sample density of a 2x2
+// quadrant-block cell.
 //
 // Returns an error if imageData can't be decoded as a supported format.
 func renderHalfBlockImage(imageData []byte, targetCols int) (string, error) {
@@ -73,15 +76,25 @@ func renderHalfBlockImage(imageData []byte, targetCols int) (string, error) {
 		rows = 1
 	}
 
+	totalSubCols := targetCols * brailleDotsWide
+	totalSubRows := rows * brailleDotsTall
+
 	var sb strings.Builder
+	var samples [brailleDotsWide * brailleDotsTall]rgb
 	for r := 0; r < rows; r++ {
 		for c := 0; c < targetCols; c++ {
-			tl := averageBoxColor(img, bounds, c*2, targetCols*2, r*2, rows*2)
-			tr := averageBoxColor(img, bounds, c*2+1, targetCols*2, r*2, rows*2)
-			bl := averageBoxColor(img, bounds, c*2, targetCols*2, r*2+1, rows*2)
-			br := averageBoxColor(img, bounds, c*2+1, targetCols*2, r*2+1, rows*2)
+			for dr := 0; dr < brailleDotsTall; dr++ {
+				for dc := 0; dc < brailleDotsWide; dc++ {
+					samples[brailleBit[dr][dc]] = averageBoxColor(
+						img, bounds,
+						c*brailleDotsWide+dc, totalSubCols,
+						r*brailleDotsTall+dr, totalSubRows,
+					)
+				}
+			}
 
-			glyph, bg, fg := quantizeQuadrant(tl, tr, bl, br)
+			mask, bg, fg := quantizeCell(samples[:])
+			glyph := rune(0x2800 + mask)
 			fmt.Fprintf(&sb, "\x1b[48;2;%d;%d;%dm\x1b[38;2;%d;%d;%dm%c", bg.r, bg.g, bg.b, fg.r, fg.g, fg.b, glyph)
 		}
 		sb.WriteString("\x1b[0m")
@@ -93,20 +106,19 @@ func renderHalfBlockImage(imageData []byte, targetCols int) (string, error) {
 	return sb.String(), nil
 }
 
-// quantizeQuadrant clusters the 4 quadrant samples into two color groups —
-// the pair with the greatest color distance seeds the two clusters, and
-// each sample joins whichever seed it's closer to — then returns the
-// Block Elements glyph for the resulting quadrant pattern along with each
+// quantizeCell clusters samples into two color groups — the pair with the
+// greatest color distance seeds the two clusters, and every other sample
+// joins whichever seed it's closer to — returning a bitmask of which
+// sample indices joined the second ("foreground") cluster, along with each
 // cluster's average color (background = the first seed's cluster,
-// foreground = the second's). When all 4 samples are identical (a flat
-// region), every sample joins the first cluster, yielding a plain space
-// glyph — visually just the solid background color, as intended.
-func quantizeQuadrant(tl, tr, bl, br rgb) (glyph rune, bg, fg rgb) {
-	samples := [4]rgb{tl, tr, bl, br}
-
+// foreground = the second's). When all samples are identical (a flat
+// region), every sample joins the first cluster, yielding an all-zero mask
+// — a blank glyph showing only the solid background color, as intended.
+func quantizeCell(samples []rgb) (mask uint16, bg, fg rgb) {
+	n := len(samples)
 	bestI, bestJ, bestDist := 0, 1, -1
-	for i := 0; i < 4; i++ {
-		for j := i + 1; j < 4; j++ {
+	for i := 0; i < n; i++ {
+		for j := i + 1; j < n; j++ {
 			d := colorDistSq(samples[i], samples[j])
 			if d > bestDist {
 				bestDist = d
@@ -116,7 +128,6 @@ func quantizeQuadrant(tl, tr, bl, br rgb) (glyph rune, bg, fg rgb) {
 	}
 	seedA, seedB := samples[bestI], samples[bestJ]
 
-	var mask uint8
 	var aSum, bSum [3]uint64
 	var aCount, bCount uint64
 	for i, s := range samples {
@@ -140,7 +151,7 @@ func quantizeQuadrant(tl, tr, bl, br rgb) (glyph rune, bg, fg rgb) {
 	} else {
 		fg = rgb{uint8(bSum[0] / bCount), uint8(bSum[1] / bCount), uint8(bSum[2] / bCount)}
 	}
-	return quadrantGlyphs[mask], bg, fg
+	return mask, bg, fg
 }
 
 func colorDistSq(a, b rgb) int {

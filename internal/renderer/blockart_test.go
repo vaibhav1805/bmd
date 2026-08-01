@@ -30,29 +30,37 @@ func makeTestPNG(t *testing.T, w, h int) []byte {
 	return buf.Bytes()
 }
 
-// TestQuantizeQuadrant_UniformColorYieldsSpaceGlyph verifies a flat region
-// (no color variation across the 2x2 sample) degenerates to the plain
-// space glyph, rendering as a solid block via the background color alone.
-func TestQuantizeQuadrant_UniformColorYieldsSpaceGlyph(t *testing.T) {
+// TestQuantizeCell_UniformColorYieldsZeroMask verifies a flat region (no
+// color variation across all samples) clusters entirely into one group,
+// yielding an all-zero mask — a blank/dot-less glyph showing only the
+// solid background color.
+func TestQuantizeCell_UniformColorYieldsZeroMask(t *testing.T) {
 	c := rgb{100, 150, 200}
-	glyph, bg, fg := quantizeQuadrant(c, c, c, c)
-	if glyph != ' ' {
-		t.Errorf("expected space glyph for a uniform-color cell, got %q", glyph)
+	samples := []rgb{c, c, c, c, c, c, c, c}
+	mask, bg, fg := quantizeCell(samples)
+	if mask != 0 {
+		t.Errorf("expected mask=0 for a uniform-color cell, got %#b", mask)
 	}
 	if bg != c || fg != c {
 		t.Errorf("expected both bg and fg to equal the uniform color %v, got bg=%v fg=%v", c, bg, fg)
 	}
 }
 
-// TestQuantizeQuadrant_TopBottomSplit verifies a pure top/bottom color
-// split still degrades correctly to a half-block-style glyph — the
-// pattern plain half-block rendering was already able to represent.
-func TestQuantizeQuadrant_TopBottomSplit(t *testing.T) {
+// TestQuantizeCell_TwoDistinctGroupsCluster verifies samples split cleanly
+// into two color groups: the first half red, the second half blue. Every
+// red sample must land in the background cluster (mask bit unset) and
+// every blue sample in the foreground cluster (mask bit set), regardless
+// of how many total samples are clustered (4 for quadrants, 8 for
+// Braille) — this is the general clustering logic both build on.
+func TestQuantizeCell_TwoDistinctGroupsCluster(t *testing.T) {
 	red := rgb{255, 0, 0}
 	blue := rgb{0, 0, 255}
-	glyph, bg, fg := quantizeQuadrant(red, red, blue, blue)
-	if glyph != '▄' {
-		t.Errorf("expected '▄' (bottom-half) glyph for a top-red/bottom-blue split, got %q", glyph)
+	samples := []rgb{red, red, red, red, blue, blue, blue, blue}
+	mask, bg, fg := quantizeCell(samples)
+
+	var want uint16 = 0b11110000
+	if mask != want {
+		t.Errorf("expected mask=%#b (last 4 samples foreground), got %#b", want, mask)
 	}
 	if bg != red {
 		t.Errorf("expected background=red, got %v", bg)
@@ -62,24 +70,50 @@ func TestQuantizeQuadrant_TopBottomSplit(t *testing.T) {
 	}
 }
 
-// TestQuantizeQuadrant_LeftRightSplit verifies a left/right color split
-// clusters correctly — this is exactly the detail plain half-block
-// rendering could never represent (it only ever samples a full-width top
-// half and full-width bottom half), and is the whole point of the
-// quadrant upgrade.
-func TestQuantizeQuadrant_LeftRightSplit(t *testing.T) {
-	red := rgb{255, 0, 0}
-	blue := rgb{0, 0, 255}
-	glyph, bg, fg := quantizeQuadrant(red, blue, red, blue)
-	if glyph != '▐' {
-		t.Errorf("expected '▐' (right-half) glyph for a left-red/right-blue split, got %q", glyph)
+// TestRenderHalfBlockImage_UsesBrailleCodepoints verifies every glyph
+// emitted falls in the Unicode Braille Patterns block (U+2800-U+28FF),
+// confirming Braille rendering is actually in effect (not a leftover
+// block-element glyph from the prior quadrant technique).
+func TestRenderHalfBlockImage_UsesBrailleCodepoints(t *testing.T) {
+	data := makeTestPNG(t, 8, 8)
+	art, err := renderHalfBlockImage(data, 4)
+	if err != nil {
+		t.Fatalf("renderHalfBlockImage: %v", err)
 	}
-	if bg != red {
-		t.Errorf("expected background=red, got %v", bg)
+	plain := stripANSIForTest(art)
+	for _, r := range plain {
+		if r == '\n' {
+			continue
+		}
+		if r < 0x2800 || r > 0x28FF {
+			t.Fatalf("expected only Braille Pattern glyphs (U+2800-U+28FF), found %q (%U) in: %q", r, r, art)
+		}
 	}
-	if fg != blue {
-		t.Errorf("expected foreground=blue, got %v", fg)
+}
+
+// stripANSIForTest strips ANSI SGR escape sequences for glyph inspection
+// (a local minimal copy — this package doesn't import the tui package's
+// stripANSI helper). ESC and '[' are single-byte ASCII, so byte-level
+// scanning can't corrupt multi-byte UTF-8 runes elsewhere in the string.
+func stripANSIForTest(s string) string {
+	var b strings.Builder
+	i := 0
+	for i < len(s) {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			j := i + 2
+			for j < len(s) && s[j] != 'm' {
+				j++
+			}
+			if j < len(s) {
+				j++
+			}
+			i = j
+			continue
+		}
+		b.WriteByte(s[i])
+		i++
 	}
+	return b.String()
 }
 
 func TestRenderHalfBlockImage_DecodesAndRenders(t *testing.T) {
