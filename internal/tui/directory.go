@@ -546,7 +546,7 @@ func (m *DirectoryModel) renderFilePreviewSplit(rightWidth, contentHeight int) [
 		// Parse and render the markdown with full styling
 		doc, parseErr := parser.ParseMarkdown(string(data))
 		if parseErr == nil {
-			r := renderer.NewRenderer(m.theme, rightWidth).WithDocDir(filepath.Dir(f.Path))
+			r := renderer.NewRenderer(m.theme, rightWidth).WithDocDir(filepath.Dir(f.Path)).WithPlainImages()
 			rendered := r.Render(doc)
 			previewLines = stripAllSentinels(strings.Split(rendered, "\n"))
 		} else {

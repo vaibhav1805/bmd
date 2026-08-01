@@ -428,6 +428,34 @@ func TestDirectoryModelView_SplitPaneBaseline(t *testing.T) {
 	}
 }
 
+// TestDirectoryModelView_SplitPaneImagePreviewNoRawEscape guards against
+// bmd-fbq: the split-pane preview embeds rendered markdown in a fixed-width
+// column via ansiPadOrTruncate, which only recognizes CSI (\x1b[) escape
+// sequences. Inline image protocols emit OSC (\x1b]) sequences carrying a
+// base64 payload; truncating one mid-stream leaves an unterminated escape
+// that corrupts the surrounding terminal layout. The preview must fall back
+// to alt text instead of ever emitting that raw sequence.
+func TestDirectoryModelView_SplitPaneImagePreviewNoRawEscape(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+
+	dir := makeTempDir(t, map[string]string{
+		"readme.md":  "# Image Test\n\n![Sample](./sample.png)\n",
+		"sample.png": "not a real png but non-empty binary-ish content",
+	})
+	defer os.RemoveAll(dir)
+
+	dm := newTestDirectoryModel(t, dir, 120, 24)
+	dm.splitMode = true
+	out := dm.View()
+
+	if strings.Contains(out, "\x1b]1337") {
+		t.Errorf("split-pane preview leaked a raw inline-image escape sequence: %q", out)
+	}
+	if !strings.Contains(out, "[img: Sample]") {
+		t.Errorf("expected alt-text fallback '[img: Sample]' in split-pane preview, got: %q", out)
+	}
+}
+
 // ─── NewDirectoryModel — construction ────────────────────────────────────────
 
 func TestNewDirectoryModel_ScansAndSorts(t *testing.T) {

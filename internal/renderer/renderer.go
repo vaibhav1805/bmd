@@ -15,6 +15,7 @@ type Renderer struct {
 	emitLinkSentinels bool   // if true, wrap links with sentinel markers for LinkRegistry
 	leftMargin        int    // left margin (spaces) for elegant screen edge padding
 	docDir            string // directory of the document being rendered (for relative image paths)
+	plainImages       bool   // if true, always render images as alt text instead of inline terminal graphics
 }
 
 // linkSentinelPrefix and related constants mirror tui/linkreg.go — kept here
@@ -39,6 +40,19 @@ func (r *Renderer) WithLinkSentinels() *Renderer {
 func (r *Renderer) WithDocDir(dir string) *Renderer {
 	copy := *r
 	copy.docDir = dir
+	return &copy
+}
+
+// WithPlainImages returns a copy of the renderer that always falls back to
+// alt-text for images instead of emitting inline terminal graphics escape
+// sequences. Inline image protocols (iTerm2, Sixel, Kitty) draw pixels from
+// the cursor position and are not clippable to a fixed-width column, so any
+// caller that embeds rendered output inside a narrower sub-region of the
+// screen (e.g. a split-pane preview) must use this to avoid corrupting the
+// surrounding layout.
+func (r *Renderer) WithPlainImages() *Renderer {
+	copy := *r
+	copy.plainImages = true
 	return &copy
 }
 
@@ -232,6 +246,10 @@ func (r *Renderer) renderImage(img *ast.Image) string {
 	alt := img.Alt
 	if alt == "" {
 		alt = "[image]"
+	}
+
+	if r.plainImages {
+		return theme.FgCode(r.theme.LinkColor()) + "[img: " + alt + "]" + theme.Reset
 	}
 
 	imageURL := img.URL

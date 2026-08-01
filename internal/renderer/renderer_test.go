@@ -1,6 +1,8 @@
 package renderer
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -189,6 +191,37 @@ func TestRenderImage(t *testing.T) {
 	// Verify alt text appears (fallback for missing local file)
 	if !strings.Contains(output, "Alt text") {
 		t.Error("alt text not found in output")
+	}
+}
+
+// TestRenderImage_PlainImagesFallback verifies that WithPlainImages() forces
+// alt-text rendering even for a loadable local image and an active inline
+// image protocol, so callers embedding output in a fixed-width sub-region
+// (e.g. a split-pane preview) never receive an unclippable OSC escape blob.
+func TestRenderImage_PlainImagesFallback(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	if DetectImageProtocol() == ProtocolNone {
+		t.Skip("no inline image protocol detected in this environment")
+	}
+
+	dir := t.TempDir()
+	imgPath := filepath.Join(dir, "sample.png")
+	if err := os.WriteFile(imgPath, []byte("not a real png but non-empty"), 0o644); err != nil {
+		t.Fatalf("write test image: %v", err)
+	}
+
+	doc := ast.NewDocument()
+	img := &ast.Image{URL: "sample.png", Alt: "Sample screenshot"}
+	doc.AddChild(img)
+
+	r := NewRenderer(theme.NewThemeForScheme(theme.Dark), 62).WithDocDir(dir).WithPlainImages()
+	output := r.Render(doc)
+
+	if strings.Contains(output, "\x1b]1337") {
+		t.Errorf("WithPlainImages() output still contains inline image escape sequence: %q", output)
+	}
+	if !strings.Contains(output, "Sample screenshot") {
+		t.Errorf("WithPlainImages() output missing alt text fallback: %q", output)
 	}
 }
 
