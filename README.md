@@ -27,7 +27,7 @@ bmd README.md          # Press 'e' to edit, '/' to search, 'q' to quit
 bmd                    # Navigate with arrow keys, toggle split-pane with 's'
 
 # Build a search index (one-time)
-bmd index ./docs       # Creates .bmd-index.json for fast searches
+bmd index ./docs       # Creates .bmd/knowledge.db for fast searches
 
 # Search across files
 bmd query "topic" --dir ./docs  # Fast keyword search
@@ -50,7 +50,7 @@ bmd query "topic" --dir ./docs  # Fast keyword search
 - 💾 Local persistence (SQLite indexing)
 
 **Deployment:**
-- 🐳 Single-binary distribution (16MB arm64)
+- 📦 Single-binary distribution (~17MB arm64)
 - 📚 Works everywhere Markdown exists
 
 ## Documentation
@@ -84,40 +84,24 @@ bmd
 ## Key Capabilities
 
 ### Search & Discovery
-- **BM25 full-text search** — Fast, keyword-based ranking
-- **PageIndex semantic search** — LLM-powered intent understanding
-- **Context assembly** — RAG-ready blocks for LLM training
-- **Component registry** — Confidence-weighted dependency discovery
+- **BM25 full-text search** — Fast, keyword-based ranking across a directory of markdown files
+- **Chunked results** — Matches come back with heading paths and context snippets, not whole files
+- **Link graphs** — Visualize explicit markdown links between files (`bmd graph`)
 
-### Architecture Analysis
-- **Dependency graphs** — Visualize component relationships
-- **Graph traversal** — BFS crawling with cycle detection
-- **Service detection** — Automatic microservice identification
-- **Impact analysis** — Who depends on what?
-
-### Portability
-- **Export/import** — Package docs + indexes as tar.gz
-- **Versioning** — Semantic versioning + git provenance
-- **S3 distribution** — Cloud storage integration
-- **Container deployment** — Docker, Kubernetes, fleet patterns
+### Rendering
+- **ANSI 256-color rendering** — Headings, tables, code blocks, blockquotes, all rendered natively
+- **Image support** — Native Kitty/iTerm2/Sixel protocols, with a real Braille-dithered fallback rendering for any other truecolor terminal
 
 ## Status
 
-✅ **Production Ready** — All features complete and tested
-- 430+ tests, zero regressions
-- Full markdown editor with search and link graphs
-- Agent-ready via graphmd for advanced analysis
+✅ All packages passing (`go test ./...`), builds to a single ~17MB binary.
 
-**Latest:**
-- Focused architecture: bmd = viewing/searching, graphmd = discovery/analysis
-- Auto-indexed search (builds index on first search)
-- Split-pane directory browser with preview
+**Looking for dependency graphs, component discovery, relationship mining, or LLM-powered semantic search?** That functionality lives in a companion project, [graphmd](https://github.com/vaibhav1805/graphmd) — bmd deliberately stays focused on viewing, editing, and searching.
 
 ## Project Links
 
 - 📖 [Architecture Overview](./ARCHITECTURE.md) — Technical design
 - 💻 [Code](./cmd/bmd/) — Main CLI entry point
-- 🧪 [Tests](./internal/) — 415+ comprehensive tests
 - 🔗 [Related Docs](./docs/) — Detailed guides
 
 ---

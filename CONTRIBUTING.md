@@ -17,7 +17,7 @@ Please be respectful and constructive. We welcome all contributions that improve
 
 ```bash
 # Clone repository
-git clone https://github.com/flurryhead/bmd
+git clone https://github.com/vaibhav1805/bmd
 cd bmd
 
 # Install dependencies
@@ -122,13 +122,16 @@ Understanding the project layout helps with contributions:
 
 ```
 internal/
-├── knowledge/       Knowledge system (BM25, graph, services)
-├── renderer/        ANSI rendering, images
+├── knowledge/       BM25 search index + link graph (SQLite-backed)
+├── renderer/        ANSI rendering, images (incl. Braille block art)
+├── editor/          Text buffer, undo/redo, atomic file writes
 ├── theme/           Color themes
-├── tui/             Terminal UI framework
+├── tui/             Terminal UI framework (bubbletea)
 ├── nav/             Navigation
-├── search/          Search algorithms
-├── parser/          Markdown parsing
+├── search/          In-document search algorithms
+├── parser/          Markdown parsing (goldmark)
+├── ast/             Internal AST types
+├── config/          Session persistence
 └── terminal/        Terminal utilities
 
 cmd/bmd/
@@ -176,7 +179,7 @@ When contributing, ensure documentation is updated:
 - **Code comments:** For complex logic or exported functions
 - **README.md:** For new user-facing features
 - **ARCHITECTURE.md:** For architectural changes
-- **COMMANDS.md:** For new CLI commands
+- **docs/commands.md:** For new CLI commands
 - **Commit messages:** For what changed and why
 
 ## Performance Considerations
