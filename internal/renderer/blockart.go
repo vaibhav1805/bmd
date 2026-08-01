@@ -21,10 +21,8 @@ const terminalCellAspect = 2.0
 
 // brailleDotsWide and brailleDotsTall are the sample-grid dimensions
 // encoded by a single Unicode Braille Pattern character (U+2800-U+28FF):
-// 2 columns x 4 rows of independently-settable dots per cell. This gives
-// double the vertical detail of a 2x2 quadrant-block cell for the same
-// terminal row/column count, and Braille Patterns (Unicode since 1.0, in
-// active use since long before graphical terminals) have far more
+// 2 columns x 4 rows of independently-settable dots per cell. Braille
+// Patterns have been part of Unicode since 1.0 and have far more
 // consistent monospace font coverage than newer sextant/octant glyphs.
 const (
 	brailleDotsWide = 2
@@ -42,18 +40,43 @@ var brailleBit = [brailleDotsTall][brailleDotsWide]uint{
 	{6, 7},
 }
 
-// rgb is a simple 8-bit color sample used for cell color clustering.
+// rgb is a simple 8-bit color sample.
 type rgb struct{ r, g, b uint8 }
+
+// luminance returns the standard perceptual grayscale weighting of c.
+func luminance(c rgb) float64 {
+	return 0.299*float64(c.r) + 0.587*float64(c.g) + 0.114*float64(c.b)
+}
 
 // renderHalfBlockImage decodes imageData (PNG/JPEG/GIF) and renders it as
 // Unicode Braille-pattern ANSI art at targetCols terminal columns wide.
-// Each terminal cell encodes an 8-dot (2 wide x 4 tall) grid of pixel
-// samples, clustered into a "foreground" (dots on) and "background" (dots
-// off) color pair, and rendered as the single Braille character matching
-// that dot pattern — the same general terminal-agnostic technique used by
-// tools like img2braille/chafa's braille symbol mode for detailed,
-// text/line-art-heavy content, at twice the sample density of a 2x2
-// quadrant-block cell.
+//
+// This mirrors how mature terminal-art tools (chafa, dedicated
+// image-to-Braille converters) actually do it: convert to grayscale, then
+// binarize the WHOLE image at once via Floyd-Steinberg error-diffusion
+// dithering (not an independent decision per cell), and only then slice
+// the result into 2x4 dot groups per terminal cell. An earlier version of
+// this renderer instead re-clustered each cell's 8 raw color samples into
+// two groups from scratch, with no relationship between cells — on a
+// flat, ~uniform region (like a mostly-white photo/screenshot background)
+// that always found *some* two "most different" samples among ordinary
+// sampling noise and forced a high-contrast split there too, so the whole
+// image looked like static rather than a coherent shape. Diffusing the
+// quantization error forward instead keeps the dot pattern's local density
+// tracking the true local brightness, which is what makes dithered output
+// read as a recognizable image instead of noise.
+//
+// Per-cell color still varies (background = average color of the cell's
+// "paper" dots, foreground = average of its "ink" dots) since which
+// samples end up "ink" vs "paper" now comes from that globally-consistent
+// classification rather than an arbitrary local RGB split.
+//
+// Note: like all terminal character-art techniques, this has a hard
+// resolution ceiling — small printed text in a screenshot will not become
+// legible this way (a page's letterforms are often only a few source
+// pixels tall after downscaling to ~100 terminal columns). This renders a
+// recognizable shape/photo/diagram preview, not a document reader; for
+// reading actual text out of an image, see the saved-temp-file fallback.
 //
 // Returns an error if imageData can't be decoded as a supported format.
 func renderHalfBlockImage(imageData []byte, targetCols int) (string, error) {
@@ -76,24 +99,16 @@ func renderHalfBlockImage(imageData []byte, targetCols int) (string, error) {
 		rows = 1
 	}
 
-	totalSubCols := targetCols * brailleDotsWide
-	totalSubRows := rows * brailleDotsTall
+	dotCols := targetCols * brailleDotsWide
+	dotRows := rows * brailleDotsTall
+
+	colorGrid, grayGrid := sampleGrids(img, bounds, dotCols, dotRows)
+	inkGrid := ditherFloydSteinberg(grayGrid, dotCols, dotRows)
 
 	var sb strings.Builder
-	var samples [brailleDotsWide * brailleDotsTall]rgb
 	for r := 0; r < rows; r++ {
 		for c := 0; c < targetCols; c++ {
-			for dr := 0; dr < brailleDotsTall; dr++ {
-				for dc := 0; dc < brailleDotsWide; dc++ {
-					samples[brailleBit[dr][dc]] = averageBoxColor(
-						img, bounds,
-						c*brailleDotsWide+dc, totalSubCols,
-						r*brailleDotsTall+dr, totalSubRows,
-					)
-				}
-			}
-
-			mask, bg, fg := quantizeCell(samples[:])
+			mask, bg, fg := cellFromDots(colorGrid, inkGrid, dotCols, c, r)
 			glyph := rune(0x2800 + mask)
 			fmt.Fprintf(&sb, "\x1b[48;2;%d;%d;%dm\x1b[38;2;%d;%d;%dm%c", bg.r, bg.g, bg.b, fg.r, fg.g, fg.b, glyph)
 		}
@@ -106,59 +121,127 @@ func renderHalfBlockImage(imageData []byte, targetCols int) (string, error) {
 	return sb.String(), nil
 }
 
-// quantizeCell clusters samples into two color groups — the pair with the
-// greatest color distance seeds the two clusters, and every other sample
-// joins whichever seed it's closer to — returning a bitmask of which
-// sample indices joined the second ("foreground") cluster, along with each
-// cluster's average color (background = the first seed's cluster,
-// foreground = the second's). When all samples are identical (a flat
-// region), every sample joins the first cluster, yielding an all-zero mask
-// — a blank glyph showing only the solid background color, as intended.
-func quantizeCell(samples []rgb) (mask uint16, bg, fg rgb) {
-	n := len(samples)
-	bestI, bestJ, bestDist := 0, 1, -1
-	for i := 0; i < n; i++ {
-		for j := i + 1; j < n; j++ {
-			d := colorDistSq(samples[i], samples[j])
-			if d > bestDist {
-				bestDist = d
-				bestI, bestJ = i, j
+// sampleGrids box-averages img down to a dotCols x dotRows grid, returning
+// both the sampled colors (for later fg/bg averaging) and their luminance
+// (as the mutable working buffer for dithering).
+func sampleGrids(img image.Image, bounds image.Rectangle, dotCols, dotRows int) (colorGrid [][]rgb, grayGrid [][]float64) {
+	colorGrid = make([][]rgb, dotRows)
+	grayGrid = make([][]float64, dotRows)
+	for y := 0; y < dotRows; y++ {
+		colorGrid[y] = make([]rgb, dotCols)
+		grayGrid[y] = make([]float64, dotCols)
+		for x := 0; x < dotCols; x++ {
+			c := averageBoxColor(img, bounds, x, dotCols, y, dotRows)
+			colorGrid[y][x] = c
+			grayGrid[y][x] = luminance(c)
+		}
+	}
+	return colorGrid, grayGrid
+}
+
+// ditherFloydSteinberg binarizes grayGrid (mutated in place as the
+// diffusion working buffer) into a dotCols x dotRows grid marking which
+// dots are "ink" (should render as a visible Braille dot) vs "paper"
+// (background only, dot off).
+//
+// Standard Floyd-Steinberg: each pixel is quantized to the nearer of the
+// two target levels (0/255), the resulting error is pushed forward into
+// not-yet-visited neighbors (right 7/16, below-left 3/16, below 5/16,
+// below-right 1/16), and processing continues in scan order. This keeps
+// locally-averaged brightness correct even though each individual pixel's
+// decision is a hard binary choice, which is what makes the dithered
+// pattern read as a smooth gradient/shape instead of speckled noise.
+//
+// "Ink" is defined as whichever of the two quantization levels is the
+// image-wide minority (so, e.g., a mostly-white page's sparse dark text
+// becomes ink, and equally a mostly-dark UI screenshot's sparse bright
+// text becomes ink) — this keeps large flat majority regions rendering as
+// blank/background instead of densely speckled.
+func ditherFloydSteinberg(grayGrid [][]float64, dotCols, dotRows int) [][]bool {
+	var sum float64
+	for y := 0; y < dotRows; y++ {
+		for x := 0; x < dotCols; x++ {
+			sum += grayGrid[y][x]
+		}
+	}
+	meanLuminance := sum / float64(dotRows*dotCols)
+	darkIsInk := meanLuminance >= 127.5 // light is the majority, so dark is minority/ink
+
+	inkGrid := make([][]bool, dotRows)
+	for y := range inkGrid {
+		inkGrid[y] = make([]bool, dotCols)
+	}
+
+	for y := 0; y < dotRows; y++ {
+		for x := 0; x < dotCols; x++ {
+			old := grayGrid[y][x]
+			isDark := old < 127.5
+			var quantized float64
+			if isDark {
+				quantized = 0
+			} else {
+				quantized = 255
+			}
+			inkGrid[y][x] = isDark == darkIsInk
+
+			errVal := old - quantized
+			if x+1 < dotCols {
+				grayGrid[y][x+1] += errVal * 7.0 / 16
+			}
+			if y+1 < dotRows {
+				if x-1 >= 0 {
+					grayGrid[y+1][x-1] += errVal * 3.0 / 16
+				}
+				grayGrid[y+1][x] += errVal * 5.0 / 16
+				if x+1 < dotCols {
+					grayGrid[y+1][x+1] += errVal * 1.0 / 16
+				}
 			}
 		}
 	}
-	seedA, seedB := samples[bestI], samples[bestJ]
 
-	var aSum, bSum [3]uint64
-	var aCount, bCount uint64
-	for i, s := range samples {
-		if colorDistSq(s, seedA) <= colorDistSq(s, seedB) {
-			aSum[0] += uint64(s.r)
-			aSum[1] += uint64(s.g)
-			aSum[2] += uint64(s.b)
-			aCount++
-		} else {
-			mask |= 1 << uint(i)
-			bSum[0] += uint64(s.r)
-			bSum[1] += uint64(s.g)
-			bSum[2] += uint64(s.b)
-			bCount++
+	return inkGrid
+}
+
+// cellFromDots builds the Braille dot mask and fg/bg colors for the
+// terminal cell at (col, row), from the already-dithered ink/paper
+// classification and sampled colors of its 2x4 dot block.
+func cellFromDots(colorGrid [][]rgb, inkGrid [][]bool, dotCols, col, row int) (mask uint16, bg, fg rgb) {
+	var inkSum, paperSum [3]uint64
+	var inkCount, paperCount uint64
+
+	for dr := 0; dr < brailleDotsTall; dr++ {
+		for dc := 0; dc < brailleDotsWide; dc++ {
+			x := col*brailleDotsWide + dc
+			y := row*brailleDotsTall + dr
+			c := colorGrid[y][x]
+			if inkGrid[y][x] {
+				mask |= 1 << brailleBit[dr][dc]
+				inkSum[0] += uint64(c.r)
+				inkSum[1] += uint64(c.g)
+				inkSum[2] += uint64(c.b)
+				inkCount++
+			} else {
+				paperSum[0] += uint64(c.r)
+				paperSum[1] += uint64(c.g)
+				paperSum[2] += uint64(c.b)
+				paperCount++
+			}
 		}
 	}
 
-	bg = rgb{uint8(aSum[0] / aCount), uint8(aSum[1] / aCount), uint8(aSum[2] / aCount)}
-	if bCount == 0 {
-		fg = bg
+	if paperCount > 0 {
+		bg = rgb{uint8(paperSum[0] / paperCount), uint8(paperSum[1] / paperCount), uint8(paperSum[2] / paperCount)}
+	}
+	if inkCount > 0 {
+		fg = rgb{uint8(inkSum[0] / inkCount), uint8(inkSum[1] / inkCount), uint8(inkSum[2] / inkCount)}
 	} else {
-		fg = rgb{uint8(bSum[0] / bCount), uint8(bSum[1] / bCount), uint8(bSum[2] / bCount)}
+		fg = bg
+	}
+	if paperCount == 0 {
+		bg = fg
 	}
 	return mask, bg, fg
-}
-
-func colorDistSq(a, b rgb) int {
-	dr := int(a.r) - int(b.r)
-	dg := int(a.g) - int(b.g)
-	db := int(a.b) - int(b.b)
-	return dr*dr + dg*dg + db*db
 }
 
 // averageBoxColor box-averages the source pixels falling under output

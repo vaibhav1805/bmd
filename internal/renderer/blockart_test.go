@@ -30,43 +30,38 @@ func makeTestPNG(t *testing.T, w, h int) []byte {
 	return buf.Bytes()
 }
 
-// TestQuantizeCell_UniformColorYieldsZeroMask verifies a flat region (no
-// color variation across all samples) clusters entirely into one group,
-// yielding an all-zero mask — a blank/dot-less glyph showing only the
-// solid background color.
-func TestQuantizeCell_UniformColorYieldsZeroMask(t *testing.T) {
-	c := rgb{100, 150, 200}
-	samples := []rgb{c, c, c, c, c, c, c, c}
-	mask, bg, fg := quantizeCell(samples)
-	if mask != 0 {
-		t.Errorf("expected mask=0 for a uniform-color cell, got %#b", mask)
-	}
-	if bg != c || fg != c {
-		t.Errorf("expected both bg and fg to equal the uniform color %v, got bg=%v fg=%v", c, bg, fg)
+// TestDitherFloydSteinberg_UniformRegionProducesNoInk is the regression
+// test for the "seriously broken... static noise" bug: a flat, uniform
+// region (no real detail at all) must dither to zero ink dots, rendering
+// as a clean solid background fill. The earlier per-cell RGB-clustering
+// approach instead always found *some* two "most different" samples
+// (ordinary sampling noise is never perfectly zero-variance) and forced a
+// high-contrast dot pattern there anyway, which is what produced the
+// speckled/illegible look on real photos and screenshots.
+func TestDitherFloydSteinberg_UniformRegionProducesNoInk(t *testing.T) {
+	gray := [][]float64{{200, 200, 200, 200}}
+	ink := ditherFloydSteinberg(gray, 4, 1)
+	for x := 0; x < 4; x++ {
+		if ink[0][x] {
+			t.Errorf("expected no ink dots in a uniform flat region, got ink at x=%d (row: %v)", x, ink[0])
+		}
 	}
 }
 
-// TestQuantizeCell_TwoDistinctGroupsCluster verifies samples split cleanly
-// into two color groups: the first half red, the second half blue. Every
-// red sample must land in the background cluster (mask bit unset) and
-// every blue sample in the foreground cluster (mask bit set), regardless
-// of how many total samples are clustered (4 for quadrants, 8 for
-// Braille) — this is the general clustering logic both build on.
-func TestQuantizeCell_TwoDistinctGroupsCluster(t *testing.T) {
-	red := rgb{255, 0, 0}
-	blue := rgb{0, 0, 255}
-	samples := []rgb{red, red, red, red, blue, blue, blue, blue}
-	mask, bg, fg := quantizeCell(samples)
-
-	var want uint16 = 0b11110000
-	if mask != want {
-		t.Errorf("expected mask=%#b (last 4 samples foreground), got %#b", want, mask)
-	}
-	if bg != red {
-		t.Errorf("expected background=red, got %v", bg)
-	}
-	if fg != blue {
-		t.Errorf("expected foreground=blue, got %v", fg)
+// TestDitherFloydSteinberg_HighContrastSplitProducesInkOnDarkSide verifies
+// a genuine light/dark edge is captured correctly: the dark (minority)
+// side should dither to ink, the light (majority) side to paper. Values
+// chosen and hand-traced against the exact Floyd-Steinberg diffusion
+// (7/16, 3/16, 5/16, 1/16 to right/below-left/below/below-right) for a
+// single row, so the expected ink pattern is exact, not approximate.
+func TestDitherFloydSteinberg_HighContrastSplitProducesInkOnDarkSide(t *testing.T) {
+	gray := [][]float64{{240, 240, 15, 15}}
+	ink := ditherFloydSteinberg(gray, 4, 1)
+	want := []bool{false, false, true, true}
+	for x, w := range want {
+		if ink[0][x] != w {
+			t.Errorf("at x=%d: expected ink=%v, got %v (full row: %v)", x, w, ink[0][x], ink[0])
+		}
 	}
 }
 
