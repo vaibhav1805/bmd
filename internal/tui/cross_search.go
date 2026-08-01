@@ -1,5 +1,5 @@
-// Package tui: cross-document search mode — full-text BM25 (or PageIndex)
-// search across every markdown file under the browsed directory.
+// Package tui: cross-document search mode — full-text BM25 search across
+// every markdown file under the browsed directory.
 //
 // CrossSearchModel is an independent tea.Model (ARCH-02): its state (query
 // input, executed results, selection) lives entirely here, not as flat
@@ -11,7 +11,6 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -405,31 +404,11 @@ func stripANSIForLen(s string) string {
 	return string(result)
 }
 
-// SearchAllFiles executes a cross-document search across all markdown files in
-// the model's rootPath.  The search strategy is determined by the BMD_STRATEGY
-// environment variable:
-//
-//   - "pageindex": use PageIndex semantic search (falls back to BM25 if trees
-//     are missing or the pageindex binary is not found).
-//   - "bm25" or "" (default): use BM25 keyword search.
-//
-// Returns the results, the strategy actually used, and any error.
+// SearchAllFiles executes a cross-document BM25 search across all markdown
+// files in the model's rootPath. Returns the results, the strategy string
+// (always "bm25" — kept for display and to leave room for a future
+// strategy), and any error.
 func (m *CrossSearchModel) SearchAllFiles(query string) ([]knowledge.SearchResult, string, error) {
-	strategy := os.Getenv("BMD_STRATEGY")
-	if strategy == "" {
-		strategy = "bm25"
-	}
-
-	if strategy == "pageindex" {
-		results, err := knowledge.SearchAllDocumentsPageIndex(m.rootPath, query, 50)
-		if err != nil {
-			// Fall back to BM25 when trees are missing or binary not found.
-			fallbackResults, fallbackErr := knowledge.SearchAllDocuments(m.rootPath, query, 50)
-			return fallbackResults, "bm25", fallbackErr
-		}
-		return results, "pageindex", nil
-	}
-
 	results, err := knowledge.SearchAllDocuments(m.rootPath, query, 50)
-	return results, strategy, err
+	return results, "bm25", err
 }

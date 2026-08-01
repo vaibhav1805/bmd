@@ -1,8 +1,6 @@
 package knowledge
 
 import (
-	"errors"
-	"fmt"
 	"os"
 	"strings"
 )
@@ -104,45 +102,14 @@ func collapseWhitespace(s string) string {
 	return strings.TrimSpace(b.String())
 }
 
-// ErrPageIndexNotAvailable is returned by SearchAllDocumentsPageIndex when no
-// .bmd-tree.json files are found in the directory — indicating PageIndex has
-// not been run yet.  Callers should fall back to BM25.
-var ErrPageIndexNotAvailable = errors.New("pageindex trees not found; run 'bmd index --strategy pageindex' first")
-
-// SearchAllDocumentsPageIndex searches across all documents using PageIndex
-// semantic search.  It loads .bmd-tree.json files from dir/.bmd/trees/, then
-// calls RunPageIndexQuery to rank results by semantic relevance.
+// SearchAllDocuments builds a BM25 index by scanning rootPath (auto-building
+// the SQLite-backed graph/staleness cache via openOrBuildIndex if needed) and
+// executes a full-text search across all indexed markdown files.
 //
-// Returns ErrPageIndexNotAvailable when no tree files exist (caller should
-// fall back to BM25).  Returns ErrPageIndexNotFound (wrapped) when the
-// pageindex binary is absent.
+// The database only stores document metadata, not full content, so search
+// always runs against a fresh in-memory index built from a rescan — that
+// rescan is needed anyway to populate snippet content.
 //
-// Results are converted to SearchResult format with Score populated from the
-// PageIndex confidence score, sorted descending.
-func SearchAllDocumentsPageIndex(dir, query string, limit int) ([]SearchResult, error) {
-	if query == "" {
-		return []SearchResult{}, nil
-	}
-	if limit <= 0 {
-		limit = 50
-	}
-
-	trees, err := LoadTreeFiles(dir)
-	if err != nil {
-		return nil, fmt.Errorf("SearchAllDocumentsPageIndex: load trees: %w", err)
-	}
-	if len(trees) == 0 {
-		return nil, ErrPageIndexNotAvailable
-	}
-
-	// PageIndex moved to graphmd - return error
-	return nil, fmt.Errorf("PageIndex semantic search moved to graphmd")
-}
-
-// SearchAllDocuments loads the BM25 index from rootPath (building it if missing)
-// and executes a full-text search across all indexed markdown files.
-//
-// It reuses the existing openOrBuildIndex infrastructure from Phase 6.
 // Returns SearchResult slice sorted by BM25 score descending.
 // Returns an empty slice (not nil) when no documents match.
 func SearchAllDocuments(rootPath, query string, topK int) ([]SearchResult, error) {
@@ -160,17 +127,14 @@ func SearchAllDocuments(rootPath, query string, topK int) ([]SearchResult, error
 	}
 	defer db.Close() //nolint:errcheck
 
-	idx := NewIndex()
-	if err := db.LoadIndex(idx); err != nil {
+	k := DefaultKnowledge()
+	docs, err := k.Scan(rootPath)
+	if err != nil {
 		return nil, err
 	}
-
-	// Re-scan to populate content for snippet extraction.
-	// Use default Knowledge configuration for backward compatibility.
-	k := DefaultKnowledge()
-	docs, scanErr := k.Scan(rootPath)
-	if scanErr == nil && len(docs) > 0 {
-		_ = idx.Build(docs)
+	idx := NewIndex()
+	if err := idx.Build(docs); err != nil {
+		return nil, err
 	}
 
 	return idx.Search(query, topK)

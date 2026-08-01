@@ -39,7 +39,6 @@ bmd query "authentication" --dir ./docs
 
 **Options:**
 - `--dir DIR` — Directory to search (default: .)
-- `--strategy bm25|pageindex` — Search type (default: bm25)
 - `--format json|text|csv` — Output format (default: json)
 - `--top N` — Max results (default: 10)
 
@@ -53,3 +52,4 @@ bmd graph --dir ./docs --format json
 **Options:**
 - `--dir DIR` — Directory to graph (default: .)
 - `--format dot|json` — Output format (default: json)
+- `--service NAME` — Export only the subgraph reachable from this node (matched by ID or filename)

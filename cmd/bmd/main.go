@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/bmd/bmd/internal/config"
 	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/terminal"
 	"github.com/bmd/bmd/internal/theme"
 	"github.com/bmd/bmd/internal/tui"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {
@@ -235,7 +235,6 @@ SEARCH & INDEXING:
   bmd index [DIR] [OPTIONS]
     --dir DIR                 Directory to index (default: .)
     --db DB                   Database path (default: .bmd/knowledge.db)
-    --strategy pageindex      Use PageIndex for semantic indexing (optional)
     --ignore-dirs DIRS        Comma-separated directory patterns to ignore
     --ignore-files PATTERNS   Comma-separated file patterns to ignore
     -A, --include-hidden      Include hidden directories and files
@@ -243,7 +242,6 @@ SEARCH & INDEXING:
 
   bmd query TERM [OPTIONS]
     --dir DIR                 Directory to search (default: .)
-    --strategy bm25|pageindex Search strategy (default: bm25)
     --format json|text|csv    Output format (default: json)
     --top N                   Max results (default: 10)
 
@@ -259,10 +257,8 @@ Examples:
   bmd                         Browse current directory
   bmd --browse ./docs         Browse specific directory
   bmd README.md               View file
-  bmd index ./docs            Index with BM25 (default)
-  bmd index ./docs --strategy pageindex  Index with semantic trees
-  bmd query "authentication"  Search (fast BM25)
-  bmd query "auth" --strategy pageindex  Semantic search (requires trees)
+  bmd index ./docs            Build the search index and link graph
+  bmd query "authentication"  Search (BM25)
   bmd graph                   Show link graph as JSON
 
 For advanced features (dependencies, components, relationships, discovery):

@@ -603,51 +603,20 @@ func TestNewCrossSearchModel_StartsInInputStage(t *testing.T) {
 	}
 }
 
-// ─── SearchAllFiles — strategy selection (moved from Viewer) ────────────────
+// ─── SearchAllFiles — strategy reporting ────────────────────────────────────
 
-func TestCrossSearchModel_SearchAllFiles_DefaultStrategyIsBM25(t *testing.T) {
+func TestCrossSearchModel_SearchAllFiles_StrategyIsBM25(t *testing.T) {
 	dir := buildTmpSearchDir(t, map[string]string{
 		"doc.md": "# Document\nThis is about authentication and microservices.",
 	})
 	m := newTestCrossSearchModel(dir, 80, 24)
-	t.Setenv("BMD_STRATEGY", "")
 
 	_, strategy, err := m.SearchAllFiles("authentication")
 	if err != nil {
 		t.Fatalf("SearchAllFiles error: %v", err)
 	}
 	if strategy != "bm25" {
-		t.Errorf("expected default strategy 'bm25', got %q", strategy)
-	}
-}
-
-func TestCrossSearchModel_SearchAllFiles_StrategyEnvVarBM25(t *testing.T) {
-	dir := buildTmpSearchDir(t, map[string]string{
-		"doc.md": "# Document\nContent about services.",
-	})
-	m := newTestCrossSearchModel(dir, 80, 24)
-	t.Setenv("BMD_STRATEGY", "bm25")
-
-	_, strategy, err := m.SearchAllFiles("services")
-	if err != nil {
-		t.Fatalf("SearchAllFiles error: %v", err)
-	}
-	if strategy != "bm25" {
 		t.Errorf("expected strategy 'bm25', got %q", strategy)
-	}
-}
-
-func TestCrossSearchModel_SearchAllFiles_PageIndexFallback(t *testing.T) {
-	dir := buildTmpSearchDir(t, map[string]string{
-		"doc.md": "# Document\nContent about authentication microservices.",
-	})
-	m := newTestCrossSearchModel(dir, 80, 24)
-	t.Setenv("BMD_STRATEGY", "pageindex")
-
-	// No .bmd-tree.json files exist, so PageIndex will fail → BM25 fallback.
-	_, strategy, _ := m.SearchAllFiles("authentication")
-	if strategy != "bm25" {
-		t.Errorf("expected fallback strategy 'bm25', got %q", strategy)
 	}
 }
 

@@ -18,68 +18,36 @@ type IndexArgs struct {
 	Dir          string
 	DB           string
 	Watch        bool
-	PollInterval int    // seconds
-	Strategy     string // "" | "pageindex" — default "" means BM25-only
-	Model        string // LLM model for pageindex strategy; default "claude-sonnet-4-5"
-	PageIndexBin string // path to pageindex executable; default "pageindex"
+	PollInterval int // seconds
 	// Scan configuration flags
 	IgnoreDirs       string // comma-separated directory patterns to ignore
 	IgnoreFiles      string // comma-separated file patterns to ignore
 	IncludeHidden    bool   // -A flag: include hidden directories
 	NoIgnoreDefaults bool   // disable default ignore patterns
-	// Discovery flags (Phase 23)
-	// SkipDiscovery disables implicit relationship discovery algorithms.
-	// When true, only explicit graph edges (links, code refs, mentions) are used.
-	SkipDiscovery bool
-	// MinDiscoveryConf overrides the minimum confidence threshold for the
-	// implicit discovery filter. 0.0 means use the algorithm-tuned defaults
-	// from DefaultDiscoveryFilterConfig().
-	MinDiscoveryConf float64
-	// LLMDiscovery enables LLM-powered semantic discovery via PageIndex.
-	// When false (default), LLMSemanticRelationships is skipped.
-	LLMDiscovery bool
 }
 
 // QueryArgs holds parsed arguments for CmdQuery.
 type QueryArgs struct {
-	Query    string
-	Dir      string
-	Format   string
-	Top      int
-	Strategy string // "" | "bm25" | "pageindex" — default "" (BM25)
-	Model    string // LLM model for pageindex strategy; default "claude-sonnet-4-5"
+	Query  string
+	Dir    string
+	Format string
+	Top    int
 }
 
 // GraphArgs holds parsed arguments for CmdGraph.
 type GraphArgs struct {
-	Service  string
-	Dir      string
-	Format   string
-	NoHybrid bool // --no-hybrid: skip registry signal merging
+	Service string
+	Dir     string
+	Format  string
 }
 
 // ─── argument parsers ─────────────────────────────────────────────────────────
 
-// resolveStrategy returns the strategy in precedence order: flag value → env var → default "bm25".
-// This allows users to set a global preference via BMD_STRATEGY env var while allowing
-// command-line flags to override it.
-func resolveStrategy(flagValue string) string {
-	// Flag value takes precedence
-	if flagValue != "" {
-		return flagValue
-	}
-	// Environment variable next
-	if env := os.Getenv("BMD_STRATEGY"); env != "" {
-		return env
-	}
-	// Default to BM25
-	return "bm25"
-}
-
 // ParseIndexArgs parses raw CLI arguments for the index command.
 //
 // Usage: bmd index [DIR] [--dir DIR] [--db PATH] [--watch] [--poll-interval N]
-//        [--ignore-dirs DIRS] [--ignore-files FILES] [-A|--include-hidden] [--no-ignore-defaults]
+//
+//	[--ignore-dirs DIRS] [--ignore-files FILES] [-A|--include-hidden] [--no-ignore-defaults]
 func ParseIndexArgs(args []string) (*IndexArgs, error) {
 	fs := flag.NewFlagSet("index", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -89,9 +57,6 @@ func ParseIndexArgs(args []string) (*IndexArgs, error) {
 	fs.StringVar(&a.DB, "db", ".bmd/knowledge.db", "Path to SQLite database")
 	fs.BoolVar(&a.Watch, "watch", false, "Rebuild index on file changes")
 	fs.IntVar(&a.PollInterval, "poll-interval", 5, "Polling interval in seconds (watch mode)")
-	fs.StringVar(&a.Strategy, "strategy", "", "Indexing strategy: '' (BM25 default) | 'pageindex'")
-	fs.StringVar(&a.Model, "model", "claude-sonnet-4-5", "LLM model for pageindex strategy")
-	fs.StringVar(&a.PageIndexBin, "pageindex-bin", "pageindex", "Path to pageindex CLI binary")
 	// Scan configuration flags
 	fs.StringVar(&a.IgnoreDirs, "ignore-dirs", "", "Comma-separated directory patterns to ignore (appends to defaults)")
 	fs.StringVar(&a.IgnoreFiles, "ignore-files", "", "Comma-separated file patterns to ignore")
@@ -99,7 +64,6 @@ func ParseIndexArgs(args []string) (*IndexArgs, error) {
 	fs.BoolVar(&a.NoIgnoreDefaults, "no-ignore-defaults", false, "Disable default ignore patterns")
 	// Also register --include-hidden as an alias for -A
 	fs.BoolVar(&a.IncludeHidden, "include-hidden", a.IncludeHidden, "Include hidden directories and files")
-	// Note: Discovery flags removed; use 'graphmd index' for intelligent discovery
 
 	if err := fs.Parse(args); err != nil {
 		return nil, fmt.Errorf("index: %w", err)
@@ -109,9 +73,6 @@ func ParseIndexArgs(args []string) (*IndexArgs, error) {
 	if pos := fs.Args(); len(pos) > 0 {
 		a.Dir = pos[0]
 	}
-
-	// Resolve strategy: flag → env var → default
-	a.Strategy = resolveStrategy(a.Strategy)
 
 	return &a, nil
 }
@@ -131,15 +92,13 @@ func ParseQueryArgs(args []string) (*QueryArgs, error) {
 	fs.StringVar(&a.Dir, "dir", ".", "Directory that was indexed")
 	fs.StringVar(&a.Format, "format", "json", "Output format (json|text|csv)")
 	fs.IntVar(&a.Top, "top", 10, "Maximum number of results to return")
-	fs.StringVar(&a.Strategy, "strategy", "", "Search strategy: '' or 'bm25' (default) | 'pageindex'")
-	fs.StringVar(&a.Model, "model", "claude-sonnet-4-5", "LLM model for pageindex strategy")
 
 	if err := fs.Parse(flags); err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
 
 	if len(positionals) < 1 {
-		return nil, fmt.Errorf("query: TERM argument required\nUsage: bmd query TERM [DIR] [--dir DIR] [--format json|text|csv] [--top N] [--strategy bm25|pageindex] [--model MODEL]")
+		return nil, fmt.Errorf("query: TERM argument required\nUsage: bmd query TERM [DIR] [--dir DIR] [--format json|text|csv] [--top N]")
 	}
 	a.Query = positionals[0]
 	if len(positionals) > 1 {
@@ -150,15 +109,12 @@ func ParseQueryArgs(args []string) (*QueryArgs, error) {
 		return nil, fmt.Errorf("query: --top must be >= 1")
 	}
 
-	// Resolve strategy: flag → env var → default
-	a.Strategy = resolveStrategy(a.Strategy)
-
 	return &a, nil
 }
 
 // ParseGraphArgs parses raw CLI arguments for the graph command.
 //
-// Usage: bmd graph [SERVICE] [--dir DIR] [--format dot|json] [--service NAME] [--no-hybrid]
+// Usage: bmd graph [SERVICE] [--dir DIR] [--format dot|json] [--service NAME]
 func ParseGraphArgs(args []string) (*GraphArgs, error) {
 	positionals, flags := splitPositionalsAndFlags(args)
 
@@ -169,7 +125,6 @@ func ParseGraphArgs(args []string) (*GraphArgs, error) {
 	fs.StringVar(&a.Dir, "dir", ".", "Directory that was indexed")
 	fs.StringVar(&a.Format, "format", "dot", "Output format (dot|json)")
 	fs.StringVar(&a.Service, "service", "", "Export subgraph for this service only")
-	fs.BoolVar(&a.NoHybrid, "no-hybrid", false, "Skip registry signal merging (use base graph only)")
 
 	if err := fs.Parse(flags); err != nil {
 		return nil, fmt.Errorf("graph: %w", err)
@@ -300,19 +255,12 @@ func CmdIndex(args []string) error {
 	return nil
 }
 
-// CmdQuery implements `bmd query TERM`.  It loads the index from the database
-// and executes a BM25 search (default) or a PageIndex semantic search
-// (--strategy pageindex), printing results in the requested format.
+// CmdQuery implements `bmd query TERM`.  It executes a BM25 search over the
+// indexed directory, printing results in the requested format.
 func CmdQuery(args []string) error {
 	a, err := ParseQueryArgs(args)
 	if err != nil {
 		return err
-	}
-
-	// Route to pageindex strategy when requested.
-	usePageIndex := strings.ToLower(a.Strategy) == "pageindex"
-	if usePageIndex {
-		return cmdQueryPageIndex(a)
 	}
 
 	isJSON := strings.ToLower(a.Format) == "json"
@@ -345,23 +293,25 @@ func CmdQuery(args []string) error {
 	}
 	defer db.Close() //nolint:errcheck
 
-	// Load index.
-	idx := NewIndex()
-	if err := db.LoadIndex(idx); err != nil {
+	// The database only stores document metadata, not full content, so BM25
+	// search always runs against a fresh in-memory index built by rescanning
+	// the directory (needed for snippet extraction anyway).
+	k := DefaultKnowledge()
+	docs, err := k.Scan(absDir)
+	if err != nil {
 		if isJSON {
 			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
 			return nil
 		}
-		return fmt.Errorf("query: load index: %w", err)
+		return fmt.Errorf("query: scan: %w", err)
 	}
-
-	// Re-scan to populate content for snippets (db stores only metadata).
-	// Use default Knowledge configuration for backward compatibility.
-	k := DefaultKnowledge()
-	docs, scanErr := k.Scan(absDir)
-	if scanErr == nil {
-		// Re-build in-memory so snippets are available.
-		_ = idx.Build(docs)
+	idx := NewIndex()
+	if err := idx.Build(docs); err != nil {
+		if isJSON {
+			fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, err.Error())))
+			return nil
+		}
+		return fmt.Errorf("query: build index: %w", err)
 	}
 
 	// Execute search.
@@ -418,24 +368,6 @@ func CmdQuery(args []string) error {
 	return nil
 }
 
-// cmdQueryPageIndex executes `bmd query` with strategy=pageindex.
-// It loads .bmd-tree.json files from absDir, calls RunPageIndexQuery,
-// and returns results wrapped in a CONTRACT-01 envelope with reasoning_trace
-// fields per result.
-//
-// Graceful fallback paths:
-//   - No .bmd-tree.json files → INDEX_NOT_FOUND error
-//   - pageindex binary not found → PAGEINDEX_NOT_AVAILABLE error
-func cmdQueryPageIndex(a *QueryArgs) error {
-	isJSON := strings.ToLower(a.Format) == "json"
-	msg := "PageIndex semantic search moved to graphmd. Use: graphmd index --llm-discovery"
-	if isJSON {
-		fmt.Println(marshalContract(NewErrorResponse(ErrCodeInternalError, msg)))
-		return nil
-	}
-	return fmt.Errorf("%s", msg)
-}
-
 // CmdGraph implements `bmd graph`.  It loads the knowledge graph and exports
 // it in the requested format (DOT or JSON).
 func CmdGraph(args []string) error {
@@ -474,14 +406,6 @@ func CmdGraph(args []string) error {
 		}
 		return fmt.Errorf("graph: load graph: %w", err)
 	}
-
-	// Registry augmentation removed (moved to graphmd)
-	// if !a.NoHybrid {
-	//   registryPath := filepath.Join(absDir, RegistryFileName)
-	//   if reg, regErr := LoadRegistry(registryPath); regErr == nil && reg != nil {
-	//     _ = graph.MergeRegistry(reg)
-	//   }
-	// }
 
 	// Apply subgraph filter when a service is specified.
 	exportGraph := graph
@@ -657,8 +581,6 @@ func openOrBuildIndex(absDir, dbPath string) (*Database, error) {
 	return db, nil
 }
 
-// loadGraphAndServices is a convenience helper that opens the database,
-// loads the graph, re-scans for documents, and detects services.
 // findNodeForService searches for a graph node matching serviceID by ID or by
 // filename stem.  Returns the node ID string, or "" when not found.
 func findNodeForService(graph *Graph, serviceID string) string {
@@ -685,6 +607,12 @@ func findNodeForService(graph *Graph, serviceID string) string {
 	}
 
 	return ""
+}
+
+// filenameStem returns the identifier used to match a --service flag against
+// a graph node when no exact or case-insensitive ID match is found.
+func filenameStem(path string) string {
+	return path
 }
 
 // watchAndRebuild polls absDir every pollInterval seconds and rebuilds the
@@ -724,11 +652,9 @@ func watchAndRebuild(a *IndexArgs, absDir string, initialDocs []Document) error 
 
 		if changed {
 			fmt.Fprintln(os.Stderr, "Changes detected, rebuilding index...")
-			buildArgs := &IndexArgs{Dir: absDir, DB: a.DB}
 			if err := CmdIndex([]string{"--dir", absDir, "--db", a.DB}); err != nil {
 				fmt.Fprintf(os.Stderr, "watch: rebuild error: %v\n", err)
 			}
-			_ = buildArgs
 		}
 	}
 }
