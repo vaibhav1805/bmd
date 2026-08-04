@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -318,7 +319,7 @@ func TestImageToKitty_UsesSemicolonSeparator(t *testing.T) {
 	data := []byte{0x89, 0x50, 0x4E, 0x47, 1, 2, 3}
 	seq := ImageToKitty(data, 40, 20)
 
-	const wantPrefix = "\x1b_Ga=T,f=100,m=0;"
+	const wantPrefix = "\x1b_Ga=T,f=100,r=20,m=0;"
 	if !strings.HasPrefix(seq, wantPrefix) {
 		t.Fatalf("expected control data terminated by ';', got: %q", seq)
 	}
@@ -404,6 +405,86 @@ func TestImageToKitty_ChunksLargePayloads(t *testing.T) {
 	}
 	if reassembled.String() != encoded {
 		t.Errorf("reassembled chunk payloads don't match the original base64 data (lengths: got %d, want %d)", reassembled.Len(), len(encoded))
+	}
+}
+
+// TestKittyDeleteAllImages is a regression test for bmd-xqh's ghost-image
+// symptom: Kitty renders images as an out-of-band pixel overlay that
+// persists on screen even after bmd redraws different text in the same
+// cells (e.g. navigating to a different file), so bmd must be able to emit
+// an explicit delete-all-images command (a=d action, d=A: all placements +
+// cached data) at navigation choke points.
+func TestKittyDeleteAllImages(t *testing.T) {
+	got := KittyDeleteAllImages()
+	want := "\x1b_Ga=d,d=A\x1b\\"
+	if got != want {
+		t.Errorf("KittyDeleteAllImages() = %q, want %q", got, want)
+	}
+}
+
+// TestImageToKitty_ConstrainsDisplaySizeWithRowsOnly is a regression test
+// for bmd-xqh: ImageToKitty previously omitted Kitty's r= placement key
+// entirely, so the terminal rendered the image at its natural pixel size
+// (intrinsic PNG dimensions / cell size) — almost always many more terminal
+// rows than the single v.Lines entry bmd's document model accounts for per
+// image, causing the image to overlap subsequent content and breaking
+// click-to-line math for everything below it. r= must be set to the exact
+// height (in terminal cells) the caller requested, on the first chunk only
+// (matching a=/f=/m=).
+//
+// A second regression (also bmd-xqh): an earlier attempt set BOTH c= and
+// r=, which per the Kitty spec forces the image into that exact box
+// regardless of its real aspect ratio — visibly stretching/squashing a
+// non-square image in real-terminal testing. c= must NOT be set, so Kitty
+// computes columns from the PNG's own aspect ratio given the fixed r=.
+func TestImageToKitty_ConstrainsDisplaySizeWithRowsOnly(t *testing.T) {
+	data := []byte{0x89, 0x50, 0x4E, 0x47, 1, 2, 3}
+	seq := ImageToKitty(data, 42, 17)
+
+	const wantPrefix = "\x1b_Ga=T,f=100,r=17,m=0;"
+	if !strings.HasPrefix(seq, wantPrefix) {
+		t.Fatalf("expected control data to constrain display size via r= only, got: %q", seq)
+	}
+	if strings.Contains(seq, "c=") {
+		t.Errorf("expected no c= key (would force distortion instead of preserving aspect ratio), got: %q", seq)
+	}
+}
+
+// TestRenderImage_KittyHeightCappedAndReservesMatchingRows is a regression
+// test for bmd-xqh: a first attempt let imageHeight scale proportionally
+// with imageWidth (up to 66 rows on a wide terminal) with no relation to
+// the terminal's actual visible row count, and requesting a Kitty image
+// taller than the real window corrupted rendering in practice. renderImage
+// must cap native-protocol (Kitty/iTerm2) height to maxNativeImageHeight
+// regardless of how wide the terminal is, and the blank-line padding after
+// the image (so v.Lines row-accounting matches what's on screen) must
+// track that same capped value, not the uncapped width-derived one.
+func TestRenderImage_KittyHeightCappedAndReservesMatchingRows(t *testing.T) {
+	t.Setenv("KITTY_WINDOW_ID", "1")
+	if got := DetectImageProtocol(); got != ProtocolKitty {
+		t.Fatalf("expected ProtocolKitty in this environment, got %v", got)
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "sample.png"), makeTestPNG(t, 400, 400), 0o644); err != nil {
+		t.Fatalf("write test image: %v", err)
+	}
+
+	// A wide terminal: uncapped, imageWidth would clamp to 100 and
+	// imageHeight to 66 — well over maxNativeImageHeight.
+	termWidth := 200
+	r := NewRenderer(theme.NewThemeForScheme(theme.Dark), termWidth).WithDocDir(dir)
+	img := &ast.Image{URL: "sample.png", Alt: "Sample"}
+	out := r.renderImage(img)
+
+	wantHeightMarker := "r=" + strconv.Itoa(maxNativeImageHeight)
+	if !strings.Contains(out, wantHeightMarker) {
+		t.Errorf("expected the Kitty escape height capped at maxNativeImageHeight=%d, got: %.200q...", maxNativeImageHeight, out)
+	}
+
+	rows := strings.Count(out, "\n")
+	if rows != maxNativeImageHeight {
+		t.Errorf("expected renderImage to produce %d newlines (matching the capped r=%d row constraint) so v.Lines row-accounting matches the image's real footprint, got %d", maxNativeImageHeight, maxNativeImageHeight, rows)
 	}
 }
 

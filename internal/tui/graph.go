@@ -231,6 +231,16 @@ func (m *GraphModel) View() string {
 
 	var sb strings.Builder
 
+	// bmd-xqh: graph view bypasses Viewer.renderHeader() (D-05 above), so
+	// it needs its own copy of the Kitty ghost-image cleanup — otherwise
+	// a lingering image from the file view that was active before
+	// switching to graph mode stays visually stuck on screen, since
+	// Kitty images are an out-of-band pixel overlay independent of
+	// whatever text bmd draws over the same cells.
+	if renderer.DetectImageProtocol() == renderer.ProtocolKitty {
+		sb.WriteString(renderer.KittyDeleteAllImages())
+	}
+
 	// Header
 	headerStr := " Graph View: Document Dependencies"
 	runes := []rune(headerStr)

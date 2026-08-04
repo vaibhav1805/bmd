@@ -208,10 +208,26 @@ func ImageToKitty(imageData []byte, width, height int) string {
 	// Only the first chunk carries the full control-data set (a=/f=/etc);
 	// subsequent chunks carry only m= (and optionally q=), per the spec.
 	//
-	// We don't constrain display size (Kitty's c=/r= placement keys) even
-	// though width/height are available — the terminal renders at the
-	// PNG's natural size (intrinsic pixel dimensions divided by the
-	// current cell size) instead.
+	// r= constrains the display footprint to exactly height terminal
+	// rows (bmd-xqh): without it, Kitty renders at the PNG's natural
+	// size (intrinsic pixel dimensions / current cell size). height is
+	// capped by the caller (renderImage's maxNativeImageHeight) to a
+	// value that safely fits within any realistic terminal window — a
+	// first attempt let it scale with terminal width instead and
+	// corrupted rendering in practice (verified against a real Kitty
+	// terminal).
+	//
+	// Deliberately NOT also setting c= (width parameter unused for
+	// Kitty, still used by ImageToITerm2 below): per the Kitty graphics
+	// protocol spec, "if only one of either r or c is specified, the
+	// other one is computed based on the source image aspect ratio, so
+	// that the image is displayed without distortion" — specifying BOTH
+	// forces the image into that exact box regardless of its real
+	// aspect ratio, which visibly stretched/squashed a non-square image
+	// in real-terminal testing. Letting Kitty derive columns from the
+	// PNG's own dimensions (which it already has, having just decoded
+	// the same payload for f=100) is more reliable than bmd computing
+	// and asserting an aspect-correct width itself.
 	var sb strings.Builder
 	for i := 0; i < len(encoded); i += kittyChunkSize {
 		end := i + kittyChunkSize
@@ -223,13 +239,37 @@ func ImageToKitty(imageData []byte, width, height int) string {
 			more = 1
 		}
 		if i == 0 {
-			fmt.Fprintf(&sb, "\x1b_Ga=T,f=100,m=%d;%s\x1b\\", more, encoded[i:end])
+			fmt.Fprintf(&sb, "\x1b_Ga=T,f=100,r=%d,m=%d;%s\x1b\\", height, more, encoded[i:end])
 		} else {
 			fmt.Fprintf(&sb, "\x1b_Gm=%d;%s\x1b\\", more, encoded[i:end])
 		}
 	}
 
 	return sb.String()
+}
+
+// kittyDeleteAllImagesSeq is the Kitty graphics protocol command to remove
+// every currently displayed image and free its cached data (a=d: delete
+// action, d=A: all placements + underlying image data — lowercase "a"
+// would only clear the on-screen placement and leave the image cached
+// server-side). Kitty images are an out-of-band pixel overlay independent
+// of the terminal's text grid: unlike normal characters, they are NOT
+// automatically cleared when bmd redraws different text in the same
+// screen cells (e.g. navigating to a different file), so bmd must send
+// this explicitly at every navigation choke point to avoid a "ghost"
+// image from the previous document persisting on screen (bmd-xqh).
+const kittyDeleteAllImagesSeq = "\x1b_Ga=d,d=A\x1b\\"
+
+// KittyDeleteAllImages returns the Kitty graphics protocol escape sequence
+// that deletes every image currently displayed by the terminal. Callers
+// should prepend this to rendered output at document-navigation choke
+// points (loading a new file, returning to the directory/search view) so
+// a previous document's image cannot persist as a ghost overlay once its
+// text content is gone. Sending it when the terminal isn't Kitty, or when
+// no image is on screen, is a harmless no-op (either the terminal ignores
+// the unrecognized APC sequence, or the delete matches nothing).
+func KittyDeleteAllImages() string {
+	return kittyDeleteAllImagesSeq
 }
 
 // ImageToSixel converts image data to Sixel format using ImageMagick's convert command.

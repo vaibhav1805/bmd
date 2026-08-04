@@ -1786,8 +1786,25 @@ func (v Viewer) renderHeader() string {
 
 	bar := left + strings.Repeat(" ", padding) + right
 
+	// bmd-xqh: Kitty images are an out-of-band pixel overlay that isn't
+	// automatically cleared when bmd redraws different text underneath —
+	// a previous document's image can persist as a "ghost" after
+	// navigating to a new file or back to the directory/search view.
+	// Prepending the delete-all-images command to every header render
+	// (the header is the first line of every Viewer.View() frame, so
+	// this covers loadFile/loadFileNoHistory/BackToDirectory/
+	// BackToSearchResults/reloadFile without touching each choke point
+	// individually) guarantees any stale image is gone before the
+	// current frame's own image, if any, is drawn later in the same
+	// output. It's a zero-width, harmless no-op on non-Kitty terminals
+	// and when no image is currently displayed.
+	var imageCleanup string
+	if renderer.DetectImageProtocol() == renderer.ProtocolKitty {
+		imageCleanup = renderer.KittyDeleteAllImages()
+	}
+
 	// Enhanced header with better contrast and subtle colors
-	return "\x1b[48;5;17m\x1b[1;38;5;51m" + bar + "\x1b[0m"
+	return imageCleanup + "\x1b[48;5;17m\x1b[1;38;5;51m" + bar + "\x1b[0m"
 }
 
 // View renders the visible portion of the document for display.
@@ -2359,6 +2376,15 @@ func scanMdFiles(startDir string) []string {
 // when squeezing content into a narrower sub-pane) truncates it mid-stream
 // and leaves an unterminated escape that corrupts the surrounding
 // terminal display.
+//
+// A single Kitty image over the protocol's 4096-byte-per-chunk limit (see
+// kittyChunkSize in images.go) is transmitted as many consecutive APC
+// escape sequences concatenated with no separator — one image, many
+// sequences. Emitting "[image]" per matched sequence (as an earlier
+// version of this function did) collapsed such an image into a long run
+// of repeated "[image][image][image]..." tokens instead of one
+// placeholder (bmd-xqh). Only emit the placeholder on the rising edge
+// into a run of escapes, and stay silent for the rest of that same run.
 func stripInlineImageEscapes(line string) string {
 	if !strings.ContainsRune(line, '\x1b') {
 		return line
@@ -2366,13 +2392,18 @@ func stripInlineImageEscapes(line string) string {
 	runes := []rune(line)
 	var b strings.Builder
 	i := 0
+	inEscapeRun := false
 	for i < len(runes) {
 		if runes[i] == '\x1b' && i+1 < len(runes) && (runes[i+1] == ']' || runes[i+1] == '_' || runes[i+1] == 'P') {
+			if !inEscapeRun {
+				b.WriteString("[image]")
+				inEscapeRun = true
+			}
 			escLen := ansiEscapeRuneLen(runes, i)
-			b.WriteString("[image]")
 			i += escLen
 			continue
 		}
+		inEscapeRun = false
 		b.WriteRune(runes[i])
 		i++
 	}
@@ -2634,8 +2665,20 @@ func (v *Viewer) renderEditMode() string {
 	var lines []string
 
 	// Header: show file path and [EDIT MODE]
+	//
+	// bmd-xqh: renderEditMode builds its own header rather than going
+	// through v.renderHeader(), so toggling into edit mode from a
+	// document that was showing a Kitty image bypasses that function's
+	// ghost-image cleanup — the previous view-mode render's image stays
+	// stuck on screen as an out-of-band pixel overlay even though edit
+	// mode itself only ever displays plain source text (v.editBuffer),
+	// never a rendered image. Same fix as renderHeader()/GraphModel.View().
+	var imageCleanup string
+	if renderer.DetectImageProtocol() == renderer.ProtocolKitty {
+		imageCleanup = renderer.KittyDeleteAllImages()
+	}
 	header := fmt.Sprintf(" %s [EDIT MODE]", filepath.Base(v.FilePath))
-	lines = append(lines, header[:min(len(header), v.Width)])
+	lines = append(lines, imageCleanup+header[:min(len(header), v.Width)])
 
 	// Render each visible line with line number + raw text
 	contentHeight := v.Height - 2 // header + status bar

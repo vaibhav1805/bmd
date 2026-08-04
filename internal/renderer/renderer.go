@@ -241,6 +241,12 @@ func (r *Renderer) renderLink(l *ast.Link) string {
 	return rendererLinkPrefix + l.URL + rendererLinkSep + styled + rendererLinkEnd
 }
 
+// maxNativeImageHeight caps how many terminal rows a Kitty/iTerm2 image is
+// allowed to request (see the sizing comment in renderImage below) — well
+// under any realistic terminal window height, so the request can never
+// exceed what's actually visible on screen.
+const maxNativeImageHeight = 18
+
 // renderImage renders an image using terminal protocol or alt text fallback.
 func (r *Renderer) renderImage(img *ast.Image) string {
 	alt := img.Alt
@@ -309,10 +315,44 @@ func (r *Renderer) renderImage(img *ast.Image) string {
 	}
 	imageHeight := (imageWidth * 2) / 3 // Rough aspect ratio for images
 
+	protocol := DetectImageProtocol()
+
+	// bmd-xqh: an earlier attempt constrained Kitty's display footprint
+	// via c=/r= using this width-derived imageHeight directly (up to 66
+	// rows for a wide terminal) and it corrupted real-terminal rendering
+	// — likely because it requested an image taller than the terminal's
+	// actual visible row count, which Renderer has no visibility into
+	// (it only tracks width). Rather than plumb the real terminal height
+	// through here, cap native-protocol image height to a small constant
+	// well under any realistic terminal window, mirroring the block-art
+	// fallback's already-validated "small thumbnail reads better than a
+	// large render" sizing philosophy above. This sacrifices proportional
+	// scaling on very wide terminals in exchange for never asking a
+	// terminal to draw something taller than it can show.
+	if (protocol == ProtocolKitty || protocol == ProtocolITerm2) && imageHeight > maxNativeImageHeight {
+		imageHeight = maxNativeImageHeight
+	}
+
 	imageStr := ImageToTerminal(imageData, resolvedPath, alt, imageWidth, imageHeight)
 
 	// Don't wrap image with colors - the escape sequence needs to be clean
-	// Just add spacing
+	// Just add spacing.
+	//
+	// For Kitty/iTerm2 (real pixel-graphics protocols, now constrained to
+	// exactly imageHeight rows via c=/r=/width=height=), the escape
+	// sequence itself is a single string with no embedded newlines — it
+	// collapses to exactly ONE v.Lines entry downstream regardless of how
+	// many terminal rows the image occupies once displayed. Reserve the
+	// same footprint here with blank lines so the image consumes exactly
+	// as many v.Lines entries as it visually occupies on screen — this
+	// keeps scroll offset math and mouse click-to-line math (which both
+	// index v.Lines 1:1 with screen rows) correct for content after the
+	// image, with no separate row-accounting logic needed elsewhere.
+	// Block-art (ProtocolUnicode) doesn't need this: its dithered output
+	// already contains one real text row per screen row.
+	if protocol == ProtocolKitty || protocol == ProtocolITerm2 {
+		return imageStr + strings.Repeat("\n", imageHeight)
+	}
 	return imageStr + "\n"
 }
 

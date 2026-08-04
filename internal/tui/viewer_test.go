@@ -420,6 +420,32 @@ func TestEditModeRenderEditMode(t *testing.T) {
 	}
 }
 
+// TestRenderEditMode_KittyPrependsDeleteAllImages is a regression test for
+// bmd-xqh: renderEditMode() builds its own header rather than going
+// through v.renderHeader(), so toggling into edit mode from a document
+// that was showing a Kitty image bypassed the ghost-image cleanup —
+// confirmed via a real-terminal screenshot showing the previous view-mode
+// render's image stuck on screen behind the edit-mode text, even though
+// edit mode itself only ever renders plain source text (v.editBuffer),
+// never a rendered image.
+func TestRenderEditMode_KittyPrependsDeleteAllImages(t *testing.T) {
+	t.Setenv("KITTY_WINDOW_ID", "1")
+	if renderer.DetectImageProtocol() != renderer.ProtocolKitty {
+		t.Fatal("test setup error: expected ProtocolKitty with KITTY_WINDOW_ID set")
+	}
+
+	doc := createTestDocument([]string{})
+	v := New(doc, "test.md", theme.NewTheme(), 80)
+	v.Lines = []string{"hello world"}
+	v.editMode = true
+	v.editBuffer = editor.NewTextBuffer(v.Lines)
+
+	output := v.renderEditMode()
+	if !strings.HasPrefix(output, "\x1b_Ga=d,d=A\x1b\\") {
+		t.Errorf("expected renderEditMode() to start with the Kitty delete-all-images command, got: %.100q...", output)
+	}
+}
+
 // TestEditModeSetLines tests the SetLines method (for undo/redo).
 func TestEditModeSetLines(t *testing.T) {
 	doc := createTestDocument([]string{})
@@ -735,6 +761,60 @@ func TestNoBreadcrumbInNormalFileHeader(t *testing.T) {
 	}
 	if strings.Contains(plain, "[/tmp]") {
 		t.Error("Unexpected breadcrumb format '[dir]' in non-directory header")
+	}
+}
+
+// TestRenderHeader_KittyPrependsDeleteAllImages is a regression test for
+// bmd-xqh: Kitty images are an out-of-band pixel overlay that persists on
+// screen even after bmd redraws different text in the same cells, so a
+// previous document's image can be left as a "ghost" after navigating to a
+// new file or back to the directory/search view. Since the header is the
+// first line of every Viewer.View() frame, prepending the Kitty
+// delete-all-images command there (rather than at each individual
+// navigation choke point) guarantees any stale image is cleared before the
+// frame's own content, if any, draws further down the same output.
+func TestRenderHeader_KittyPrependsDeleteAllImages(t *testing.T) {
+	t.Setenv("KITTY_WINDOW_ID", "1")
+	if renderer.DetectImageProtocol() != renderer.ProtocolKitty {
+		t.Fatal("test setup error: expected ProtocolKitty with KITTY_WINDOW_ID set")
+	}
+
+	v := New(&ast.Document{}, "/tmp/file.md", theme.NewTheme(), 80)
+	v.Height = 24
+
+	header := v.renderHeader()
+	if !strings.HasPrefix(header, "\x1b_Ga=d,d=A\x1b\\") {
+		t.Errorf("expected renderHeader() to start with the Kitty delete-all-images command, got: %q", header)
+	}
+	// The cleanup sequence must not leak into the visible header text.
+	plain := stripANSI(header)
+	if strings.Contains(plain, "_G") {
+		t.Errorf("Kitty escape leaked into stripped header text: %q", plain)
+	}
+}
+
+// TestRenderHeader_NonKittyOmitsDeleteAllImages verifies the Kitty
+// ghost-image cleanup (see TestRenderHeader_KittyPrependsDeleteAllImages) is
+// only emitted when the detected protocol is actually Kitty — sending an
+// unrecognized APC sequence to every other terminal on every frame would be
+// pure noise with no corresponding benefit.
+func TestRenderHeader_NonKittyOmitsDeleteAllImages(t *testing.T) {
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("TERM_PROGRAM", "")
+	t.Setenv("ITERM_PROGRAM", "")
+	t.Setenv("ITERM2_SHOULDMANAGEPASTEBOARD", "")
+	t.Setenv("KITTY_WINDOW_ID", "")
+	t.Setenv("COLORTERM", "")
+	if renderer.DetectImageProtocol() == renderer.ProtocolKitty {
+		t.Fatal("test setup error: expected non-Kitty protocol")
+	}
+
+	v := New(&ast.Document{}, "/tmp/file.md", theme.NewTheme(), 80)
+	v.Height = 24
+
+	header := v.renderHeader()
+	if strings.Contains(header, "\x1b_Ga=d") {
+		t.Errorf("did not expect the Kitty delete-all-images command outside a Kitty terminal, got: %q", header)
 	}
 }
 
@@ -1877,6 +1957,45 @@ func TestViewWithBrowser_InlineImage_NoRawEscapeLeak(t *testing.T) {
 	}
 }
 
+// TestViewWithBrowser_LargeKittyImage_SinglePlaceholderNotRepeated is a
+// regression test for bmd-xqh: a large image (base64-encoded well over
+// Kitty's 4096-byte-per-chunk limit — any real photo/screenshot always is)
+// is transmitted as many consecutive APC escape sequences with no
+// separator between them. stripInlineImageEscapes previously emitted the
+// "[image]" placeholder once per matched escape sequence, so a large
+// image collapsed into a long run of repeated "[image][image][image]..."
+// tokens in the browser-split main content column instead of a single
+// placeholder.
+func TestViewWithBrowser_LargeKittyImage_SinglePlaceholderNotRepeated(t *testing.T) {
+	t.Setenv("KITTY_WINDOW_ID", "1")
+
+	dir := t.TempDir()
+	imgData := make([]byte, 50000)
+	for i := range imgData {
+		imgData[i] = byte(i % 256)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "big.png"), imgData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	v := newTestFileViewer(t, dir, "readme.md", "# Test\n\n![img](./big.png)\n", 80, 24)
+	v.browserOpen = true
+	v.browserFiles = []string{filepath.Join(dir, "readme.md")}
+
+	out := v.View()
+
+	// "\x1b_Ga=T" is the image transmit escape itself; "\x1b_Ga=d" is the
+	// unrelated ghost-image cleanup command every header legitimately
+	// carries when Kitty is detected (bmd-xqh) — only the former would be
+	// a genuine leak of raw image content into the truncated main column.
+	if strings.Contains(out, "\x1b_Ga=T") {
+		t.Errorf("viewWithBrowser leaked a raw Kitty image-transmit escape sequence: %.200q...", out)
+	}
+	if got := strings.Count(out, "[image]"); got != 1 {
+		t.Errorf("expected exactly 1 '[image]' placeholder for one large chunked image, got %d", got)
+	}
+}
+
 // TestView_KittyProtocolImage_NoWrapCorruption is a regression test for a
 // real bug found via manual testing: the main (non-split-pane) viewer's
 // wrapLineToWidth() only recognized CSI escape sequences (\x1b[...m).
@@ -1904,10 +2023,15 @@ func TestView_KittyProtocolImage_NoWrapCorruption(t *testing.T) {
 	out := v.View()
 
 	// A 50000-byte image needs chunking (see bmd-wt6), so the first chunk
-	// is marked m=1 (more chunks follow), not m=0.
-	const prefix = "\x1b_Ga=T,f=100,m=1;"
-	if !strings.Contains(out, prefix) {
+	// is marked m=1 (more chunks follow), not m=0. It also now carries a
+	// r= display-size constraint (bmd-xqh), so match around the dynamic
+	// height value rather than hardcoding it.
+	const prefixStart = "\x1b_Ga=T,f=100,r="
+	if !strings.Contains(out, prefixStart) {
 		t.Fatalf("expected the Kitty graphics protocol escape prefix intact in output, got: %.200q...", out)
+	}
+	if !strings.Contains(out, ",m=1;") {
+		t.Fatalf("expected the first chunk marked m=1 (more chunks follow) intact in output, got: %.200q...", out)
 	}
 
 	// Every chunked escape sequence (\x1b_G...\x1b\\) must survive as one
