@@ -13,7 +13,6 @@ type Renderer struct {
 	theme             theme.Theme
 	termWidth         int
 	emitLinkSentinels bool   // if true, wrap links with sentinel markers for LinkRegistry
-	leftMargin        int    // left margin (spaces) for elegant screen edge padding
 	docDir            string // directory of the document being rendered (for relative image paths)
 	plainImages       bool   // if true, always render images as alt text instead of inline terminal graphics
 }

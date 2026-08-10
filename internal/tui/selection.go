@@ -125,28 +125,6 @@ func (v *Viewer) SelectedText() string {
 	return v.selectedText
 }
 
-// highlightTextRange applies a selection highlight background (ANSI color 238, dark grey)
-// to the rune range [start, end) in the line.
-func highlightTextRange(line string, start, end int) string {
-	runes := []rune(line)
-	if start < 0 {
-		start = 0
-	}
-	if end > len(runes) {
-		end = len(runes)
-	}
-	if start >= end {
-		return line
-	}
-
-	before := string(runes[:start])
-	selected := string(runes[start:end])
-	after := string(runes[end:])
-
-	// Apply selection highlight: dark grey background (238)
-	return before + "\x1b[48;5;238m" + selected + "\x1b[m" + after
-}
-
 // highlightTextRangeWithStripped applies selection highlighting to displayLine,
 // using rune indices from strippedLine. This handles cases where displayLine may
 // contain ANSI codes (from search highlights or other styling) but we need to

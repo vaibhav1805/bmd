@@ -76,7 +76,7 @@ func RenderGraphAsImage(g *knowledge.Graph, width, height int) string {
 
 	// Render PNG as Kitty graphics (Alacritty native support)
 	// Use Kitty protocol directly for best Alacritty support
-	return ImageToKitty(pngData, width, height)
+	return ImageToKitty(pngData, height)
 }
 
 // dotToPNG converts Graphviz DOT format to PNG data.

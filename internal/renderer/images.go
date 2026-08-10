@@ -179,7 +179,7 @@ const kittyChunkSize = 4096
 // This protocol works in Kitty, WezTerm, and other terminals that
 // implement it (notably not mainline Alacritty — see DetectImageProtocol).
 // Returns an ANSI sequence that compatible terminals will render as an inline image.
-func ImageToKitty(imageData []byte, width, height int) string {
+func ImageToKitty(imageData []byte, height int) string {
 	if len(imageData) == 0 {
 		return ""
 	}
@@ -217,17 +217,17 @@ func ImageToKitty(imageData []byte, width, height int) string {
 	// corrupted rendering in practice (verified against a real Kitty
 	// terminal).
 	//
-	// Deliberately NOT also setting c= (width parameter unused for
-	// Kitty, still used by ImageToITerm2 below): per the Kitty graphics
-	// protocol spec, "if only one of either r or c is specified, the
-	// other one is computed based on the source image aspect ratio, so
-	// that the image is displayed without distortion" — specifying BOTH
-	// forces the image into that exact box regardless of its real
-	// aspect ratio, which visibly stretched/squashed a non-square image
-	// in real-terminal testing. Letting Kitty derive columns from the
-	// PNG's own dimensions (which it already has, having just decoded
-	// the same payload for f=100) is more reliable than bmd computing
-	// and asserting an aspect-correct width itself.
+	// Deliberately NOT also setting c= (so no width parameter — contrast
+	// ImageToITerm2 below, which still takes and uses one): per the
+	// Kitty graphics protocol spec, "if only one of either r or c is
+	// specified, the other one is computed based on the source image
+	// aspect ratio, so that the image is displayed without distortion"
+	// — specifying BOTH forces the image into that exact box regardless
+	// of its real aspect ratio, which visibly stretched/squashed a
+	// non-square image in real-terminal testing. Letting Kitty derive
+	// columns from the PNG's own dimensions (which it already has,
+	// having just decoded the same payload for f=100) is more reliable
+	// than bmd computing and asserting an aspect-correct width itself.
 	var sb strings.Builder
 	for i := 0; i < len(encoded); i += kittyChunkSize {
 		end := i + kittyChunkSize
@@ -347,7 +347,7 @@ func ImageToTerminal(imageData []byte, imagePath, altText string, width, height 
 
 	switch protocol {
 	case ProtocolKitty:
-		result := ImageToKitty(imageData, width, height)
+		result := ImageToKitty(imageData, height)
 		// fmt.Fprintf(os.Stderr, "[DEBUG] Kitty sequence generated, %d bytes\n", len(result))
 		return result
 	case ProtocolITerm2:

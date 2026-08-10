@@ -29,10 +29,6 @@ const statusTimeout = 3 * time.Second
 // switches to virtual-mode line count display and width-change-only re-rendering.
 const virtualThreshold = 500
 
-// virtualBuffer is the number of lines above/below the viewport pre-rendered in virtual mode.
-// Currently unused in display logic (slicing already handles this), but reserved for future use.
-const virtualBuffer = 50
-
 // clearErrorMsg is sent after the status timeout to clear the error display.
 type clearErrorMsg struct{}
 

@@ -51,7 +51,7 @@ func TestGraphRenderingDebug(t *testing.T) {
 	}
 
 	// Test Kitty encoding
-	kitty := ImageToKitty(pngData, 80, 24)
+	kitty := ImageToKitty(pngData, 24)
 	t.Logf("Kitty sequence generated: %d bytes", len(kitty))
 	if len(kitty) == 0 {
 		t.Fatal("Kitty sequence is empty")

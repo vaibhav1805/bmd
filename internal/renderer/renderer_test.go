@@ -317,7 +317,7 @@ func TestDetectImageProtocol_XtermTermWithoutTermProgram_NoProtocolGuessed(t *te
 // expects and the whole command silently fails to parse.
 func TestImageToKitty_UsesSemicolonSeparator(t *testing.T) {
 	data := []byte{0x89, 0x50, 0x4E, 0x47, 1, 2, 3}
-	seq := ImageToKitty(data, 40, 20)
+	seq := ImageToKitty(data, 20)
 
 	const wantPrefix = "\x1b_Ga=T,f=100,r=20,m=0;"
 	if !strings.HasPrefix(seq, wantPrefix) {
@@ -354,7 +354,7 @@ func TestImageToKitty_ChunksLargePayloads(t *testing.T) {
 	for i := range data {
 		data[i] = byte(i % 256)
 	}
-	seq := ImageToKitty(data, 40, 20)
+	seq := ImageToKitty(data, 20)
 
 	encoded := base64.StdEncoding.EncodeToString(data)
 	wantChunks := (len(encoded) + kittyChunkSize - 1) / kittyChunkSize
@@ -439,7 +439,7 @@ func TestKittyDeleteAllImages(t *testing.T) {
 // computes columns from the PNG's own aspect ratio given the fixed r=.
 func TestImageToKitty_ConstrainsDisplaySizeWithRowsOnly(t *testing.T) {
 	data := []byte{0x89, 0x50, 0x4E, 0x47, 1, 2, 3}
-	seq := ImageToKitty(data, 42, 17)
+	seq := ImageToKitty(data, 17)
 
 	const wantPrefix = "\x1b_Ga=T,f=100,r=17,m=0;"
 	if !strings.HasPrefix(seq, wantPrefix) {
