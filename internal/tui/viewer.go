@@ -81,7 +81,8 @@ type Viewer struct {
 	outlineSelection int           // index of selected heading
 
 	// Help overlay
-	helpOpen bool // true when the help overlay is visible
+	helpOpen         bool // true when the help overlay is visible
+	helpScrollOffset int  // first visible line index into renderHelp's content, for scrolling
 
 	// Theme selection dialog
 	themeDialog      ThemeDialog     // theme selection menu
@@ -523,6 +524,9 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case toggleHelpMsg:
 		v.helpOpen = !v.helpOpen
+		if v.helpOpen {
+			v.helpScrollOffset = 0
+		}
 		return v, nil
 
 	case statusMsg:
@@ -671,6 +675,9 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			// '?': toggle help (sole help trigger, more intuitive than 'h')
 			v.helpOpen = !v.helpOpen
+			if v.helpOpen {
+				v.helpScrollOffset = 0
+			}
 			v.lastWasG = false
 			return v, nil
 
@@ -1283,17 +1290,48 @@ func (v *Viewer) updateThemeDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // updateHelp handles keyboard input when the help overlay is open.
-// Pressing esc, q, ?, or h closes the overlay. All other keys are absorbed.
+// Pressing esc, q, ?, or h closes the overlay. ↑/k, ↓/j, PgUp/PgDn, and
+// g/G (or Home/End) scroll the content — the full keybinding reference is
+// long enough on most terminal heights that it doesn't fit on one screen
+// (see helpContentBudget), so it needs to be a scrollable list rather than
+// a single static block. All other keys are absorbed.
 func (v *Viewer) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	budget := v.helpContentBudget()
+	maxOffset := len(v.helpContent()) - budget
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
 	switch msg.String() {
 	case "esc", "q", "?", "h":
 		v.helpOpen = false
+	case "up", "k":
+		if v.helpScrollOffset > 0 {
+			v.helpScrollOffset--
+		}
+	case "down", "j":
+		if v.helpScrollOffset < maxOffset {
+			v.helpScrollOffset++
+		}
+	case "pgup":
+		v.helpScrollOffset -= budget
+		if v.helpScrollOffset < 0 {
+			v.helpScrollOffset = 0
+		}
+	case "pgdown":
+		v.helpScrollOffset += budget
+		if v.helpScrollOffset > maxOffset {
+			v.helpScrollOffset = maxOffset
+		}
+	case "g", "home":
+		v.helpScrollOffset = 0
+	case "G", "end":
+		v.helpScrollOffset = maxOffset
 	}
 	return v, nil
 }
 
 // updateWordCount handles keyboard input when the word count modal is open.
-// Pressing Esc or Ctrl+I closes the modal. All other keys are absorbed.
+// Pressing Esc or Ctrl+W closes the modal. All other keys are absorbed.
 func (v *Viewer) updateWordCount(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "ctrl+w":
@@ -1310,14 +1348,40 @@ func (v *Viewer) updateWordCount(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // preview of the currently selected file with full styling. It returns one string per row (up to
 // contentHeight rows). Each row is padded/truncated to rightWidth.
 
-// renderHelp returns a centered box overlay with grouped keyboard shortcuts.
-// The overlay replaces the full view while helpOpen is true.
-// Enhanced with better colors and visual hierarchy.
-func (v Viewer) renderHelp() string {
-	const boxWidth = 45             // inner content width
-	border := lipgloss.Color("51")  // bright cyan border
-	text := lipgloss.Color("252")   // light text
-	section := lipgloss.Color("87") // section headers in cyan
+// helpBoxWidth is the inner content width of the help overlay box, shared
+// by helpContent (which pads every line to it) and renderHelp (which draws
+// the border at it).
+const helpBoxWidth = 60
+
+// helpContentBudget returns how many interior content lines (bindings,
+// section headers, separators — everything helpContent returns) can be
+// shown at once in the help overlay for the current terminal height.
+// Shared by updateHelp (to clamp the scroll offset) and renderHelp (to
+// slice the visible window), so the two can't drift out of sync.
+func (v Viewer) helpContentBudget() int {
+	maxBoxHeight := v.Height - 2 // leave a small margin at the terminal edges
+	if maxBoxHeight < 10 {
+		maxBoxHeight = 10
+	}
+	const fixedChromeLines = 6 // header border, title, 2 separators, status line, footer border
+	budget := maxBoxHeight - fixedChromeLines
+	if budget < 3 {
+		budget = 3
+	}
+	return budget
+}
+
+// helpContent returns every interior line of the help overlay (section
+// headers, separators, and one line per key binding), styled and padded to
+// helpBoxWidth but without the outer box border, title, or scroll-status
+// line. This is the full, current keymap across every mode bmd has — it
+// intentionally does not fit on a single screen at typical terminal
+// heights, which is why renderHelp scrolls it instead of showing it all
+// unconditionally (see helpContentBudget/updateHelp).
+func (v Viewer) helpContent() []string {
+	text := lipgloss.Color("252")
+	section := lipgloss.Color("87")
+	border := lipgloss.Color("51")
 	borderStyle := lipgloss.NewStyle().Foreground(border).Bold(true)
 	textStyle := lipgloss.NewStyle().Foreground(text)
 	sectionStyle := lipgloss.NewStyle().Foreground(section).Bold(true)
@@ -1329,69 +1393,169 @@ func (v Viewer) renderHelp() string {
 		}
 		return s + strings.Repeat(" ", width-runeLen)
 	}
-
 	line := func(content string) string {
-		return borderStyle.Render("│") + textStyle.Render(content) + borderStyle.Render("│")
+		return borderStyle.Render("│") + textStyle.Render(padRight(content, helpBoxWidth)) + borderStyle.Render("│")
 	}
 	sectionLine := func(content string) string {
-		return borderStyle.Render("│") + sectionStyle.Render(padRight(" "+content, boxWidth)) + borderStyle.Render("│")
+		return borderStyle.Render("│") + sectionStyle.Render(padRight(" "+content, helpBoxWidth)) + borderStyle.Render("│")
 	}
 	sectionSep := func() string {
-		return borderStyle.Render("├" + strings.Repeat("─", boxWidth) + "┤")
+		return borderStyle.Render("├" + strings.Repeat("─", helpBoxWidth) + "┤")
 	}
-	header := borderStyle.Render("┌" + strings.Repeat("─", boxWidth) + "┐")
-	footer := borderStyle.Render("└" + strings.Repeat("─", boxWidth) + "┘")
+	const keyColWidth = 18
+	kv := func(key, desc string) string {
+		return line("  " + padRight(key, keyColWidth) + desc)
+	}
 
-	lines := []string{
-		header,
-		line(padRight("    ⌨ Keyboard Shortcuts", boxWidth)),
-		sectionSep(),
+	return []string{
 		sectionLine("Scrolling"),
-		line(padRight("  ↑/k ↓/j       Scroll up / down", boxWidth)),
-		line(padRight("  PgUp/PgDn     Page up / down", boxWidth)),
-		line(padRight("  g/Home G/End  Jump to top / bottom", boxWidth)),
+		kv("↑/k  ↓/j", "Scroll up / down"),
+		kv("PgUp / PgDn", "Page up / down"),
+		kv("Ctrl+U / Ctrl+D", "Half-page up / down"),
+		kv("g g", "Jump to top (double-tap g)"),
+		kv("Home / End", "Jump to top / bottom"),
 		sectionSep(),
 		sectionLine("Navigation"),
-		line(padRight("  Tab/Shift+Tab Focus next/prev link", boxWidth)),
-		line(padRight("  l / Enter     Follow focused link", boxWidth)),
-		line(padRight("  Ctrl+B        Back in history", boxWidth)),
-		line(padRight("  Alt+Right     Forward in history", boxWidth)),
-		line(padRight("  b             File browser", boxWidth)),
+		kv("Tab / Shift+Tab", "Focus next / prev link"),
+		kv("l", "Follow focused link"),
+		kv("h / Backspace", "Back (if opened from dir/search)"),
+		kv("Ctrl+B / Alt+←", "Back in history"),
+		kv("Alt+→ / Ctrl+→", "Forward in history"),
+		kv(":", "Jump to line number"),
+		kv("Ctrl+O", "Outline / table of contents"),
+		kv("Ctrl+P", "Fuzzy file finder"),
+		kv("b", "File browser (split pane)"),
+		kv("Ctrl+Shift+L", "Toggle line numbers"),
+		kv("Ctrl+G", "Open dependency graph"),
+		sectionSep(),
+		sectionLine("File Browser Split (b)"),
+		kv("↑/↓ or j/k", "Navigate file list"),
+		kv("Enter", "Open selected file"),
+		kv("Esc / b / q", "Close"),
 		sectionSep(),
 		sectionLine("Directory Browser"),
-		line(padRight("  ↑/↓ or j/k    Navigate file list", boxWidth)),
-		line(padRight("  l / Enter     Open selected file", boxWidth)),
-		line(padRight("  h / Backspace Back to directory", boxWidth)),
-		line(padRight("  s             Toggle split pane", boxWidth)),
-		line(padRight("  /             Search all files", boxWidth)),
-		line(padRight("  g             View dependency graph", boxWidth)),
+		kv("↑/↓ or j/k", "Navigate file list"),
+		kv("l / Enter / →", "Open selected file"),
+		kv("s", "Toggle split pane"),
+		kv("/", "Search all files"),
+		kv("g", "View dependency graph"),
 		sectionSep(),
 		sectionLine("Search"),
-		line(padRight("  Ctrl+F        In-document search", boxWidth)),
-		line(padRight("  /             Cross-document search", boxWidth)),
-		line(padRight("  n / N         Next / prev match", boxWidth)),
-		line(padRight("  Esc           Close search", boxWidth)),
+		kv("Ctrl+F", "In-document search"),
+		kv("/", "Cross-document search"),
+		kv("n / N", "Next / prev match"),
+		kv("Alt+C/W/R", "Toggle case / whole-word / regex"),
+		kv("↑ / ↓", "Recall search history"),
+		kv("Ctrl+L", "Clear search history"),
+		kv("Esc", "Close search"),
 		sectionSep(),
-		sectionLine("Theme"),
-		line(padRight("  T/Shift+T     Select theme", boxWidth)),
+		sectionLine("Graph View"),
+		kv("↑/k  ↓/j", "Cycle documents by importance"),
+		kv("← / →", "Follow incoming / outgoing links"),
+		kv("l / Enter", "Open selected document"),
+		kv("e / E", "Export graph as PNG"),
+		kv("h / Esc", "Back to directory"),
+		sectionSep(),
+		sectionLine("Theme & Word Count"),
+		kv("t / Ctrl+T", "Select theme"),
+		kv("Ctrl+W", "Word count (Esc closes)"),
 		sectionSep(),
 		sectionLine("Mouse & Copy"),
-		line(padRight("  Click         Move cursor / follow link", boxWidth)),
-		line(padRight("  Ctrl+C        Copy line at cursor", boxWidth)),
+		kv("Click", "Move cursor / follow link"),
+		kv("Ctrl+C", "Copy line at cursor"),
 		sectionSep(),
 		sectionLine("Edit Mode (e)"),
-		line(padRight("  Ctrl+H        Find & Replace", boxWidth)),
-		line(padRight("  Ctrl+S        Save file", boxWidth)),
-		line(padRight("  Ctrl+Z/Y      Undo / Redo", boxWidth)),
+		kv("Ctrl+S", "Save file"),
+		kv("Ctrl+Z / Ctrl+Y", "Undo / Redo"),
+		kv("Ctrl+H", "Find & Replace"),
+		kv("Ctrl+X/C/V", "Cut / Copy / Paste"),
+		kv("Ctrl+D", "Duplicate line"),
+		kv("Ctrl+Shift+K", "Delete line"),
+		kv("Alt+↑ / Alt+↓", "Move line up / down"),
+		kv("Tab / Shift+Tab", "Indent / dedent"),
+		kv("Ctrl+F", "Search buffer"),
+		kv("Ctrl+G", "Jump to line"),
+		kv("Ctrl+O", "Outline"),
+		kv("Esc", "Exit edit mode"),
 		sectionSep(),
-		line(padRight("  ? / h         Toggle this help", boxWidth)),
-		line(padRight("  q             Quit", boxWidth)),
-		line(padRight("  Ctrl+C        Copy (cursor set) / Quit", boxWidth)),
-		footer,
+		sectionLine("Find & Replace (Ctrl+H in edit)"),
+		kv("Tab", "Switch find / replace field"),
+		kv("Enter", "Replace current, advance"),
+		kv("Ctrl+A", "Replace all"),
+		kv("Ctrl+N / Ctrl+P", "Next / prev match"),
+		kv("Alt+C / Alt+W", "Toggle case / whole-word"),
+		sectionSep(),
+		kv("? / h", "Toggle this help (h: file view only)"),
+		kv("q", "Quit"),
+		kv("Ctrl+C", "Copy (cursor set) / Quit"),
+	}
+}
+
+// renderHelp returns a centered box overlay with grouped keyboard
+// shortcuts. The overlay replaces the full view while helpOpen is true.
+// The full keymap (helpContent) is longer than fits on most terminal
+// heights, so this renders a scrollable window into it — clamped to
+// v.helpScrollOffset — plus a status line showing position and how to
+// scroll (see updateHelp).
+func (v Viewer) renderHelp() string {
+	border := lipgloss.Color("51") // bright cyan border
+	text := lipgloss.Color("252")  // light text
+	muted := lipgloss.Color("244") // status line
+	borderStyle := lipgloss.NewStyle().Foreground(border).Bold(true)
+	textStyle := lipgloss.NewStyle().Foreground(text)
+	mutedStyle := lipgloss.NewStyle().Foreground(muted)
+
+	padRight := func(s string, width int) string {
+		runeLen := len([]rune(s))
+		if runeLen >= width {
+			return s
+		}
+		return s + strings.Repeat(" ", width-runeLen)
+	}
+	line := func(content string) string {
+		return borderStyle.Render("│") + textStyle.Render(padRight(content, helpBoxWidth)) + borderStyle.Render("│")
+	}
+	mutedLine := func(content string) string {
+		return borderStyle.Render("│") + mutedStyle.Render(padRight(content, helpBoxWidth)) + borderStyle.Render("│")
+	}
+	sectionSep := func() string {
+		return borderStyle.Render("├" + strings.Repeat("─", helpBoxWidth) + "┤")
+	}
+	header := borderStyle.Render("┌" + strings.Repeat("─", helpBoxWidth) + "┐")
+	footer := borderStyle.Render("└" + strings.Repeat("─", helpBoxWidth) + "┘")
+
+	content := v.helpContent()
+	budget := v.helpContentBudget()
+	offset := v.helpScrollOffset
+	maxOffset := len(content) - budget
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if offset > maxOffset {
+		offset = maxOffset
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	end := offset + budget
+	if end > len(content) {
+		end = len(content)
+	}
+	visible := content[offset:end]
+
+	var status string
+	if len(content) <= budget {
+		status = "  ? / Esc to close"
+	} else {
+		status = fmt.Sprintf("  %d-%d of %d shortcuts   ↑/↓ scroll   Esc close", offset+1, end, len(content))
 	}
 
+	lines := []string{header, line(padRight("    ⌨ Keyboard Shortcuts", helpBoxWidth)), sectionSep()}
+	lines = append(lines, visible...)
+	lines = append(lines, sectionSep(), mutedLine(status), footer)
+
 	// Center the box horizontally.
-	totalBoxWidth := boxWidth + 2 // +2 for the border chars
+	totalBoxWidth := helpBoxWidth + 2 // +2 for the border chars
 	leftPad := (v.Width - totalBoxWidth) / 2
 	if leftPad < 0 {
 		leftPad = 0

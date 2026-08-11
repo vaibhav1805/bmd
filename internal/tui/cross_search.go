@@ -91,9 +91,18 @@ func (m *CrossSearchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateInput handles keyboard input when the cross-document search input
 // prompt is open. Printable characters build the query; Enter executes the
-// search; Esc/Ctrl+F cancels.
+// search; Esc/Ctrl+F cancels; Ctrl+C quits the app.
 func (m *CrossSearchModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "ctrl+c":
+		// bmd's keymap audit: every other mode (file view, edit mode,
+		// DirectoryModel, GraphModel) binds Ctrl+C to quit — this stage was
+		// the one place that universal terminal expectation didn't work.
+		// 'q' isn't usable here since it's a valid character to type into
+		// the search query; Ctrl+C has no such conflict (msg.Runes is empty
+		// for it), so it's the safe binding for this stage specifically.
+		return m, tea.Quit
+
 	case "enter":
 		query := strings.TrimSpace(m.input)
 		if query == "" {
@@ -135,7 +144,8 @@ func (m *CrossSearchModel) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updateResults handles keyboard navigation when cross-document search
 // results are shown: ↑/↓ to move through results, l/Enter to open, h/Esc to
-// exit back to directory (or close if there's no directory to return to).
+// exit back to directory (or close if there's no directory to return to),
+// q/Ctrl+C to quit.
 func (m *CrossSearchModel) updateResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.results)
 	switch msg.String() {
@@ -177,7 +187,7 @@ func (m *CrossSearchModel) updateResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// — '?' is a valid query character while typing).
 		return m, toggleHelpCmd()
 
-	case "q":
+	case "q", "ctrl+c":
 		return m, tea.Quit
 
 	case "/":

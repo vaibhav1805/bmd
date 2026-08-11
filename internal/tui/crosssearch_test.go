@@ -347,6 +347,36 @@ func TestCrossSearchModelUpdate_QQuits(t *testing.T) {
 	}
 }
 
+// TestCrossSearchModelUpdate_CtrlCQuits_ResultsStage is a regression test
+// for bmd's keymap audit: every other mode (file view, edit mode,
+// DirectoryModel, GraphModel) binds Ctrl+C to quit, but CrossSearchModel's
+// results stage previously had no case for it at all, breaking that
+// universal terminal expectation specifically here.
+func TestCrossSearchModelUpdate_CtrlCQuits_ResultsStage(t *testing.T) {
+	m := newTestCrossSearchModel(t.TempDir(), 80, 24)
+	m.stage = csStageResults
+	m.results = []knowledge.SearchResult{{RelPath: "a.md", Score: 5.0}}
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatal("expected tea.Quit cmd for Ctrl+C in results stage")
+	}
+}
+
+// TestCrossSearchModelUpdate_CtrlCQuits_InputStage is the input-stage
+// counterpart: 'q' can't quit here (it's a valid character to type into
+// the search query), so Ctrl+C is the only way to quit while the prompt is
+// open, and previously had no handling at all.
+func TestCrossSearchModelUpdate_CtrlCQuits_InputStage(t *testing.T) {
+	m := newTestCrossSearchModel(t.TempDir(), 80, 24)
+	m.input = "partial query"
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatal("expected tea.Quit cmd for Ctrl+C in input stage")
+	}
+}
+
 func TestCrossSearchModelUpdate_SlashReopensInputWithPriorQuery(t *testing.T) {
 	m := newTestCrossSearchModel(t.TempDir(), 80, 24)
 	m.stage = csStageResults

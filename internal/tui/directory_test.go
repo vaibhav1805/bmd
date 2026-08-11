@@ -274,19 +274,35 @@ func TestDirectoryModelUpdate_SlashAndCtrlFEmitSwitchModeCrossSearch(t *testing.
 	}
 }
 
-func TestDirectoryModelUpdate_QuestionAndHEmitToggleHelp(t *testing.T) {
+func TestDirectoryModelUpdate_QuestionEmitsToggleHelp(t *testing.T) {
 	dir := makeTempDir(t, map[string]string{"a.md": "# A"})
 	defer os.RemoveAll(dir)
 
-	for _, key := range []tea.KeyMsg{
-		{Type: tea.KeyRunes, Runes: []rune("?")},
-		{Type: tea.KeyRunes, Runes: []rune("h")},
-	} {
-		dm := newTestDirectoryModel(t, dir, 120, 24)
-		_, cmd := dm.Update(key)
+	dm := newTestDirectoryModel(t, dir, 120, 24)
+	_, cmd := dm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	msg := resolveCmd(t, cmd)
+	if _, ok := msg.(toggleHelpMsg); !ok {
+		t.Errorf("'?': expected toggleHelpMsg, got %T", msg)
+	}
+}
+
+// TestDirectoryModelUpdate_HIsNotBoundToHelp is a regression test for
+// bmd's keymap audit: 'h' means "back" in every other mode (file view,
+// GraphModel, CrossSearchModel results), but DirectoryModel previously
+// bound it to help instead — DirectoryModel has no parent view to return
+// to, so this contradicted the convention without actually providing a
+// back action. 'h' must now be a no-op here (falls through, absorbed by
+// nothing), not open help.
+func TestDirectoryModelUpdate_HIsNotBoundToHelp(t *testing.T) {
+	dir := makeTempDir(t, map[string]string{"a.md": "# A"})
+	defer os.RemoveAll(dir)
+
+	dm := newTestDirectoryModel(t, dir, 120, 24)
+	_, cmd := dm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
+	if cmd != nil {
 		msg := resolveCmd(t, cmd)
-		if _, ok := msg.(toggleHelpMsg); !ok {
-			t.Errorf("key %v: expected toggleHelpMsg, got %T", key, msg)
+		if _, ok := msg.(toggleHelpMsg); ok {
+			t.Error("'h' should not open help in DirectoryModel (no back action to give it instead)")
 		}
 	}
 }

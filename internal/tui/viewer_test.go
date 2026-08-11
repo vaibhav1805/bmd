@@ -764,6 +764,142 @@ func TestNoBreadcrumbInNormalFileHeader(t *testing.T) {
 	}
 }
 
+// TestHelp_ScrollsWithinBudget is a regression test for bmd's keymap
+// audit: the full keybinding reference (helpContent) covers ~70 lines
+// across every mode, which doesn't fit on one screen at typical terminal
+// heights. The help overlay must scroll rather than silently overflow —
+// j/down moves forward, k/up moves back, both clamped to [0, maxOffset].
+func TestHelp_ScrollsWithinBudget(t *testing.T) {
+	v := New(&ast.Document{}, "/tmp/file.md", theme.NewTheme(), 80)
+	v.Height = 24 // short enough that helpContent (~70 lines) can't fit at once
+	v.helpOpen = true
+
+	budget := v.helpContentBudget()
+	total := len(v.helpContent())
+	if total <= budget {
+		t.Fatalf("test setup error: expected helpContent (%d lines) to exceed the budget (%d) at Height=24 so scrolling is actually exercised", total, budget)
+	}
+
+	if v.helpScrollOffset != 0 {
+		t.Fatalf("expected helpScrollOffset=0 initially, got %d", v.helpScrollOffset)
+	}
+
+	vv, _ := v.updateHelp(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	v = vv.(*Viewer)
+	if v.helpScrollOffset != 1 {
+		t.Errorf("expected helpScrollOffset=1 after one 'j', got %d", v.helpScrollOffset)
+	}
+
+	vv, _ = v.updateHelp(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	v = vv.(*Viewer)
+	if v.helpScrollOffset != 0 {
+		t.Errorf("expected helpScrollOffset=0 after 'k' back, got %d", v.helpScrollOffset)
+	}
+
+	// 'k' at offset 0 must not go negative.
+	vv, _ = v.updateHelp(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	v = vv.(*Viewer)
+	if v.helpScrollOffset != 0 {
+		t.Errorf("expected helpScrollOffset clamped at 0, got %d", v.helpScrollOffset)
+	}
+
+	// 'G' jumps to the max offset (last page of content).
+	vv, _ = v.updateHelp(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+	v = vv.(*Viewer)
+	wantMax := total - budget
+	if v.helpScrollOffset != wantMax {
+		t.Errorf("expected 'G' to jump to max offset %d, got %d", wantMax, v.helpScrollOffset)
+	}
+
+	// A further 'j' at the max offset must not overshoot.
+	vv, _ = v.updateHelp(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	v = vv.(*Viewer)
+	if v.helpScrollOffset != wantMax {
+		t.Errorf("expected helpScrollOffset clamped at max %d, got %d", wantMax, v.helpScrollOffset)
+	}
+
+	// 'g' resets to the top.
+	vv, _ = v.updateHelp(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+	v = vv.(*Viewer)
+	if v.helpScrollOffset != 0 {
+		t.Errorf("expected 'g' to reset to offset 0, got %d", v.helpScrollOffset)
+	}
+}
+
+// TestHelp_OpeningResetsScrollOffset verifies both help-open choke points
+// (the direct '?' key in file view, and the toggleHelpMsg path used by
+// DirectoryModel/CrossSearchModel/GraphModel) reset a stale scroll
+// position from a previous help session, so reopening help doesn't start
+// mid-scroll from wherever it was last left.
+func TestHelp_OpeningResetsScrollOffset(t *testing.T) {
+	v := New(&ast.Document{}, "/tmp/file.md", theme.NewTheme(), 80)
+	v.Height = 24
+	v.helpOpen = true
+	v.helpScrollOffset = 5
+
+	// Close via the toggleHelpMsg path (mirrors DirectoryModel/GraphModel).
+	m, _ := v.Update(toggleHelpMsg{})
+	v = m.(*Viewer)
+	if v.helpOpen {
+		t.Fatal("expected help closed after toggle")
+	}
+
+	// Reopen via the same path; offset must be back to 0, not the stale 5.
+	m, _ = v.Update(toggleHelpMsg{})
+	v = m.(*Viewer)
+	if !v.helpOpen {
+		t.Fatal("expected help open after second toggle")
+	}
+	if v.helpScrollOffset != 0 {
+		t.Errorf("expected helpScrollOffset reset to 0 on reopen, got %d", v.helpScrollOffset)
+	}
+}
+
+// TestHelp_RenderShowsScrollStatusWhenContentOverflows is a regression
+// test for the same audit finding: renderHelp must surface that there's
+// more content below (not just silently truncate), and the visible window
+// must actually move to the newer helpScrollOffset — otherwise scrolling
+// updates state but the user never sees a different screen.
+func TestHelp_RenderShowsScrollStatusWhenContentOverflows(t *testing.T) {
+	v := New(&ast.Document{}, "/tmp/file.md", theme.NewTheme(), 80)
+	v.Height = 24
+	v.helpOpen = true
+
+	out := v.renderHelp()
+	if !strings.Contains(out, "scroll") {
+		t.Errorf("expected a scroll hint in help output when content overflows the budget, got: %.300q...", out)
+	}
+
+	before := v.renderHelp()
+	v.helpScrollOffset = 5
+	after := v.renderHelp()
+	if before == after {
+		t.Error("expected renderHelp output to change after scrolling (different content window)")
+	}
+}
+
+// TestHelp_FollowLinkDoesNotClaimEnter is a regression test for a stale
+// help-text bug found via bmd's keymap audit: the box previously listed
+// "l / Enter -> Follow focused link", but no "enter" case exists anywhere
+// in the file-view key switch — only 'l' actually follows a link. Enter is
+// unbound in file view.
+func TestHelp_FollowLinkDoesNotClaimEnter(t *testing.T) {
+	v := New(&ast.Document{}, "/tmp/file.md", theme.NewTheme(), 80)
+	found := false
+	for _, l := range v.helpContent() {
+		plain := stripANSI(l)
+		if strings.Contains(plain, "Follow focused link") {
+			found = true
+			if strings.Contains(plain, "Enter") {
+				t.Errorf("help text incorrectly claims Enter follows a link (only 'l' does): %q", plain)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected a 'Follow focused link' entry in helpContent")
+	}
+}
+
 // TestRenderHeader_KittyPrependsDeleteAllImages is a regression test for
 // bmd-xqh: Kitty images are an out-of-band pixel overlay that persists on
 // screen even after bmd redraws different text in the same cells, so a

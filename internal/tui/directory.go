@@ -154,8 +154,12 @@ func (m *DirectoryModel) Init() tea.Cmd { return nil }
 // Update handles keyboard input and window resizes for directory listing
 // mode. Arrow keys move the cursor; Enter/'l' opens the selected file (via
 // openFileCmd, ARCH-03); 'g'/'/' hand off to graph/cross-search mode (via
-// switchModeCmd, ARCH-05); '?'/'h' toggle help (via toggleHelpCmd);
-// 'q'/Ctrl+C quits.
+// switchModeCmd, ARCH-05); '?' toggles help (via toggleHelpCmd); 'q'/Ctrl+C
+// quits. 'h' is deliberately NOT bound here (unlike every other mode, where
+// it means "back") — DirectoryModel has no parent view to return to, so
+// binding it to help (as an earlier version did) contradicted the "h =
+// back" convention every other mode teaches without actually providing a
+// back action.
 func (m *DirectoryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -170,7 +174,7 @@ func (m *DirectoryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 
-		case "?", "h":
+		case "?":
 			return m, toggleHelpCmd()
 
 		case "s":
