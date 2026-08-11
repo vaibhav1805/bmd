@@ -96,11 +96,20 @@ func (v *Viewer) ClearSelection() {
 	v.selectedText = ""
 }
 
-// StartSelection begins a new selection at the given line and column.
+// StartSelection begins a new selection at the given line and column. This
+// is called on every mouse press (mouse.go) to prime a potential drag, not
+// just on an actual drag — so it must reset selectedText to "" rather than
+// leaving it holding whatever a PREVIOUS real selection (from an earlier
+// drag) left behind. Without this, a plain click with no drag after an
+// earlier real selection would report that stale text as "selected" (via
+// SelectedText()/HasSelection()) even though nothing is actually
+// highlighted, which broke Ctrl+C's "copy selection, else copy line at
+// cursor" fallback for exactly the no-drag case it's meant to handle.
 func (v *Viewer) StartSelection(lineIndex, columnIndex int) {
 	v.isSelecting = true
 	v.selectionStart = &SelectionPoint{LineIndex: lineIndex, ColumnIndex: columnIndex}
 	v.selectionEnd = &SelectionPoint{LineIndex: lineIndex, ColumnIndex: columnIndex}
+	v.selectedText = ""
 }
 
 // ExtendSelection moves the end point to the given line and column.

@@ -262,3 +262,39 @@ func TestSelection_CopiedTextHasNoRawAnsiFragments(t *testing.T) {
 		t.Errorf("copied text does not match the plain-text slice at the same visual columns: got %q, want %q", text, wantText)
 	}
 }
+
+// TestStartSelection_PlainClickAfterRealDragClearsStaleSelectedText is a
+// regression test for a bug found while building keyboard cursor support:
+// StartSelection() is called on every mouse press (mouse.go) to prime a
+// potential drag, not just on an actual drag — but it never reset
+// selectedText, so after a REAL drag-selection (which does populate it via
+// ExtendSelection), a later plain click elsewhere with no drag left the
+// PREVIOUS drag's text sitting in v.selectedText even though
+// selectionStart/selectionEnd had moved to the new (zero-length) anchor.
+// HasSelection() was still true either way (it only checks non-nil
+// pointers), so Ctrl+C's "copy selection, else copy line at cursor"
+// fallback would silently copy stale text from the earlier drag instead of
+// either the new line or nothing.
+func TestStartSelection_PlainClickAfterRealDragClearsStaleSelectedText(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestFileViewer(t, dir, "auth.md",
+		"# Auth\n\nfirst line here\nsecond line here\n", 100, 24)
+
+	// A real drag-selection on line 2 populates selectedText.
+	m, _ := v.updateMouse(tea.MouseMsg{Y: 3, X: 0, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	v = m.(*Viewer)
+	m, _ = v.updateMouse(tea.MouseMsg{Y: 3, X: 5, Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft})
+	v = m.(*Viewer)
+	if v.SelectedText() == "" {
+		t.Fatalf("test setup error: expected a real selection after the drag")
+	}
+
+	// A later plain click elsewhere, with no drag, must not leave the
+	// earlier drag's text looking like it's still selected.
+	m, _ = v.updateMouse(tea.MouseMsg{Y: 4, X: 0, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	v = m.(*Viewer)
+
+	if text := v.SelectedText(); text != "" {
+		t.Errorf("expected SelectedText() to be empty after a plain click with no drag, got stale text: %q", text)
+	}
+}

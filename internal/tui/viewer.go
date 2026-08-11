@@ -95,10 +95,14 @@ type Viewer struct {
 	// Line number display (Ctrl+Shift+L toggles in view mode)
 	showLineNumbers bool // true when line numbers are shown in view mode
 
-	// Mouse cursor state
+	// Cursor state — committed by either a mouse click or, in read/view
+	// mode, keyboard cursor movement (Left/Right/Shift+arrows; see
+	// cursor.go). mouseRow/mouseCol track live hover position regardless
+	// of commitment; hasCursor/cursorRow/cursorCol are the committed
+	// position either input method last set.
 	mouseRow  int  // current mouse Y position (0-based, screen row)
 	mouseCol  int  // current mouse X position (0-based, screen col)
-	hasCursor bool // true once the user has clicked to commit a cursor position
+	hasCursor bool // true once a cursor position has been committed (click or keyboard)
 	cursorRow int  // committed cursor row (document line index, 0-based)
 	cursorCol int  // committed cursor column (0-based)
 
@@ -657,6 +661,32 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v.updateEdit(msg)
 		}
 
+		// Shift+arrow keyboard cursor/selection in read mode (cursor.go):
+		// matched via msg.Type, not msg.String(), mirroring edit_mode.go's
+		// KeyShiftUp/Down/Left/Right handling — bubbletea's typed key
+		// constants are the more reliable way to recognize these across
+		// terminals than string-matching "shift+up" etc.
+		switch msg.Type {
+		case tea.KeyShiftLeft:
+			v.ensureCursorInitialized()
+			row, col := v.cursorTargetLeft(v.cursorRow, v.cursorCol)
+			v.moveCursor(row, col, true)
+			return v, nil
+		case tea.KeyShiftRight:
+			v.ensureCursorInitialized()
+			row, col := v.cursorTargetRight(v.cursorRow, v.cursorCol)
+			v.moveCursor(row, col, true)
+			return v, nil
+		case tea.KeyShiftUp:
+			v.ensureCursorInitialized()
+			v.moveCursor(v.cursorRow-1, v.cursorCol, true)
+			return v, nil
+		case tea.KeyShiftDown:
+			v.ensureCursorInitialized()
+			v.moveCursor(v.cursorRow+1, v.cursorCol, true)
+			return v, nil
+		}
+
 		switch msg.String() {
 		case "h":
 			// 'h': back navigation (vim-style)
@@ -751,9 +781,14 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v, tea.Quit
 
 		case "ctrl+c":
-			// If there's a selection, copy selected text
-			if v.HasSelection() {
-				text := v.SelectedText()
+			// If there's a real (non-empty) selection, copy the selected
+			// text. StartSelection is called on every mouse press (to prime
+			// a potential drag) and every plain keyboard cursor move (to
+			// clear any prior selection, per moveCursor in cursor.go) —
+			// neither of those alone produces actual selected text, so
+			// check SelectedText() itself rather than HasSelection() (which
+			// would be true for a zero-length just-primed anchor too).
+			if text := v.SelectedText(); text != "" {
 				if _, err := copyWithFallback(text); err != nil {
 					v.errorMsg = "Clipboard unavailable"
 				} else {
@@ -868,6 +903,24 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if url := v.links.FocusedURL(); url != "" {
 				return v.followLink(url)
 			}
+
+		// Keyboard cursor movement (cursor.go): steps through the document
+		// one column at a time, wrapping across line boundaries, so a
+		// keyboard-only user can reach any line/column without a mouse.
+		// Plain Up/Down/j/k intentionally still mean "scroll" (unchanged,
+		// see cursor.go's package comment) — cursor row movement is via
+		// Shift+Up/Down instead (handled above via msg.Type).
+		case "left":
+			v.ensureCursorInitialized()
+			row, col := v.cursorTargetLeft(v.cursorRow, v.cursorCol)
+			v.moveCursor(row, col, false)
+			return v, nil
+
+		case "right":
+			v.ensureCursorInitialized()
+			row, col := v.cursorTargetRight(v.cursorRow, v.cursorCol)
+			v.moveCursor(row, col, false)
+			return v, nil
 
 		// Ctrl+B or Alt+Left: go back in history.
 		case "ctrl+b", "alt+left":
@@ -1460,9 +1513,12 @@ func (v Viewer) helpContent() []string {
 		kv("t / Ctrl+T", "Select theme"),
 		kv("Ctrl+W", "Word count (Esc closes)"),
 		sectionSep(),
-		sectionLine("Mouse & Copy"),
+		sectionLine("Cursor, Selection & Copy"),
 		kv("Click", "Move cursor / follow link"),
-		kv("Ctrl+C", "Copy line at cursor"),
+		kv("←/→", "Move cursor (wraps across lines)"),
+		kv("Shift+←/→", "Select text"),
+		kv("Shift+↑/↓", "Select lines"),
+		kv("Ctrl+C", "Copy selection, else line at cursor"),
 		sectionSep(),
 		sectionLine("Edit Mode (e)"),
 		kv("Ctrl+S", "Save file"),
