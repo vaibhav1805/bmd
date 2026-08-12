@@ -954,6 +954,17 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.fuzzyMode = false
 			v.fuzzyInput = ""
 
+		case "B":
+			// Shift+B: switch to the full directory browser (DirectoryModel),
+			// mirroring 'b' for the lightweight split-pane one. Previously
+			// the only way into DirectoryModel from file view was 'h'/
+			// Backspace, and only when the current file had actually been
+			// opened FROM a directory session (v.openedFromDirectory) — a
+			// file opened directly (e.g. `bmd somefile.md`) had no key at
+			// all to reach directory mode.
+			v.lastWasG = false
+			return v, switchModeCmd(modeDirectory, v.startDir)
+
 		case "ctrl+p":
 			// Ctrl+P: fuzzy file finder
 			v.browserOpen = true
@@ -1488,6 +1499,7 @@ func (v Viewer) helpContent() []string {
 		kv("Ctrl+O", "Outline / table of contents"),
 		kv("Ctrl+P", "Fuzzy file finder"),
 		kv("b", "File browser (split pane)"),
+		kv("B", "Directory browser (full)"),
 		kv("Ctrl+Shift+L", "Toggle line numbers"),
 		kv("Ctrl+G", "Open dependency graph"),
 		sectionSep(),

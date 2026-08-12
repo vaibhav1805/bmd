@@ -219,6 +219,33 @@ func TestKeyboardCursor_ScrollsCursorIntoView(t *testing.T) {
 	}
 }
 
+// TestShiftB_SwitchesToDirectoryModeFromDirectFileOpen is a regression test
+// for a real gap: a file opened directly (e.g. `bmd somefile.md`, not via
+// the directory browser) had no key at all to reach directory mode — 'h'/
+// Backspace only work when v.openedFromDirectory is true. Shift+B must
+// switch to DirectoryModel rooted at the file's own directory (v.startDir)
+// regardless of how the file was opened.
+func TestShiftB_SwitchesToDirectoryModeFromDirectFileOpen(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "other.md"), []byte("# Other\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v := newTestFileViewer(t, dir, "a.md", "# A\n", 100, 24)
+	if v.openedFromDirectory {
+		t.Fatal("test setup error: expected a direct file open, not opened-from-directory")
+	}
+
+	v = pressKeySettled(v, runeKey("B"))
+
+	dm, ok := v.activeChild.(*DirectoryModel)
+	if !ok {
+		t.Fatalf("expected Shift+B to activate DirectoryModel, got %T", v.activeChild)
+	}
+	if dm.state.RootPath != dir {
+		t.Errorf("expected DirectoryModel rooted at %q, got %q", dir, dm.state.RootPath)
+	}
+}
+
 // TestVerticalNav_DownShowsAVisibleCursor is a regression test for user
 // feedback: pressing Up/Down (the natural first thing a keyboard user
 // tries) previously just adjusted v.Offset directly with no cursor at all
