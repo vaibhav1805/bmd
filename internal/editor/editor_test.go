@@ -171,9 +171,9 @@ func TestRedoAfterUndo(t *testing.T) {
 func TestRedoClearedOnNewEdit(t *testing.T) {
 	tb := NewTextBuffer([]string{"hello"})
 
-	tb.Insert('X')        // snapshot ["hello"] pushed, insert at col 0 -> "Xhello", col moves to 1
-	tb.Undo()             // restore to ["hello"], cursor stays at col 1
-	tb.Insert('Y')        // snapshot ["hello"] pushed, insert at col 1 -> "hYello", col moves to 2
+	tb.Insert('X') // snapshot ["hello"] pushed, insert at col 0 -> "Xhello", col moves to 1
+	tb.Undo()      // restore to ["hello"], cursor stays at col 1
+	tb.Insert('Y') // snapshot ["hello"] pushed, insert at col 1 -> "hYello", col moves to 2
 
 	if tb.CanRedo() {
 		t.Error("Expected redo stack to be cleared after new edit")
@@ -1004,5 +1004,112 @@ func TestMoveLineDownUndo(t *testing.T) {
 	lines := tb.GetLines()
 	if lines[0] != "alpha" || lines[1] != "beta" || lines[2] != "gamma" {
 		t.Errorf("Expected original order after Undo, got %v", lines)
+	}
+}
+
+func TestDeleteLinesBasic(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta", "gamma", "delta"})
+	tb.CursorDown() // cursor on "beta"
+	removed := tb.DeleteLines(2)
+
+	if got := []string{"beta", "gamma"}; removed[0] != got[0] || removed[1] != got[1] {
+		t.Errorf("Expected removed=%v, got %v", got, removed)
+	}
+	lines := tb.GetLines()
+	if len(lines) != 2 || lines[0] != "alpha" || lines[1] != "delta" {
+		t.Errorf("Expected [alpha delta], got %v", lines)
+	}
+	if tb.CursorLine() != 1 || tb.CursorCol() != 0 {
+		t.Errorf("Expected cursor at (1,0), got (%d,%d)", tb.CursorLine(), tb.CursorCol())
+	}
+}
+
+func TestDeleteLinesCountExceedsRemaining(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta", "gamma"})
+	tb.CursorDown() // cursor on "beta"
+	removed := tb.DeleteLines(10)
+
+	if len(removed) != 2 || removed[0] != "beta" || removed[1] != "gamma" {
+		t.Errorf("Expected removed=[beta gamma], got %v", removed)
+	}
+	lines := tb.GetLines()
+	if len(lines) != 1 || lines[0] != "alpha" {
+		t.Errorf("Expected [alpha], got %v", lines)
+	}
+}
+
+func TestDeleteLinesEntireBuffer(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta"})
+	tb.DeleteLines(5)
+
+	lines := tb.GetLines()
+	if len(lines) != 1 || lines[0] != "" {
+		t.Errorf("Expected [\"\"] (buffer never empty), got %v", lines)
+	}
+	if tb.CursorLine() != 0 || tb.CursorCol() != 0 {
+		t.Errorf("Expected cursor at (0,0), got (%d,%d)", tb.CursorLine(), tb.CursorCol())
+	}
+}
+
+func TestDeleteLinesUndo(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "beta", "gamma"})
+	tb.DeleteLines(2)
+	tb.Undo()
+
+	lines := tb.GetLines()
+	if len(lines) != 3 || lines[0] != "alpha" || lines[1] != "beta" || lines[2] != "gamma" {
+		t.Errorf("Expected original 3 lines after Undo, got %v", lines)
+	}
+}
+
+func TestInsertLinesBelowBasic(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "gamma"})
+	tb.InsertLinesBelow([]string{"beta1", "beta2"})
+
+	lines := tb.GetLines()
+	want := []string{"alpha", "beta1", "beta2", "gamma"}
+	if len(lines) != len(want) {
+		t.Fatalf("Expected %v, got %v", want, lines)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Errorf("Expected %v, got %v", want, lines)
+			break
+		}
+	}
+	if tb.CursorLine() != 1 || tb.CursorCol() != 0 {
+		t.Errorf("Expected cursor at (1,0), got (%d,%d)", tb.CursorLine(), tb.CursorCol())
+	}
+}
+
+func TestInsertLinesAboveBasic(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "gamma"})
+	tb.CursorDown() // cursor on "gamma"
+	tb.InsertLinesAbove([]string{"beta1", "beta2"})
+
+	lines := tb.GetLines()
+	want := []string{"alpha", "beta1", "beta2", "gamma"}
+	if len(lines) != len(want) {
+		t.Fatalf("Expected %v, got %v", want, lines)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Errorf("Expected %v, got %v", want, lines)
+			break
+		}
+	}
+	if tb.CursorLine() != 1 || tb.CursorCol() != 0 {
+		t.Errorf("Expected cursor at (1,0), got (%d,%d)", tb.CursorLine(), tb.CursorCol())
+	}
+}
+
+func TestInsertLinesBelowUndo(t *testing.T) {
+	tb := NewTextBuffer([]string{"alpha", "gamma"})
+	tb.InsertLinesBelow([]string{"beta"})
+	tb.Undo()
+
+	lines := tb.GetLines()
+	if len(lines) != 2 || lines[0] != "alpha" || lines[1] != "gamma" {
+		t.Errorf("Expected original 2 lines after Undo, got %v", lines)
 	}
 }

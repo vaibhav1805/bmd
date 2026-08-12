@@ -782,6 +782,81 @@ func (tb *TextBuffer) MoveLineDown() {
 	tb.clampCursorCol()
 }
 
+// DeleteLines removes the current line and the following n-1 lines (clamped
+// to the end of the buffer) as a single undo step, returning the removed
+// lines. If every line in the buffer is removed, one empty line is left in
+// place (matching DeleteLine's single-line behavior). Used by vim's linewise
+// delete (dd) with a count.
+func (tb *TextBuffer) DeleteLines(n int) []string {
+	if n < 1 {
+		n = 1
+	}
+	if len(tb.lines) == 0 {
+		return nil
+	}
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	start := tb.cursorLine
+	end := start + n
+	if end > len(tb.lines) {
+		end = len(tb.lines)
+	}
+	removed := make([]string, end-start)
+	copy(removed, tb.lines[start:end])
+
+	if end-start >= len(tb.lines) {
+		tb.lines = []string{""}
+		tb.cursorLine = 0
+		tb.cursorCol = 0
+		return removed
+	}
+
+	tb.lines = append(tb.lines[:start], tb.lines[end:]...)
+	if tb.cursorLine >= len(tb.lines) {
+		tb.cursorLine = len(tb.lines) - 1
+	}
+	tb.cursorCol = 0
+	return removed
+}
+
+// InsertLinesBelow inserts newLines after the current line as a single undo
+// step; the cursor moves to the first inserted line. Used by vim's linewise
+// paste (p) after a linewise yank/delete.
+func (tb *TextBuffer) InsertLinesBelow(newLines []string) {
+	if len(newLines) == 0 || len(tb.lines) == 0 {
+		return
+	}
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	at := tb.cursorLine + 1
+	merged := make([]string, 0, len(tb.lines)+len(newLines))
+	merged = append(merged, tb.lines[:at]...)
+	merged = append(merged, newLines...)
+	merged = append(merged, tb.lines[at:]...)
+	tb.lines = merged
+	tb.cursorLine = at
+	tb.cursorCol = 0
+}
+
+// InsertLinesAbove inserts newLines before the current line as a single
+// undo step; the cursor moves to the first inserted line. Used by vim's
+// linewise paste (P) after a linewise yank/delete.
+func (tb *TextBuffer) InsertLinesAbove(newLines []string) {
+	if len(newLines) == 0 || len(tb.lines) == 0 {
+		return
+	}
+	tb.undoRedo.PushUndo(tb.GetLines())
+
+	at := tb.cursorLine
+	merged := make([]string, 0, len(tb.lines)+len(newLines))
+	merged = append(merged, tb.lines[:at]...)
+	merged = append(merged, newLines...)
+	merged = append(merged, tb.lines[at:]...)
+	tb.lines = merged
+	tb.cursorLine = at
+	tb.cursorCol = 0
+}
+
 // clampCursorCol ensures the cursor column is within valid bounds for the current line.
 func (tb *TextBuffer) clampCursorCol() {
 	if tb.cursorLine >= len(tb.lines) {
