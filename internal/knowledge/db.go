@@ -2,12 +2,26 @@
 //
 // Schema overview:
 //
-//	documents     — one row per markdown file (path, hash, mtime)
-//	index_entries — inverted index postings (term → doc with frequency)
-//	bm25_stats    — corpus-level BM25 parameters (N, avgDocLen, termDocs JSON)
+//	documents     — one row per markdown file (id/path), used only for
+//	                staleness detection (IsIndexStale) — see the note below.
 //	graph_nodes   — knowledge graph vertices (id, type, file, title, metadata)
 //	graph_edges   — knowledge graph directed edges (source, target, type, confidence, evidence)
-//	metadata      — key/value store used for schema versioning
+//	metadata      — key/value store used for schema versioning + built_at
+//
+// bmd's BM25 search index itself is never persisted or reloaded from
+// SQLite — bmd query and SearchAllDocuments always rebuild it in-memory
+// from the markdown files on disk on every run (a full rescan is required
+// regardless, since chunk content is never stored in SQLite — only
+// metadata). This package's job is limited to: (1) tracking whether that
+// in-memory rebuild is necessary at all (IsIndexStale, via documents +
+// built_at), and (2) persisting the knowledge graph, which — unlike the
+// search index — genuinely is loaded back from SQLite (see LoadGraph,
+// used by `bmd graph` and the TUI graph view). An earlier version of this
+// package also persisted BM25 postings (inverted index term→doc
+// frequencies) to support reloading a saved index, but nothing ever
+// called that reload path in practice — SaveIndex wrote it on every index
+// run and nothing ever read it back — so it was pure write-only
+// overhead. Removed in the SchemaVersion 3 migration (migrateV2ToV3).
 //
 // All multi-step writes are wrapped in transactions to guarantee atomicity.
 // Foreign keys with ON DELETE CASCADE ensure referential integrity when
@@ -19,19 +33,17 @@
 //	if err != nil { ... }
 //	defer db.Close()
 //
-//	// Persist an index
+//	// Record that the index was (re)built, for future staleness checks.
 //	if err := db.SaveIndex(idx); err != nil { ... }
 //
-//	// Reload it later
-//	idx2 := NewIndex()
-//	if err := db.LoadIndex(idx2); err != nil { ... }
+//	// Later, before searching: rebuild in-memory if stale.
+//	stale, err := db.IsIndexStale(rootDir)
 package knowledge
 
 import (
 	"crypto/md5" //nolint:gosec // used for file change detection, not security
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,7 +55,7 @@ import (
 
 // SchemaVersion is incremented each time the database schema changes.
 // Migrations run automatically in Migrate() when an older database is opened.
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 // Database wraps an open SQLite connection and provides domain-level
 // read/write operations for indexes and knowledge graphs.
@@ -114,7 +126,13 @@ func (db *Database) Close() error {
 // Each statement is idempotent (CREATE TABLE IF NOT EXISTS / CREATE INDEX IF
 // NOT EXISTS) so Initialize may be called on an already-initialised database.
 const schemaSQL = `
--- documents: one row per markdown file in the indexed corpus.
+-- documents: one row per markdown file in the indexed corpus. Only id is
+-- actually read back (by IsIndexStale, to detect added/removed files —
+-- see GetChanges/UpdateDocuments too). The rest (title, content_hash,
+-- last_modified, indexed_at) are write-only today: kept because trimming
+-- them would need a real column-drop migration for existing databases for
+-- negligible benefit (a few bytes/row), not because anything currently
+-- reads them back. GetDocument can still query the full row.
 CREATE TABLE IF NOT EXISTS documents (
   id            TEXT    PRIMARY KEY,
   path          TEXT    NOT NULL UNIQUE,
@@ -124,33 +142,6 @@ CREATE TABLE IF NOT EXISTS documents (
   indexed_at    INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_documents_path ON documents(path);
-
--- index_entries: inverted index — one row per (term, document/chunk) pair.
--- positions is a JSON array: [line, offset, ...] (currently unused but
--- reserved for future phrase-search support).
--- chunk_id is the full chunk DocID ("relPath#HeadingPath:L{startLine}").
--- heading_path, start_line, end_line carry chunk-level location metadata.
-CREATE TABLE IF NOT EXISTS index_entries (
-  id           INTEGER PRIMARY KEY,
-  term         TEXT    NOT NULL,
-  doc_id       TEXT    NOT NULL,
-  positions    TEXT,
-  frequency    INTEGER NOT NULL,
-  chunk_id     TEXT,
-  heading_path TEXT,
-  start_line   INTEGER,
-  end_line     INTEGER,
-  FOREIGN KEY(doc_id) REFERENCES documents(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_index_terms ON index_entries(term);
-CREATE INDEX IF NOT EXISTS idx_index_docs  ON index_entries(doc_id);
-
--- bm25_stats: corpus-level statistics required for BM25 scoring.
--- param is one of: "N", "avg_doc_len", "term_docs" (JSON object), "k1", "b".
-CREATE TABLE IF NOT EXISTS bm25_stats (
-  param TEXT PRIMARY KEY,
-  value TEXT NOT NULL
-);
 
 -- graph_nodes: vertices in the knowledge graph.
 -- metadata is a JSON object (e.g. {"heading_level": 1, "line_range": [1,40]}).
@@ -255,6 +246,12 @@ func (db *Database) Migrate() error {
 		}
 	}
 
+	if current < 3 {
+		if err := db.migrateV2ToV3(); err != nil {
+			return fmt.Errorf("knowledge.Database.Migrate: v2→v3: %w", err)
+		}
+	}
+
 	// Ensure the stored version reflects the latest schema.
 	if current < SchemaVersion {
 		if _, err := db.conn.Exec(
@@ -289,6 +286,28 @@ func (db *Database) migrateV1ToV2() error {
 	return nil
 }
 
+// migrateV2ToV3 drops the BM25 postings persistence tables (index_entries,
+// bm25_stats). Nothing in the codebase ever read them back in practice —
+// SaveIndex wrote them on every index run, but bmd query/SearchAllDocuments
+// always rebuild the in-memory index from disk instead (a full rescan is
+// required regardless, since chunk content itself was never persisted to
+// SQLite — only metadata), so LoadIndex/SearchTerms were dead code kept in
+// sync for no benefit. Safe to drop unconditionally: index_entries' only
+// foreign key points OUT to documents, nothing references INTO either
+// table, so this can't orphan or break anything else.
+func (db *Database) migrateV2ToV3() error {
+	stmts := []string{
+		`DROP TABLE IF EXISTS index_entries`,
+		`DROP TABLE IF EXISTS bm25_stats`,
+	}
+	for _, stmt := range stmts {
+		if _, err := db.conn.Exec(stmt); err != nil {
+			return fmt.Errorf("exec %q: %w", stmt, err)
+		}
+	}
+	return nil
+}
+
 // GetSchemaVersion is an alias for GetVersion provided for the plan's API.
 func (db *Database) GetSchemaVersion() int { return db.GetVersion() }
 
@@ -312,30 +331,26 @@ func transaction(dbConn *sql.DB, fn func(*sql.Tx) error) error {
 
 const batchSize = 1000
 
-// SaveIndex serialises idx to the database, replacing any previously stored
-// index data.  All changes are wrapped in a single transaction.
+// SaveIndex records that idx was (re)built, for future staleness checks
+// (IsIndexStale) — it does NOT persist the BM25 postings/stats themselves.
+// bmd query and SearchAllDocuments always rebuild the in-memory index from
+// disk on every run regardless (chunk content is never stored in SQLite —
+// only metadata — so a full rescan is required either way), so there was
+// never a real reload path to serve; see the package doc comment and
+// migrateV2ToV3. All changes are wrapped in a single transaction.
 func (db *Database) SaveIndex(idx *Index) error {
 	return transaction(db.conn, func(tx *sql.Tx) error {
-		// Clear old data.
-		if _, err := tx.Exec(`DELETE FROM index_entries`); err != nil {
-			return fmt.Errorf("clear index_entries: %w", err)
-		}
 		if _, err := tx.Exec(`DELETE FROM documents`); err != nil {
 			return fmt.Errorf("clear documents: %w", err)
-		}
-		if _, err := tx.Exec(`DELETE FROM bm25_stats`); err != nil {
-			return fmt.Errorf("clear bm25_stats: %w", err)
 		}
 
 		now := time.Now().UnixNano()
 
-		// Insert documents in batches.
-		// After chunk-level indexing, multiple indexedDoc entries share the same
-		// relPath.  We deduplicate: the documents table stores one row per FILE
-		// (keyed by relPath), not one row per chunk.
+		// After chunk-level indexing, multiple indexedDoc entries share the
+		// same relPath. Deduplicate: the documents table stores one row per
+		// FILE (keyed by relPath), not one row per chunk.
 		docs := idx.bm25.docs
 
-		// Build a deduplicated file-level view for the documents table.
 		type fileDoc struct {
 			relPath string
 			path    string
@@ -378,82 +393,11 @@ func (db *Database) SaveIndex(idx *Index) error {
 			}
 		}
 
-		// Insert index entries in batches.
-		// doc_id references the file-level documents.id (= relPath).
-		// chunk_id stores the full chunk DocID for reconstruction on load.
-		type entry struct {
-			term        string
-			docID       string // file-level relPath (FK → documents.id)
-			chunkID     string // full chunk DocID
-			freq        int
-			headingPath string
-			startLine   int
-			endLine     int
-		}
-		// Build a flat list of entries.
-		var entries []entry
-		for term, postings := range idx.bm25.postings {
-			for _, pe := range postings {
-				if pe.DocIndex < len(docs) {
-					d := docs[pe.DocIndex]
-					entries = append(entries, entry{
-						term:        term,
-						docID:       d.relPath,  // file-level FK
-						chunkID:     d.id,       // chunk-level unique ID
-						freq:        pe.TF,
-						headingPath: d.headingPath,
-						startLine:   d.startLine,
-						endLine:     d.endLine,
-					})
-				}
-			}
-		}
-		for start := 0; start < len(entries); start += batchSize {
-			end := start + batchSize
-			if end > len(entries) {
-				end = len(entries)
-			}
-			for _, e := range entries[start:end] {
-				_, err := tx.Exec(
-					`INSERT INTO index_entries
-					 (term, doc_id, positions, frequency, chunk_id, heading_path, start_line, end_line)
-					 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-					e.term, e.docID, nil, e.freq, e.chunkID, e.headingPath, e.startLine, e.endLine,
-				)
-				if err != nil {
-					return fmt.Errorf("insert index_entry (%q, %q): %w", e.term, e.docID, err)
-				}
-			}
-		}
-
-		// Persist BM25 stats.
-		stats := idx.bm25.stats
-		termDocsJSON, err := json.Marshal(stats.TermDocs)
-		if err != nil {
-			return fmt.Errorf("marshal term_docs: %w", err)
-		}
-		bm25Rows := [][2]string{
-			{"N", fmt.Sprintf("%d", stats.N)},
-			{"avg_doc_len", fmt.Sprintf("%g", stats.AvgDocLen)},
-			{"term_docs", string(termDocsJSON)},
-			{"k1", fmt.Sprintf("%g", idx.params.K1)},
-			{"b", fmt.Sprintf("%g", idx.params.B)},
-		}
-		for _, row := range bm25Rows {
-			if _, err := tx.Exec(
-				`INSERT OR REPLACE INTO bm25_stats (param, value) VALUES (?, ?)`,
-				row[0], row[1],
-			); err != nil {
-				return fmt.Errorf("insert bm25_stat %q: %w", row[0], err)
-			}
-		}
-
 		// Record the build timestamp in metadata for staleness detection.
-		_, err = tx.Exec(
+		if _, err := tx.Exec(
 			`INSERT OR REPLACE INTO metadata (key, value) VALUES ('built_at', ?)`,
 			fmt.Sprintf("%d", now),
-		)
-		if err != nil {
+		); err != nil {
 			return fmt.Errorf("write built_at: %w", err)
 		}
 
@@ -575,154 +519,6 @@ func (db *Database) IsIndexStale(root string) (bool, error) {
 	}
 
 	return stale, nil
-}
-
-// LoadIndex reconstructs idx from the database, replacing its current state.
-// The Index must have been created via NewIndex(); it is safe to call on an
-// empty or partially populated Index.
-func (db *Database) LoadIndex(idx *Index) error {
-	// Load file-level documents for docMeta and path information.
-	rows, err := db.conn.Query(
-		`SELECT id, path, title, content_hash, last_modified FROM documents`,
-	)
-	if err != nil {
-		return fmt.Errorf("knowledge.Database.LoadIndex: query documents: %w", err)
-	}
-	defer rows.Close()
-
-	type fileDocRow struct {
-		id           string // file-level relPath
-		path         string
-		title        string
-		contentHash  string
-		lastModified int64
-	}
-	var fileDocRows []fileDocRow
-	for rows.Next() {
-		var r fileDocRow
-		if err := rows.Scan(&r.id, &r.path, &r.title, &r.contentHash, &r.lastModified); err != nil {
-			return fmt.Errorf("knowledge.Database.LoadIndex: scan document: %w", err)
-		}
-		fileDocRows = append(fileDocRows, r)
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("knowledge.Database.LoadIndex: iterate documents: %w", err)
-	}
-
-	// Reset the index.
-	idx.bm25 = NewBM25Index(idx.params, idx.tokenizer)
-	idx.docMeta = make(map[string]docMeta, len(fileDocRows))
-
-	// Build a map from file-level ID → file metadata for chunk reconstruction.
-	type fileMeta struct {
-		path  string
-		title string
-	}
-	fileMetaMap := make(map[string]fileMeta, len(fileDocRows))
-	for _, dr := range fileDocRows {
-		fileMetaMap[dr.id] = fileMeta{path: dr.path, title: dr.title}
-		idx.docMeta[dr.id] = docMeta{
-			Hash:         dr.contentHash,
-			LastModified: dr.lastModified,
-		}
-	}
-
-	// Load index entries (one row per (term, chunk)).
-	// We reconstruct chunk-level indexedDoc entries from the stored chunk metadata.
-	eRows, err := db.conn.Query(
-		`SELECT term, doc_id, frequency, chunk_id, heading_path, start_line, end_line
-		 FROM index_entries`,
-	)
-	if err != nil {
-		return fmt.Errorf("knowledge.Database.LoadIndex: query index_entries: %w", err)
-	}
-	defer eRows.Close()
-
-	// chunkIndex maps chunk_id → position in idx.bm25.docs.
-	chunkIndexMap := make(map[string]int)
-	postings := make(map[string][]PostingEntry)
-	termDocs := make(map[string]int)
-
-	for eRows.Next() {
-		var term, docID string
-		var freq int
-		var chunkID, headingPath sql.NullString
-		var startLine, endLine sql.NullInt64
-		if err := eRows.Scan(&term, &docID, &freq, &chunkID, &headingPath, &startLine, &endLine); err != nil {
-			return fmt.Errorf("knowledge.Database.LoadIndex: scan index_entry: %w", err)
-		}
-
-		// Determine the effective chunk ID.
-		// Legacy rows (before v2) have NULL chunk_id; fall back to doc_id.
-		effectiveChunkID := docID
-		if chunkID.Valid && chunkID.String != "" {
-			effectiveChunkID = chunkID.String
-		}
-
-		// Get or create the indexedDoc for this chunk.
-		di, exists := chunkIndexMap[effectiveChunkID]
-		if !exists {
-			fm := fileMetaMap[docID]
-			relPath := filepath.FromSlash(docID)
-			di = len(idx.bm25.docs)
-			idx.bm25.docs = append(idx.bm25.docs, indexedDoc{
-				id:          effectiveChunkID,
-				path:        fm.path,
-				relPath:     relPath,
-				title:       fm.title,
-				content:     "", // plain text not stored; snippets from doc on disk
-				headingPath: headingPath.String,
-				startLine:   int(startLine.Int64),
-				endLine:     int(endLine.Int64),
-			})
-			chunkIndexMap[effectiveChunkID] = di
-		}
-
-		postings[term] = append(postings[term], PostingEntry{DocIndex: di, TF: freq})
-		termDocs[term]++
-	}
-	if err := eRows.Err(); err != nil {
-		return fmt.Errorf("knowledge.Database.LoadIndex: iterate index_entries: %w", err)
-	}
-
-	idx.bm25.postings = postings
-	idx.bm25.stats.TermDocs = termDocs
-
-	// Load BM25 stats.
-	sRows, err := db.conn.Query(`SELECT param, value FROM bm25_stats`)
-	if err != nil {
-		return fmt.Errorf("knowledge.Database.LoadIndex: query bm25_stats: %w", err)
-	}
-	defer sRows.Close()
-
-	for sRows.Next() {
-		var param, value string
-		if err := sRows.Scan(&param, &value); err != nil {
-			return fmt.Errorf("knowledge.Database.LoadIndex: scan bm25_stat: %w", err)
-		}
-		switch param {
-		case "N":
-			fmt.Sscanf(value, "%d", &idx.bm25.stats.N)
-		case "avg_doc_len":
-			fmt.Sscanf(value, "%g", &idx.bm25.stats.AvgDocLen)
-		case "k1":
-			fmt.Sscanf(value, "%g", &idx.params.K1)
-			idx.bm25.params.K1 = idx.params.K1
-		case "b":
-			fmt.Sscanf(value, "%g", &idx.params.B)
-			idx.bm25.params.B = idx.params.B
-		case "term_docs":
-			var td map[string]int
-			if json.Unmarshal([]byte(value), &td) == nil {
-				idx.bm25.stats.TermDocs = td
-			}
-		}
-	}
-	if err := sRows.Err(); err != nil {
-		return fmt.Errorf("knowledge.Database.LoadIndex: iterate bm25_stats: %w", err)
-	}
-
-	return nil
 }
 
 // ─── graph persistence ────────────────────────────────────────────────────────
@@ -921,13 +717,13 @@ func (db *Database) GetChanges(root string) (added, modified, deleted []string, 
 // UpdateDocuments performs a partial update of the documents table.
 //
 // docs contains documents to add or replace (by their ID).
-// deletedIDs lists document IDs to remove, cascading to index_entries.
+// deletedIDs lists document IDs to remove.
 // All changes are wrapped in a single transaction.
 func (db *Database) UpdateDocuments(docs []Document, deletedIDs []string) error {
 	return transaction(db.conn, func(tx *sql.Tx) error {
 		now := time.Now().UnixNano()
 
-		// Delete removed documents (cascade removes index_entries).
+		// Delete removed documents.
 		for _, id := range deletedIDs {
 			if _, err := tx.Exec(`DELETE FROM documents WHERE id=?`, id); err != nil {
 				return fmt.Errorf("delete document %q: %w", id, err)
@@ -950,13 +746,6 @@ func (db *Database) UpdateDocuments(docs []Document, deletedIDs []string) error 
 
 		return nil
 	})
-}
-
-// RebuildIndex drops and recreates all index_entries from the current documents
-// and bm25_stats tables.  Callers must pass the freshly-built Index to supply
-// the new posting data.
-func (db *Database) RebuildIndex(idx *Index) error {
-	return db.SaveIndex(idx) // SaveIndex does a full replace already
 }
 
 // ─── database queries ─────────────────────────────────────────────────────────
@@ -1031,53 +820,6 @@ func (db *Database) GetEdges(nodeID string, direction string) ([]*Edge, error) {
 		edges = append(edges, &e)
 	}
 	return edges, rows.Err()
-}
-
-// SearchTerms performs a simple SQL full-text search against the inverted
-// index.  It returns up to topK SearchResult entries ordered by frequency sum.
-func (db *Database) SearchTerms(terms []string, topK int) ([]SearchResult, error) {
-	if len(terms) == 0 {
-		return nil, nil
-	}
-
-	// Build a query that sums frequency across matched terms.
-	placeholders := make([]string, len(terms))
-	args := make([]interface{}, len(terms))
-	for i, t := range terms {
-		placeholders[i] = "?"
-		args[i] = t
-	}
-	inClause := strings.Join(placeholders, ",")
-
-	query := fmt.Sprintf(`
-		SELECT d.id, d.path, d.title, SUM(ie.frequency) AS score
-		FROM index_entries ie
-		JOIN documents d ON ie.doc_id = d.id
-		WHERE ie.term IN (%s)
-		GROUP BY d.id
-		ORDER BY score DESC
-		LIMIT ?`, inClause)
-
-	args = append(args, topK)
-
-	rows, err := db.conn.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("knowledge.Database.SearchTerms: %w", err)
-	}
-	defer rows.Close()
-
-	var results []SearchResult
-	for rows.Next() {
-		var r SearchResult
-		var title sql.NullString
-		if err := rows.Scan(&r.DocID, &r.Path, &title, &r.Score); err != nil {
-			return nil, fmt.Errorf("knowledge.Database.SearchTerms: scan: %w", err)
-		}
-		r.Title = title.String
-		r.RelPath = filepath.FromSlash(r.DocID)
-		results = append(results, r)
-	}
-	return results, rows.Err()
 }
 
 // GetServices returns all nodes whose type is "service".

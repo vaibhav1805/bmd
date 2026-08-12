@@ -107,19 +107,25 @@ func TestDatabase_OpenExisting_NoDataLoss(t *testing.T) {
 	}
 	_ = db1.Close()
 
-	// Reopen and verify data is intact.
+	// Reopen and verify the staleness-detection data (documents + built_at)
+	// survived — SaveIndex no longer persists BM25 postings to reload (see
+	// the package doc comment), so "no data loss" now means what
+	// IsIndexStale actually depends on, not a full index round-trip.
 	db2, err := OpenDB(path)
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}
 	defer db2.Close()
 
-	idx2 := NewIndex()
-	if err := db2.LoadIndex(idx2); err != nil {
-		t.Fatalf("LoadIndex on reopen: %v", err)
+	if db2.GetIndexBuiltAt().IsZero() {
+		t.Error("expected built_at to survive reopen")
 	}
-	if idx2.DocCount() != idx.DocCount() {
-		t.Errorf("DocCount after reopen: got %d, want %d", idx2.DocCount(), idx.DocCount())
+	var docCount int
+	if err := db2.conn.QueryRow(`SELECT COUNT(*) FROM documents`).Scan(&docCount); err != nil {
+		t.Fatalf("query documents count: %v", err)
+	}
+	if docCount != idx.DocCount() {
+		t.Errorf("documents row count after reopen: got %d, want %d", docCount, idx.DocCount())
 	}
 }
 
@@ -153,70 +159,83 @@ func TestMigrate_Idempotent(t *testing.T) {
 	}
 }
 
-// ─── Index persistence (save / load round-trip) ───────────────────────────────
+// TestMigrateV2ToV3_DropsBM25PostingsTables is a regression/decision test
+// for bmd-g5u: an existing database at schema version 2 (with the
+// index_entries/bm25_stats tables from before this simplification) must
+// have those tables actually dropped by Migrate(), not just silently
+// stop being written to — otherwise upgraded installs carry orphaned
+// tables forever.
+func TestMigrateV2ToV3_DropsBM25PostingsTables(t *testing.T) {
+	db := tempDB(t) // already at the latest schema
 
-func TestSaveLoadIndex_SmallRoundTrip(t *testing.T) {
+	// Simulate a pre-existing v2 database: recreate the dropped tables by
+	// hand and roll the recorded version back to 2.
+	if _, err := db.conn.Exec(`CREATE TABLE index_entries (id INTEGER PRIMARY KEY, term TEXT, doc_id TEXT, frequency INTEGER)`); err != nil {
+		t.Fatalf("recreate index_entries: %v", err)
+	}
+	if _, err := db.conn.Exec(`CREATE TABLE bm25_stats (param TEXT PRIMARY KEY, value TEXT)`); err != nil {
+		t.Fatalf("recreate bm25_stats: %v", err)
+	}
+	if _, err := db.conn.Exec(`INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '2')`); err != nil {
+		t.Fatalf("roll back schema_version: %v", err)
+	}
+
+	if err := db.Migrate(); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	for _, table := range []string{"index_entries", "bm25_stats"} {
+		var name string
+		err := db.conn.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&name)
+		if err != sql.ErrNoRows {
+			t.Errorf("expected %s to be dropped by migrateV2ToV3, but it still exists (err=%v)", table, err)
+		}
+	}
+	if db.GetVersion() != SchemaVersion {
+		t.Errorf("version after migrate: got %d, want %d", db.GetVersion(), SchemaVersion)
+	}
+	// SaveIndex must still work fine post-migration (documents table
+	// unaffected by the drop).
+	if err := db.SaveIndex(smallIndex(3)); err != nil {
+		t.Errorf("SaveIndex after migration: %v", err)
+	}
+}
+
+// ─── Index persistence ─────────────────────────────────────────────────────────
+//
+// SaveIndex only records enough to answer IsIndexStale (documents + built_at)
+// — it does not persist BM25 postings/stats for reloading, since nothing
+// ever reloaded them in practice (see the package doc comment and
+// migrateV2ToV3). These tests exercise what SaveIndex actually guarantees.
+
+func docRowCount(t *testing.T, db *Database) int {
+	t.Helper()
+	var n int
+	if err := db.conn.QueryRow(`SELECT COUNT(*) FROM documents`).Scan(&n); err != nil {
+		t.Fatalf("query documents count: %v", err)
+	}
+	return n
+}
+
+func TestSaveIndex_RecordsDocumentsAndBuiltAt(t *testing.T) {
 	db := tempDB(t)
 	idx := smallIndex(10)
 
+	before := db.GetIndexBuiltAt()
 	if err := db.SaveIndex(idx); err != nil {
 		t.Fatalf("SaveIndex: %v", err)
 	}
 
-	idx2 := NewIndex()
-	if err := db.LoadIndex(idx2); err != nil {
-		t.Fatalf("LoadIndex: %v", err)
+	if got := docRowCount(t, db); got != idx.DocCount() {
+		t.Errorf("documents row count: got %d, want %d", got, idx.DocCount())
 	}
-
-	if idx2.DocCount() != idx.DocCount() {
-		t.Errorf("DocCount: got %d, want %d", idx2.DocCount(), idx.DocCount())
-	}
-}
-
-func TestSaveLoadIndex_ParamsPreserved(t *testing.T) {
-	db := tempDB(t)
-	idx := smallIndex(5)
-	// Use non-default params to verify they're preserved.
-	idx.params = BM25Params{K1: 1.5, B: 0.5}
-	idx.bm25.params = idx.params
-
-	if err := db.SaveIndex(idx); err != nil {
-		t.Fatalf("SaveIndex: %v", err)
-	}
-
-	idx2 := NewIndex()
-	if err := db.LoadIndex(idx2); err != nil {
-		t.Fatalf("LoadIndex: %v", err)
-	}
-
-	if idx2.params.K1 != 1.5 {
-		t.Errorf("K1: got %v, want 1.5", idx2.params.K1)
-	}
-	if idx2.params.B != 0.5 {
-		t.Errorf("B: got %v, want 0.5", idx2.params.B)
+	after := db.GetIndexBuiltAt()
+	if after.IsZero() || !after.After(before) {
+		t.Errorf("expected GetIndexBuiltAt to advance after SaveIndex: before=%v after=%v", before, after)
 	}
 }
 
-func TestSaveLoadIndex_PostingsPreserved(t *testing.T) {
-	db := tempDB(t)
-	idx := smallIndex(20)
-
-	if err := db.SaveIndex(idx); err != nil {
-		t.Fatalf("SaveIndex: %v", err)
-	}
-
-	idx2 := NewIndex()
-	if err := db.LoadIndex(idx2); err != nil {
-		t.Fatalf("LoadIndex: %v", err)
-	}
-
-	// The loaded index should return the same number of term postings.
-	if len(idx2.bm25.postings) == 0 {
-		t.Error("expected non-empty postings after load")
-	}
-}
-
-func TestSaveLoadIndex_LargeIndex(t *testing.T) {
+func TestSaveIndex_LargeIndexPerformance(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping large index test in short mode")
 	}
@@ -230,20 +249,11 @@ func TestSaveLoadIndex_LargeIndex(t *testing.T) {
 	saveDur := time.Since(start)
 	t.Logf("SaveIndex (1000 docs): %v", saveDur)
 
-	start = time.Now()
-	idx2 := NewIndex()
-	if err := db.LoadIndex(idx2); err != nil {
-		t.Fatalf("LoadIndex: %v", err)
+	if got := docRowCount(t, db); got != idx.DocCount() {
+		t.Errorf("documents row count: got %d, want %d", got, idx.DocCount())
 	}
-	loadDur := time.Since(start)
-	t.Logf("LoadIndex (1000 docs): %v", loadDur)
-
-	if idx2.DocCount() != idx.DocCount() {
-		t.Errorf("DocCount mismatch: got %d, want %d", idx2.DocCount(), idx.DocCount())
-	}
-	// Performance target: save + load < 10s (generous for CI)
-	if saveDur+loadDur > 10*time.Second {
-		t.Errorf("total save+load took %v, want <10s", saveDur+loadDur)
+	if saveDur > 5*time.Second {
+		t.Errorf("SaveIndex took %v, want <5s", saveDur)
 	}
 }
 
@@ -257,12 +267,8 @@ func TestSaveIndex_Idempotent(t *testing.T) {
 		}
 	}
 
-	idx2 := NewIndex()
-	if err := db.LoadIndex(idx2); err != nil {
-		t.Fatalf("LoadIndex: %v", err)
-	}
-	if idx2.DocCount() != idx.DocCount() {
-		t.Errorf("DocCount after repeated save: got %d, want %d", idx2.DocCount(), idx.DocCount())
+	if got := docRowCount(t, db); got != idx.DocCount() {
+		t.Errorf("documents row count after repeated save: got %d, want %d", got, idx.DocCount())
 	}
 }
 
@@ -548,31 +554,6 @@ func TestUpdateDocuments_UpsertAndDelete(t *testing.T) {
 	}
 }
 
-func TestUpdateDocuments_CascadeDeleteIndexEntries(t *testing.T) {
-	db := tempDB(t)
-	idx := smallIndex(3)
-	if err := db.SaveIndex(idx); err != nil {
-		t.Fatalf("SaveIndex: %v", err)
-	}
-
-	// Count entries for doc000 before deletion.
-	var beforeCount int
-	_ = db.conn.QueryRow(`SELECT COUNT(*) FROM index_entries WHERE doc_id='doc000.md'`).Scan(&beforeCount)
-
-	// Delete the document.
-	if err := db.UpdateDocuments(nil, []string{"doc000.md"}); err != nil {
-		t.Fatalf("UpdateDocuments: %v", err)
-	}
-
-	// Index entries should be gone (cascade delete).
-	var afterCount int
-	_ = db.conn.QueryRow(`SELECT COUNT(*) FROM index_entries WHERE doc_id='doc000.md'`).Scan(&afterCount)
-	if afterCount != 0 {
-		t.Errorf("index_entries for deleted doc: got %d, want 0", afterCount)
-	}
-	_ = beforeCount
-}
-
 // ─── Database queries ─────────────────────────────────────────────────────────
 
 func TestGetDocument_Found(t *testing.T) {
@@ -659,56 +640,6 @@ func TestGetEdges_InvalidDirection(t *testing.T) {
 	}
 }
 
-func TestSearchTerms_ReturnsResults(t *testing.T) {
-	db := tempDB(t)
-	idx := smallIndex(10)
-	if err := db.SaveIndex(idx); err != nil {
-		t.Fatalf("SaveIndex: %v", err)
-	}
-
-	results, err := db.SearchTerms([]string{"document"}, 5)
-	if err != nil {
-		t.Fatalf("SearchTerms: %v", err)
-	}
-	// "document" appears in every doc title and content, should get results.
-	if len(results) == 0 {
-		t.Error("expected results for term 'document', got none")
-	}
-}
-
-func TestSearchTerms_EmptyTerms(t *testing.T) {
-	db := tempDB(t)
-	results, err := db.SearchTerms(nil, 5)
-	if err != nil {
-		t.Fatalf("SearchTerms(nil): %v", err)
-	}
-	if results != nil {
-		t.Errorf("expected nil for empty terms, got %v", results)
-	}
-}
-
-func TestSearchTerms_QueryPerformance(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping performance test in short mode")
-	}
-	db := tempDB(t)
-	idx := smallIndex(500)
-	if err := db.SaveIndex(idx); err != nil {
-		t.Fatalf("SaveIndex: %v", err)
-	}
-
-	start := time.Now()
-	_, err := db.SearchTerms([]string{"document", "topic"}, 10)
-	dur := time.Since(start)
-	if err != nil {
-		t.Fatalf("SearchTerms: %v", err)
-	}
-	t.Logf("SearchTerms (500 docs): %v", dur)
-	if dur > 100*time.Millisecond {
-		t.Errorf("SearchTerms took %v, want <100ms", dur)
-	}
-}
-
 func TestGetServices_ReturnsServiceNodes(t *testing.T) {
 	db := tempDB(t)
 	g := NewGraph()
@@ -766,16 +697,6 @@ func TestForeignKey_EdgeRequiresExistingNodes(t *testing.T) {
 		 VALUES ('e1', 'nonexistent_a', 'nonexistent_b', 'references', 1.0)`,
 	)
 	// Should fail due to foreign key constraint.
-	if err == nil {
-		t.Error("expected FK violation, got nil error")
-	}
-}
-
-func TestForeignKey_IndexEntryRequiresDocument(t *testing.T) {
-	db := tempDB(t)
-	_, err := db.conn.Exec(
-		`INSERT INTO index_entries (term, doc_id, frequency) VALUES ('word', 'ghost.md', 1)`,
-	)
 	if err == nil {
 		t.Error("expected FK violation, got nil error")
 	}
@@ -844,28 +765,26 @@ func TestConfidenceConstraint_OutOfRange(t *testing.T) {
 	}
 }
 
-// ─── RebuildIndex ─────────────────────────────────────────────────────────────
-
-func TestRebuildIndex_ReplacesPriorData(t *testing.T) {
+// TestSaveIndex_ReplacesPriorData verifies a second SaveIndex call with a
+// different-sized index replaces the documents table contents rather than
+// accumulating alongside the previous save (distinct from
+// TestSaveIndex_Idempotent, which re-saves the SAME index and only checks
+// the count stays stable — this checks an actual size change is reflected,
+// not just no duplication of identical rows).
+func TestSaveIndex_ReplacesPriorData(t *testing.T) {
 	db := tempDB(t)
 	idx := smallIndex(5)
 	if err := db.SaveIndex(idx); err != nil {
 		t.Fatalf("SaveIndex: %v", err)
 	}
 
-	// Build a larger replacement index.
 	idx2 := smallIndex(10)
-	if err := db.RebuildIndex(idx2); err != nil {
-		t.Fatalf("RebuildIndex: %v", err)
+	if err := db.SaveIndex(idx2); err != nil {
+		t.Fatalf("SaveIndex (replacement): %v", err)
 	}
 
-	// Reload and verify 10 docs.
-	idx3 := NewIndex()
-	if err := db.LoadIndex(idx3); err != nil {
-		t.Fatalf("LoadIndex after rebuild: %v", err)
-	}
-	if idx3.DocCount() != idx2.DocCount() {
-		t.Errorf("DocCount after rebuild: got %d, want %d", idx3.DocCount(), idx2.DocCount())
+	if got := docRowCount(t, db); got != idx2.DocCount() {
+		t.Errorf("documents row count after replacement save: got %d, want %d", got, idx2.DocCount())
 	}
 }
 
@@ -924,18 +843,16 @@ func TestIntegration_PersistenceWorkflow(t *testing.T) {
 		t.Fatalf("SaveGraph: %v", err)
 	}
 
-	// Reload.
-	idx2 := NewIndex()
-	if err := db.LoadIndex(idx2); err != nil {
-		t.Fatalf("LoadIndex: %v", err)
-	}
+	// Reload the graph (the index itself isn't persisted for reload — see
+	// the package doc comment — only documents/built_at for staleness
+	// detection, checked below via GetChanges).
 	g2 := NewGraph()
 	if err := db.LoadGraph(g2); err != nil {
 		t.Fatalf("LoadGraph: %v", err)
 	}
 
-	if idx2.DocCount() != idx.DocCount() {
-		t.Errorf("DocCount after reload: %d != %d", idx2.DocCount(), idx.DocCount())
+	if got := docRowCount(t, db); got != idx.DocCount() {
+		t.Errorf("documents row count after save: %d != %d", got, idx.DocCount())
 	}
 	if g2.NodeCount() != g.NodeCount() {
 		t.Errorf("NodeCount after reload: %d != %d", g2.NodeCount(), g.NodeCount())
@@ -1176,12 +1093,8 @@ func TestOpenOrBuildIndex_RefreshesStale(t *testing.T) {
 	defer db.Close()
 
 	// The rebuilt index should contain the new file.
-	idx := NewIndex()
-	if err := db.LoadIndex(idx); err != nil {
-		t.Fatalf("LoadIndex: %v", err)
-	}
-	if idx.DocCount() != 2 {
-		t.Errorf("DocCount after refresh: got %d, want 2", idx.DocCount())
+	if got := docRowCount(t, db); got != 2 {
+		t.Errorf("documents row count after refresh: got %d, want 2", got)
 	}
 }
 
@@ -1208,12 +1121,8 @@ func TestOpenOrBuildIndex_UsesCacheWhenFresh(t *testing.T) {
 	defer db.Close()
 
 	// Verify the index is still valid.
-	idx := NewIndex()
-	if err := db.LoadIndex(idx); err != nil {
-		t.Fatalf("LoadIndex: %v", err)
-	}
-	if idx.DocCount() != 1 {
-		t.Errorf("DocCount: got %d, want 1", idx.DocCount())
+	if got := docRowCount(t, db); got != 1 {
+		t.Errorf("documents row count: got %d, want 1", got)
 	}
 
 	// DB file should not have been rewritten (mtime unchanged or close).
