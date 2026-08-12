@@ -218,3 +218,114 @@ func TestKeyboardCursor_ScrollsCursorIntoView(t *testing.T) {
 		t.Errorf("expected cursor row %d to be within the visible viewport [%d, %d), got Offset=%d", v.cursorRow, v.Offset, v.Offset+contentHeight, v.Offset)
 	}
 }
+
+// TestVerticalNav_DownShowsAVisibleCursor is a regression test for user
+// feedback: pressing Up/Down (the natural first thing a keyboard user
+// tries) previously just adjusted v.Offset directly with no cursor at all
+// — Left/Right/Shift+arrows moved a cursor, but plain Down did not, so it
+// looked like "keyboard cursor support" didn't exist. Down (and every
+// other vertical-nav key) must now auto-initialize and move a real,
+// visible cursor via moveCursor/scrollCursorIntoView (cursor.go).
+func TestVerticalNav_DownShowsAVisibleCursor(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestFileViewer(t, dir, "a.md", "first\n\nsecond\n\nthird\n", 100, 24)
+
+	if v.hasCursor {
+		t.Fatal("test setup error: expected no cursor before any navigation")
+	}
+
+	m, _ := v.Update(keyType(tea.KeyDown))
+	v = m.(*Viewer)
+
+	if !v.hasCursor {
+		t.Fatal("expected Down to initialize and commit a visible cursor")
+	}
+	firstRow := lineContaining(t, v, "first")
+	if v.cursorRow != firstRow {
+		t.Errorf("expected cursor to land on the first real content line (row %d), got row %d", firstRow, v.cursorRow)
+	}
+}
+
+// TestVerticalNav_UpDownMoveCursorWithStickyColumn verifies repeated
+// Up/Down presses move the cursor row by row (not the old fixed
+// v.Offset+=1 scrolling) while preserving the column, matching normal
+// text-navigation behavior (and Shift+Up/Down's existing convention).
+func TestVerticalNav_UpDownMoveCursorWithStickyColumn(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestFileViewer(t, dir, "a.md", "first\n\nsecond\n\nthird\n", 100, 24)
+
+	secondRow := lineContaining(t, v, "second")
+	v.moveCursor(secondRow, 3, false)
+
+	m, _ := v.Update(keyType(tea.KeyDown))
+	v = m.(*Viewer)
+	thirdRow := lineContaining(t, v, "third")
+	if v.cursorRow != thirdRow {
+		t.Errorf("expected Down to move cursor to row %d, got %d", thirdRow, v.cursorRow)
+	}
+	if v.cursorCol != 3 {
+		t.Errorf("expected column 3 to stick across the Down move, got %d", v.cursorCol)
+	}
+
+	m, _ = v.Update(keyType(tea.KeyUp))
+	v = m.(*Viewer)
+	if v.cursorRow != secondRow || v.cursorCol != 3 {
+		t.Errorf("expected Up to return to (row=%d, col=3), got (row=%d, col=%d)", secondRow, v.cursorRow, v.cursorCol)
+	}
+}
+
+// TestVerticalNav_GAndEndMoveCursorToDocumentExtremes verifies the
+// top/bottom jump keys ('gg' and G/End) also move the visible cursor to
+// row 0 / the last row, not just v.Offset — otherwise the cursor would be
+// left behind at a stale row outside the new viewport after a jump.
+func TestVerticalNav_GAndEndMoveCursorToDocumentExtremes(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestFileViewer(t, dir, "a.md", "first\n\nsecond\n\nthird\n", 100, 24)
+
+	m, _ := v.Update(runeKey("G"))
+	v = m.(*Viewer)
+	if v.cursorRow != len(v.Lines)-1 {
+		t.Errorf("expected 'G' to move the cursor to the last document row (%d), got %d", len(v.Lines)-1, v.cursorRow)
+	}
+
+	// 'gg' double-tap.
+	m, _ = v.Update(runeKey("g"))
+	v = m.(*Viewer)
+	m, _ = v.Update(runeKey("g"))
+	v = m.(*Viewer)
+	if v.cursorRow != 0 {
+		t.Errorf("expected 'gg' to move the cursor to row 0, got %d", v.cursorRow)
+	}
+}
+
+// TestVerticalNav_RendersPreciseColumnMarkerNotWholeLineUnderline is a
+// regression test for the rendering half of the same feedback bug: the
+// committed cursor previously underlined the ENTIRE line ("\x1b[4m"), so
+// horizontal (Left/Right) movement within a row was completely invisible
+// — every column looked identical. It must now render a precise
+// reverse-video marker at the exact cursorCol, matching how the live
+// mouse-hover cursor already renders (insertCursorAtVisual).
+func TestVerticalNav_RendersPreciseColumnMarkerNotWholeLineUnderline(t *testing.T) {
+	dir := t.TempDir()
+	v := newTestFileViewer(t, dir, "a.md", "hello world\n", 100, 24)
+
+	row := lineContaining(t, v, "hello world")
+	plain := stripANSI(v.Lines[row])
+	col := strings.Index(plain, "world")
+	v.moveCursor(row, col, false)
+
+	out := v.View()
+	lines := strings.Split(out, "\n")
+	renderedRow := row - v.Offset + 1 // +1 for the header line
+	if renderedRow < 0 || renderedRow >= len(lines) {
+		t.Fatalf("cursor row not within rendered output (renderedRow=%d, len=%d)", renderedRow, len(lines))
+	}
+	cursorLine := lines[renderedRow]
+
+	if strings.Contains(cursorLine, "\x1b[4m") {
+		t.Errorf("expected no whole-line underline (\\x1b[4m) on the cursor line, got: %q", cursorLine)
+	}
+	if !strings.Contains(cursorLine, "\x1b[7mw\x1b[m") {
+		t.Errorf("expected a precise reverse-video marker on the 'w' of 'world' at the cursor column, got: %q", cursorLine)
+	}
+}

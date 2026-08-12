@@ -826,50 +826,60 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// ... other escape handling can go here
 
+		// Vertical navigation moves a visible cursor (auto-initializing one
+		// at the top of the viewport if none exists yet) rather than just
+		// scrolling blindly — the viewport follows the cursor via
+		// moveCursor/scrollCursorIntoView (cursor.go). Column is "sticky"
+		// (preserved across rows, clamped per-line), matching normal text
+		// navigation. This used to just adjust v.Offset directly with no
+		// visible cursor at all; that silently orphaned any cursor set by
+		// Left/Right or a mouse click (it fell out of the viewport with no
+		// indication anything had moved), and plain arrow-key users had no
+		// visible cursor at all — the natural first thing to try.
 		case "up", "k":
 			v.lastWasG = false
-			v.ClearSelection()
-			v.Offset = clamp(v.Offset-1, 0, v.maxOffset())
+			v.ensureCursorInitialized()
+			v.moveCursor(v.cursorRow-1, v.cursorCol, false)
 
 		case "down", "j":
 			v.lastWasG = false
-			v.ClearSelection()
-			v.Offset = clamp(v.Offset+1, 0, v.maxOffset())
+			v.ensureCursorInitialized()
+			v.moveCursor(v.cursorRow+1, v.cursorCol, false)
 
 		case "pgup":
 			v.lastWasG = false
-			v.ClearSelection()
-			v.Offset = clamp(v.Offset-v.Height, 0, v.maxOffset())
+			v.ensureCursorInitialized()
+			v.moveCursor(v.cursorRow-v.Height, v.cursorCol, false)
 
 		case "pgdown":
 			v.lastWasG = false
-			v.ClearSelection()
-			v.Offset = clamp(v.Offset+v.Height, 0, v.maxOffset())
+			v.ensureCursorInitialized()
+			v.moveCursor(v.cursorRow+v.Height, v.cursorCol, false)
 
 		case "ctrl+d":
-			// Ctrl+D: scroll down half-page (vim-style)
+			// Ctrl+D: cursor down half-page (vim-style)
 			v.lastWasG = false
-			v.ClearSelection()
+			v.ensureCursorInitialized()
 			halfPage := v.Height / 2
-			v.Offset = clamp(v.Offset+halfPage, 0, v.maxOffset())
+			v.moveCursor(v.cursorRow+halfPage, v.cursorCol, false)
 
 		case "ctrl+u":
-			// Ctrl+U: scroll up half-page (vim-style)
+			// Ctrl+U: cursor up half-page (vim-style)
 			v.lastWasG = false
-			v.ClearSelection()
+			v.ensureCursorInitialized()
 			halfPage := v.Height / 2
-			v.Offset = clamp(v.Offset-halfPage, 0, v.maxOffset())
+			v.moveCursor(v.cursorRow-halfPage, v.cursorCol, false)
 
 		case "home":
-			v.ClearSelection()
-			v.Offset = 0
+			v.ensureCursorInitialized()
+			v.moveCursor(0, 0, false)
 
 		case "g":
 			// Vim-style 'gg' for go to top: check if this is a double-tap within 500ms
 			if v.lastWasG && time.Since(v.lastGKeyTime) < 500*time.Millisecond {
 				// Double-tap: go to top
-				v.ClearSelection()
-				v.Offset = 0
+				v.ensureCursorInitialized()
+				v.moveCursor(0, 0, false)
 				v.lastWasG = false
 			} else {
 				// First tap: record this as a 'g' press
@@ -885,9 +895,9 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v, switchModeCmd(modeGraph, v.startDir)
 
 		case "end", "G":
-			v.ClearSelection()
 			v.lastWasG = false // Reset double-tap state
-			v.Offset = v.maxOffset()
+			v.ensureCursorInitialized()
+			v.moveCursor(len(v.Lines)-1, 0, false)
 
 		case "tab":
 			v.ClearSelection()
@@ -1461,10 +1471,10 @@ func (v Viewer) helpContent() []string {
 	}
 
 	return []string{
-		sectionLine("Scrolling"),
-		kv("↑/k  ↓/j", "Scroll up / down"),
-		kv("PgUp / PgDn", "Page up / down"),
-		kv("Ctrl+U / Ctrl+D", "Half-page up / down"),
+		sectionLine("Cursor & Scrolling"),
+		kv("↑/k  ↓/j", "Move cursor up / down"),
+		kv("PgUp / PgDn", "Move cursor a page up / down"),
+		kv("Ctrl+U / Ctrl+D", "Move cursor a half-page up / down"),
 		kv("g g", "Jump to top (double-tap g)"),
 		kv("Home / End", "Jump to top / bottom"),
 		sectionSep(),
@@ -1513,7 +1523,7 @@ func (v Viewer) helpContent() []string {
 		kv("t / Ctrl+T", "Select theme"),
 		kv("Ctrl+W", "Word count (Esc closes)"),
 		sectionSep(),
-		sectionLine("Cursor, Selection & Copy"),
+		sectionLine("Selection & Copy"),
 		kv("Click", "Move cursor / follow link"),
 		kv("←/→", "Move cursor (wraps across lines)"),
 		kv("Shift+←/→", "Select text"),
@@ -2163,8 +2173,16 @@ func (v Viewer) View() string {
 					// Link focus takes priority over other cursor indicators.
 					sb.WriteString("\x1b[7m" + wrappedLine + "\x1b[m")
 				} else if v.hasCursor && docLine == v.cursorRow {
-					// Committed cursor (MOUSE-02): underline the clicked line.
-					sb.WriteString("\x1b[4m" + wrappedLine + "\x1b[m")
+					// Committed cursor (mouse click or keyboard Left/Right/
+					// Up/Down/etc, cursor.go): reverse-video the exact
+					// character at cursorCol, matching the live mouse-hover
+					// marker below. This used to underline the WHOLE line
+					// instead (MOUSE-02) — that gave no visual feedback at
+					// all for horizontal movement, since every column on
+					// the same row looked identical; a keyboard user moving
+					// the cursor with Left/Right couldn't see it move at
+					// all until it crossed onto a different row.
+					sb.WriteString(insertCursorAtVisual(wrappedLine, v.cursorCol))
 				} else {
 					// Mouse hover cursor (MOUSE-01): reverse-video the character at mouse position.
 					// v.mouseRow is 0-based screen row; Y=0 is header, Y=1 is first content row.
