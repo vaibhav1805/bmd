@@ -410,8 +410,11 @@ func (v *Viewer) UpdateTheme(newTheme theme.Theme, themeName theme.ThemeName) {
 	// Rebuild the link registry for the new rendering
 	v.links = BuildRegistry(v.rawLines)
 
-	// Persist the theme preference to config
-	cfg := config.Config{Theme: string(themeName)}
+	// Persist the theme preference to config. Load first (not a fresh
+	// Config{}) so other persisted settings (auto-save, vim keybindings)
+	// aren't wiped back to zero values by this save.
+	cfg, _ := config.Load()
+	cfg.Theme = string(themeName)
 	_ = cfg.Save() // ignore errors; theme selection still applies even if save fails
 }
 
