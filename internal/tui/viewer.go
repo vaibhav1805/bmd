@@ -143,6 +143,16 @@ type Viewer struct {
 	replaceMode  bool         // true when find/replace prompt is open
 	replaceState ReplaceState // find/replace query, options, and match state
 
+	// Vim keybindings in edit mode (opt-in via config, toggled with Ctrl+Shift+V)
+	vimEnabled          bool     // mirrors config.VimKeybindings; when false, edit mode behaves exactly as before this feature
+	vimMode             vimModeT // current vim sub-mode (normal/insert/visual/visualLine); only meaningful while editMode && vimEnabled
+	vimPendingCount     string   // digits accumulated for a count prefix (e.g. "3" in "3dd")
+	vimPendingOperator  rune     // 0, or 'd'/'y'/'c' awaiting a motion
+	vimPendingG         bool     // true after a lone 'g', awaiting the second key of "gg"
+	vimVisualAnchor     [2]int   // [line, col] where visual mode was entered
+	vimRegister         string   // unnamed register: last yanked/deleted text
+	vimRegisterLinewise bool     // true when vimRegister holds whole lines (yy/dd) rather than a charwise span
+
 	// Double-tap detection for vim 'gg' (go to top)
 	lastGKeyTime time.Time // time of last 'g' keypress for double-tap detection
 	lastWasG     bool      // true if previous key was 'g' (for vim 'gg' detection)
@@ -273,6 +283,7 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer 
 		virtualMode:      len(lines) > virtualThreshold,
 		autoSaveEnabled:  cfg.AutoSaveEnabled,
 		autoSavePath:     autoSaveFilePath(absPath),
+		vimEnabled:       cfg.VimKeybindings,
 	}
 
 	// Prime the live-reload watcher (RELOAD-01): this entry point sets
@@ -298,6 +309,8 @@ func NewDirectoryViewer(dirPath string, th theme.Theme, width int) *Viewer {
 	sh := search.NewSearchHistory(search.DefaultHistoryPath())
 	_ = sh.Load()
 
+	cfg, _ := config.Load()
+
 	v := &Viewer{
 		Doc:              doc,
 		Height:           24,
@@ -312,6 +325,7 @@ func NewDirectoryViewer(dirPath string, th theme.Theme, width int) *Viewer {
 		themeDialog:      NewThemeDialog(theme.ThemeDefault),
 		currentThemeName: theme.ThemeDefault,
 		currentView:      "directory",
+		vimEnabled:       cfg.VimKeybindings,
 	}
 	if dm, err := NewDirectoryModel(dirPath, th, width, v.Height); err == nil {
 		v.activeChild = dm
@@ -777,6 +791,10 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.searchInput = ""
 				v.isSelecting = false
 				v.selectedText = ""
+				v.vimMode = vimModeNormal
+				v.vimPendingCount = ""
+				v.vimPendingOperator = 0
+				v.vimPendingG = false
 			}
 			return v, nil
 
@@ -1032,6 +1050,30 @@ func (v *Viewer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.errorMsg = "Line numbers: ON"
 			} else {
 				v.errorMsg = "Line numbers: OFF"
+			}
+			return v, clearErrorAfter(statusTimeout)
+
+		case "v":
+			// v: toggle vim keybindings in edit mode, persisted to config.
+			// Not bound as Ctrl+Shift+V: bubbletea (as vendored here) only
+			// distinguishes modifier combos it has a dedicated KeyType for
+			// (e.g. KeyCtrlS) -- there is no Kitty-keyboard-protocol style
+			// modifier reporting, so a "ctrl+shift+<letter>" string match
+			// (see the line-numbers toggle above) can never actually match
+			// a real keypress. A plain letter in read mode is guaranteed
+			// reachable and was otherwise unbound.
+			v.vimEnabled = !v.vimEnabled
+			cfg, _ := config.Load()
+			cfg.VimKeybindings = v.vimEnabled
+			_ = cfg.Save() // ignore errors; toggle still applies for this session even if save fails
+			if v.vimEnabled {
+				v.vimMode = vimModeNormal
+				v.vimPendingCount = ""
+				v.vimPendingOperator = 0
+				v.vimPendingG = false
+				v.errorMsg = "Vim keybindings: ON"
+			} else {
+				v.errorMsg = "Vim keybindings: OFF"
 			}
 			return v, clearErrorAfter(statusTimeout)
 
@@ -1504,6 +1546,7 @@ func (v Viewer) helpContent() []string {
 		kv("b", "File browser (split pane)"),
 		kv("B", "Directory browser (full)"),
 		kv("Ctrl+Shift+L", "Toggle line numbers"),
+		kv("v", "Toggle vim keybindings (edit mode)"),
 		kv("Ctrl+G", "Open dependency graph"),
 		sectionSep(),
 		sectionLine("File Browser Split (b)"),

@@ -31,6 +31,7 @@ type Config struct {
 	Theme            string        `json:"theme"`              // ThemeName as string
 	AutoSaveEnabled  bool          `json:"auto_save_enabled"`  // whether auto-save is active while editing
 	AutoSaveInterval time.Duration `json:"auto_save_interval"` // interval between auto-saves (e.g. 30s)
+	VimKeybindings   bool          `json:"vim_keybindings"`    // whether edit mode uses vim modal keybindings
 }
 
 // DefaultConfig returns a new Config with sensible defaults.
@@ -39,6 +40,7 @@ func DefaultConfig() Config {
 		Theme:            string(theme.ThemeDefault),
 		AutoSaveEnabled:  true,
 		AutoSaveInterval: 30 * time.Second,
+		VimKeybindings:   false,
 	}
 }
 
