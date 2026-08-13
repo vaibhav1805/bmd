@@ -55,6 +55,54 @@ type GraphModel struct {
 	// invisible) behavior byte-for-byte rather than introducing a new,
 	// previously-absent status display.
 	errorMsg string
+
+	// edgeCycle tracks repeated Left/Right presses so they actually cycle
+	// through every incoming/outgoing edge of a node instead of always
+	// landing on index 0 (see the case "left"/"right" doc comments below).
+	edgeCycle edgeCycleState
+}
+
+// edgeCycleState remembers the node a run of same-direction Left/Right
+// presses is cycling the edges OF, so repeated presses keep stepping
+// through that SAME node's sibling edges (0, 1, 2, ..., wrapping) instead
+// of drifting to whatever node the previous press happened to land on --
+// which would immediately dead-end on that node's own (usually shorter, or
+// empty) edge list after just one press. Any navigation that isn't a
+// same-direction repeat (a direction change, or Up/Down/Enter) resets it
+// via reset(), so the next Left/Right starts a fresh cycle from index 0 of
+// whatever node is newly selected.
+type edgeCycleState struct {
+	dir        string // "left" or "right"; "" means no active cycle
+	sourceNode string // the node whose edge list this run is cycling through
+	idx        int    // last index used into that node's incoming/outgoing edge list
+}
+
+// reset clears the cycle, so the next Left/Right press starts fresh from
+// index 0 of whatever node is currently selected.
+func (c *edgeCycleState) reset() { *c = edgeCycleState{} }
+
+// source returns the node whose edge list a press of dir should query:
+// the node this run has been cycling through if it's a same-direction
+// continuation, otherwise selected (starting a fresh cycle there).
+func (c *edgeCycleState) source(dir, selected string) string {
+	if c.dir == dir {
+		return c.sourceNode
+	}
+	return selected
+}
+
+// advance returns the edge index to use for this press (0 if starting a
+// fresh cycle, otherwise the next index into source's edge list, wrapping
+// at length) and records it so the *following* press continues correctly.
+func (c *edgeCycleState) advance(dir, source string, length int) int {
+	idx := 0
+	if c.dir == dir && c.sourceNode == source {
+		idx = (c.idx + 1) % length
+	}
+	c.dir = dir
+	c.sourceNode = source
+	c.idx = idx
+	return idx
 }
 
 // NewGraphModel loads the Phase 6 knowledge graph from rootPath's
@@ -178,6 +226,7 @@ func (m *GraphModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// browses every document by importance, Left/Right follows this specific
 	// document's real links.
 	case "up", "k":
+		m.edgeCycle.reset() // Up/Down browses a different list entirely; a later Left/Right should start fresh
 		order := m.state.NodeOrder
 		if len(order) > 0 {
 			idx := graphIndexOfNode(order, m.state.SelectedNodeID)
@@ -191,6 +240,7 @@ func (m *GraphModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "down", "j":
+		m.edgeCycle.reset()
 		order := m.state.NodeOrder
 		if len(order) > 0 {
 			idx := graphIndexOfNode(order, m.state.SelectedNodeID)
@@ -204,21 +254,34 @@ func (m *GraphModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "left":
-		// Cycle to previous parent
+		// Step to a parent (incoming dependency). A node can have several;
+		// repeated Left presses (without any other navigation in between)
+		// cycle through all of them -- via edgeCycle, which keeps stepping
+		// through the ORIGINAL node's incoming list -- rather than landing
+		// on the same first one every time and getting stuck once that
+		// parent itself has no further incoming edges (the previous
+		// behavior: it always re-read GetIncoming(SelectedNodeID), and
+		// SelectedNodeID had already moved to the target of the last jump).
 		if m.state.Graph != nil && m.state.SelectedNodeID != "" {
-			incoming := m.state.Graph.GetIncoming(m.state.SelectedNodeID)
+			source := m.edgeCycle.source("left", m.state.SelectedNodeID)
+			incoming := m.state.Graph.GetIncoming(source)
 			if len(incoming) > 0 {
-				m.state.SelectedNodeID = incoming[0].Source
+				idx := m.edgeCycle.advance("left", source, len(incoming))
+				m.state.SelectedNodeID = incoming[idx].Source
 			}
 		}
 		return m, nil
 
 	case "right":
-		// Cycle to next child
+		// Step to a child (outgoing dependency); see the "left" case above
+		// for why this cycles through the original node's outgoing list via
+		// edgeCycle instead of always re-picking the first.
 		if m.state.Graph != nil && m.state.SelectedNodeID != "" {
-			outgoing := m.state.Graph.GetOutgoing(m.state.SelectedNodeID)
+			source := m.edgeCycle.source("right", m.state.SelectedNodeID)
+			outgoing := m.state.Graph.GetOutgoing(source)
 			if len(outgoing) > 0 {
-				m.state.SelectedNodeID = outgoing[0].Target
+				idx := m.edgeCycle.advance("right", source, len(outgoing))
+				m.state.SelectedNodeID = outgoing[idx].Target
 			}
 		}
 		return m, nil

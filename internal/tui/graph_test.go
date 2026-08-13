@@ -473,6 +473,83 @@ func TestGraphModelUpdate_LeftNavigatesParent(t *testing.T) {
 	}
 }
 
+// TestGraphModelUpdate_RightCyclesThroughAllChildren is a regression test:
+// Right used to always jump to GetOutgoing(SelectedNodeID)[0], so a node
+// with several children was only ever reachable via the first, and once
+// you landed on a leaf (no outgoing edges of its own) Right became a
+// permanent no-op -- there was no way to reach the other children at all.
+// Repeated Right presses (with nothing else in between) must now cycle
+// through every child of the node the run STARTED from, wrapping around,
+// rather than re-deriving the list from wherever the last press landed.
+func TestGraphModelUpdate_RightCyclesThroughAllChildren(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"}, // leaf: no outgoing edges of its own
+		{ID: "c.md", Title: "C", Type: "document"},
+		{ID: "d.md", Title: "D", Type: "document"},
+	}, []knowledge.Edge{
+		*makeEdge("a.md", "b.md"),
+		*makeEdge("a.md", "c.md"),
+		*makeEdge("a.md", "d.md"),
+	})
+	m.state.SelectedNodeID = "a.md"
+
+	seen := map[string]bool{}
+	for i := 0; i < 3; i++ {
+		model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m = model.(*GraphModel)
+		seen[m.state.SelectedNodeID] = true
+	}
+	for _, want := range []string{"b.md", "c.md", "d.md"} {
+		if !seen[want] {
+			t.Errorf("expected 3 presses of Right to reach all of a.md's children, never reached %q (saw %v)", want, seen)
+		}
+	}
+
+	// A 4th press wraps back to the first child rather than getting stuck
+	// (b.md is a leaf -- the pre-fix code would silently no-op here).
+	before := m.state.SelectedNodeID
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = model.(*GraphModel)
+	if m.state.SelectedNodeID == before {
+		t.Errorf("expected the 4th Right press to wrap to a different child, stayed on %q", before)
+	}
+}
+
+// TestGraphModelUpdate_UpResetsRightCycle verifies any other navigation
+// (Up/Down) in between Right presses starts a fresh cycle on the newly
+// selected node instead of continuing the old one -- otherwise Right could
+// index into a totally unrelated node's (possibly shorter) edge list using
+// a stale index left over from a previous node.
+func TestGraphModelUpdate_UpResetsRightCycle(t *testing.T) {
+	m := newTestGraphModel(120, 40, []knowledge.Node{
+		{ID: "a.md", Title: "A", Type: "document"},
+		{ID: "b.md", Title: "B", Type: "document"},
+		{ID: "c.md", Title: "C", Type: "document"},
+		{ID: "other.md", Title: "Other", Type: "document"},
+	}, []knowledge.Edge{
+		*makeEdge("a.md", "b.md"),
+		*makeEdge("a.md", "c.md"),
+	})
+	m.state.SelectedNodeID = "a.md"
+
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight}) // a.md -> b.md (idx 0)
+	m = model.(*GraphModel)
+	if m.state.SelectedNodeID != "b.md" {
+		t.Fatalf("expected b.md after first Right, got %q", m.state.SelectedNodeID)
+	}
+
+	model, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp}) // any other navigation
+	m = model.(*GraphModel)
+	m.state.SelectedNodeID = "a.md" // put it back on a.md regardless of NodeOrder specifics
+
+	model, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight}) // must restart at idx 0, not continue at idx 1
+	m = model.(*GraphModel)
+	if m.state.SelectedNodeID != "b.md" {
+		t.Errorf("expected Right after Up to restart the cycle at b.md, got %q", m.state.SelectedNodeID)
+	}
+}
+
 // --- GraphModel.View() tests --------------------------------------------------
 
 // TestGraphModelView_ShowsHeader renders the graph view header.
