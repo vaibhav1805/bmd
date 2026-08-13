@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,16 +61,35 @@ func newTestGraphModel(width, height int, nodes []knowledge.Node, edges []knowle
 // buildTestKnowledgeDB creates a knowledge.db at dir's default DB path
 // (.bmd/knowledge.db, matching `bmd index`'s and cross-search's convention)
 // containing g, for exercising NewGraphModel's real synchronous SQLite-read
-// constructor path (Pitfall 3) without requiring `bmd index`.
+// constructor path (Pitfall 3).
+//
+// NewGraphModel now opens the DB via knowledge.OpenOrBuildIndex (matching
+// cross-search's auto-build behavior -- see the graph.go doc comment), which
+// runs IsIndexStale against the real directory contents. A DB populated with
+// a synthetic graph and no matching files on disk is always "stale" (the
+// deleted-files check in IsIndexStale flags every node with no matching
+// file), so it gets silently rebuilt from the (empty) directory, discarding
+// the fixture. To keep exercising the real read path, this writes one real
+// .md file per node in g (titled with the node's Title) and lets
+// knowledge.CmdIndex build a genuinely fresh, non-stale index from them --
+// the same code OpenOrBuildIndex itself calls on a cold cache.
 func buildTestKnowledgeDB(t *testing.T, dir string, g *knowledge.Graph) {
 	t.Helper()
-	db, err := knowledge.OpenDB(knowledge.DefaultDBPath(dir))
-	if err != nil {
-		t.Fatalf("OpenDB: %v", err)
+	for id, n := range g.Nodes {
+		path := filepath.Join(dir, id)
+		if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
+			t.Fatalf("MkdirAll(%s): %v", filepath.Dir(path), mkErr)
+		}
+		title := n.Title
+		if title == "" {
+			title = id
+		}
+		if err := os.WriteFile(path, []byte("# "+title+"\n"), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s): %v", path, err)
+		}
 	}
-	defer db.Close()
-	if err := db.SaveGraph(g); err != nil {
-		t.Fatalf("SaveGraph: %v", err)
+	if err := knowledge.CmdIndex([]string{"--dir", dir}); err != nil {
+		t.Fatalf("CmdIndex: %v", err)
 	}
 }
 
@@ -180,6 +200,42 @@ func TestGraphIndexOfNode_Empty(t *testing.T) {
 }
 
 // --- NewGraphModel — synchronous construction (Pitfall 3, ARCH-04) ----------
+
+// TestNewGraphModel_AutoBuildsIndexWhenMissing is a regression test: opening
+// the graph view (Ctrl+G) on a directory that has real markdown files but no
+// .bmd/knowledge.db yet used to fail with "Graph load error" -- NewGraphModel
+// called knowledge.OpenDB directly, unlike cross-search's SearchAllDocuments,
+// which auto-builds via OpenOrBuildIndex on a cold cache. A first-time user
+// who pressed Ctrl+G before ever searching or running `bmd index` hit a
+// confusing error for no good reason. NewGraphModel now goes through
+// OpenOrBuildIndex too, so this must succeed with no pre-existing index at
+// all, exactly like cross-search already does.
+func TestNewGraphModel_AutoBuildsIndexWhenMissing(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("# A\n\n[link to b](b.md)\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile a.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.md"), []byte("# B\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile b.md: %v", err)
+	}
+	if _, err := os.Stat(knowledge.DefaultDBPath(dir)); !os.IsNotExist(err) {
+		t.Fatalf("test setup bug: expected no pre-existing index, stat err = %v", err)
+	}
+
+	m, err := NewGraphModel(dir, theme.NewTheme(), 120, 40)
+	if err != nil {
+		t.Fatalf("NewGraphModel should auto-build the index instead of erroring, got: %v", err)
+	}
+	if !m.state.Loaded || m.state.Graph == nil {
+		t.Fatal("expected graph to be loaded after auto-build")
+	}
+	if len(m.state.NodeOrder) != 2 {
+		t.Errorf("expected 2 nodes in NodeOrder after auto-build, got %d", len(m.state.NodeOrder))
+	}
+	if _, err := os.Stat(knowledge.DefaultDBPath(dir)); err != nil {
+		t.Errorf("expected knowledge.db to have been created by auto-build: %v", err)
+	}
+}
 
 // TestNewGraphModel_LoadsSynchronously verifies the graph, NodeOrder, and a
 // default selection are all populated by the time NewGraphModel returns —
@@ -492,5 +548,61 @@ func TestGraphModelView_LockedBaselineLiterals(t *testing.T) {
 	}
 	if strings.Contains(out, "Zoom") {
 		t.Errorf("expected no zoom hint in footer (feature removed, was never wired to rendering), got: %q", out)
+	}
+}
+
+// --- suppressStderrDuring ----------------------------------------------------
+
+// TestSuppressStderrDuring_RedirectsAndRestores verifies stderr writes made
+// inside fn don't reach the real os.Stderr, and that the original
+// os.Stderr is restored afterward regardless.
+func TestSuppressStderrDuring_RedirectsAndRestores(t *testing.T) {
+	realStderr := os.Stderr
+	defer func() { os.Stderr = realStderr }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stderr = w // simulate "the real terminal" for this test
+
+	var duringStderr *os.File
+	ran := false
+	suppressStderrDuring(func() {
+		ran = true
+		duringStderr = os.Stderr
+		fmt.Fprintln(os.Stderr, "this must not reach the pipe")
+	})
+
+	if !ran {
+		t.Fatal("expected fn to run")
+	}
+	if os.Stderr != w {
+		t.Errorf("expected os.Stderr restored to the pre-call value after return")
+	}
+	if duringStderr == w {
+		t.Errorf("expected os.Stderr to be redirected away from the real stream during fn")
+	}
+
+	w.Close()
+	buf := make([]byte, 64)
+	n, _ := r.Read(buf)
+	if n != 0 {
+		t.Errorf("expected nothing written to the original stream, got %q", string(buf[:n]))
+	}
+	r.Close()
+}
+
+// TestSuppressStderrDuring_PropagatesResultsViaClosure verifies the
+// closure-capture pattern callers use (var + assign inside fn) actually
+// carries results out, since suppressStderrDuring itself has no return
+// value.
+func TestSuppressStderrDuring_PropagatesResultsViaClosure(t *testing.T) {
+	var got int
+	suppressStderrDuring(func() {
+		got = 42
+	})
+	if got != 42 {
+		t.Errorf("expected closure-captured result 42, got %d", got)
 	}
 }

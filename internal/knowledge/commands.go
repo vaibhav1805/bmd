@@ -283,7 +283,7 @@ func CmdQuery(args []string) error {
 	}
 
 	dbPath := DefaultDBPath(absDir)
-	db, err := openOrBuildIndex(absDir, dbPath)
+	db, err := OpenOrBuildIndex(absDir, dbPath)
 	if err != nil {
 		if isJSON {
 			fmt.Println(marshalContract(NewErrorResponse(classifyIndexError(err), err.Error())))
@@ -388,7 +388,7 @@ func CmdGraph(args []string) error {
 	}
 
 	dbPath := DefaultDBPath(absDir)
-	db, err := openOrBuildIndex(absDir, dbPath)
+	db, err := OpenOrBuildIndex(absDir, dbPath)
 	if err != nil {
 		if isJSON {
 			fmt.Println(marshalContract(NewErrorResponse(classifyIndexError(err), err.Error())))
@@ -546,13 +546,13 @@ func DefaultDBPath(dir string) string {
 	return filepath.Join(dir, ".bmd", "knowledge.db")
 }
 
-// openOrBuildIndex opens an existing database at dbPath, or if one does not
+// OpenOrBuildIndex opens an existing database at dbPath, or if one does not
 // exist, tries to build it from the directory at absDir.
 //
 // When the database exists, it checks whether the index is stale (any markdown
 // file modified, added, or removed since the last build) and silently rebuilds
 // if needed.  Old databases without a built_at timestamp are also rebuilt.
-func openOrBuildIndex(absDir, dbPath string) (*Database, error) {
+func OpenOrBuildIndex(absDir, dbPath string) (*Database, error) {
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		// Auto-build index if database doesn't exist.
 		fmt.Fprintln(os.Stderr, "No index found, building...")
@@ -659,7 +659,7 @@ func watchAndRebuild(a *IndexArgs, absDir string, initialDocs []Document) error 
 	}
 }
 
-// classifyIndexError maps an openOrBuildIndex error to the appropriate ErrCode*
+// classifyIndexError maps an OpenOrBuildIndex error to the appropriate ErrCode*
 // constant.  Errors mentioning "no index" or "index not found" become
 // ErrCodeIndexNotFound; everything else becomes ErrCodeInternalError.
 func classifyIndexError(err error) string {

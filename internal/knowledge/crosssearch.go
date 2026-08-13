@@ -103,7 +103,7 @@ func collapseWhitespace(s string) string {
 }
 
 // SearchAllDocuments builds a BM25 index by scanning rootPath (auto-building
-// the SQLite-backed graph/staleness cache via openOrBuildIndex if needed) and
+// the SQLite-backed graph/staleness cache via OpenOrBuildIndex if needed) and
 // executes a full-text search across all indexed markdown files.
 //
 // The database only stores document metadata, not full content, so search
@@ -121,7 +121,7 @@ func SearchAllDocuments(rootPath, query string, topK int) ([]SearchResult, error
 	}
 
 	dbPath := DefaultDBPath(rootPath)
-	db, err := openOrBuildIndex(rootPath, dbPath)
+	db, err := OpenOrBuildIndex(rootPath, dbPath)
 	if err != nil {
 		return nil, err
 	}

@@ -418,7 +418,16 @@ func stripANSIForLen(s string) string {
 // files in the model's rootPath. Returns the results, the strategy string
 // (always "bm25" — kept for display and to leave room for a future
 // strategy), and any error.
+//
+// SearchAllDocuments auto-builds the index on a cold or stale cache (see
+// knowledge.OpenOrBuildIndex), which logs progress to os.Stderr -- run
+// through suppressStderrDuring (graph.go) so that doesn't risk corrupting
+// the terminal the same way it did for the graph view before that fix.
 func (m *CrossSearchModel) SearchAllFiles(query string) ([]knowledge.SearchResult, string, error) {
-	results, err := knowledge.SearchAllDocuments(m.rootPath, query, 50)
+	var results []knowledge.SearchResult
+	var err error
+	suppressStderrDuring(func() {
+		results, err = knowledge.SearchAllDocuments(m.rootPath, query, 50)
+	})
 	return results, "bm25", err
 }

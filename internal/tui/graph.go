@@ -62,10 +62,18 @@ type GraphModel struct {
 // NodeOrder, returning a fully ready-to-render GraphModel. This is
 // deliberately NOT deferred into Init() (Pitfall 3): deferring the load would
 // introduce a one-frame empty-graph flash and goroutine-timing test flakes.
+// Auto-builds (or refreshes a stale) index via OpenOrBuildIndex the same way
+// cross-search's SearchAllDocuments does, so opening the graph view before
+// ever indexing or searching doesn't dead-end on a "Graph load error" --
+// it just builds on first use instead, like the rest of bmd.
 // Returns (nil, err) if the graph cannot be loaded.
 func NewGraphModel(rootPath string, th theme.Theme, width, height int) (*GraphModel, error) {
 	dbPath := knowledge.DefaultDBPath(rootPath)
-	db, err := knowledge.OpenDB(dbPath)
+	var db *knowledge.Database
+	var err error
+	suppressStderrDuring(func() {
+		db, err = knowledge.OpenOrBuildIndex(rootPath, dbPath)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("open knowledge db: %w", err)
 	}
@@ -106,6 +114,39 @@ func NewGraphModel(rootPath string, th theme.Theme, width, height int) (*GraphMo
 	}
 
 	return m, nil
+}
+
+// suppressStderrDuring runs fn with the process's os.Stderr temporarily
+// redirected to /dev/null, restoring it afterward. knowledge.CmdIndex (run
+// via OpenOrBuildIndex on a cold or stale cache) was written for CLI use and
+// always logs its progress ("Indexing...", "N files scanned", "Index saved
+// to...") straight to os.Stderr. When that happens synchronously from
+// inside an active bubbletea Update() call -- as both NewGraphModel and
+// cross-search's SearchAllFiles do -- those raw writes bypass bubbletea's
+// managed screen buffer entirely and can leave stray text permanently baked
+// into the terminal, since bubbletea's differential rendering only
+// repaints rows it thinks changed and may never touch the ones a stray
+// write landed on. Confirmed via manual testing: opening the graph view on
+// a directory with no existing index visibly corrupted the status line,
+// persisting across further redraws until enough on-screen content changed
+// to happen to overwrite those exact rows.
+//
+// Swapping the package-level os.Stderr var is safe here specifically
+// because it's called only from the single goroutine handling bubbletea's
+// Update() loop, and bmd's TUI has no other goroutine that writes to
+// stderr concurrently (its only other stderr use, clipboard.go's OSC52
+// sequence, runs on that same goroutine too).
+func suppressStderrDuring(fn func()) {
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		fn() // can't suppress; run normally rather than skipping the call
+		return
+	}
+	defer devNull.Close()
+	orig := os.Stderr
+	os.Stderr = devNull
+	defer func() { os.Stderr = orig }()
+	fn()
 }
 
 // Init satisfies tea.Model. The graph is already loaded synchronously by

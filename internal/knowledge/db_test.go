@@ -1085,10 +1085,10 @@ func TestOpenOrBuildIndex_RefreshesStale(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	writeFile(t, filepath.Join(dir, "new.md"), "# Kubernetes\nKubernetes deployment guide")
 
-	// openOrBuildIndex should detect staleness and rebuild.
-	db, err := openOrBuildIndex(dir, dbPath)
+	// OpenOrBuildIndex should detect staleness and rebuild.
+	db, err := OpenOrBuildIndex(dir, dbPath)
 	if err != nil {
-		t.Fatalf("openOrBuildIndex: %v", err)
+		t.Fatalf("OpenOrBuildIndex: %v", err)
 	}
 	defer db.Close()
 
@@ -1114,9 +1114,9 @@ func TestOpenOrBuildIndex_UsesCacheWhenFresh(t *testing.T) {
 	}
 
 	// Open without changes — should use cache (no rebuild).
-	db, err := openOrBuildIndex(dir, dbPath)
+	db, err := OpenOrBuildIndex(dir, dbPath)
 	if err != nil {
-		t.Fatalf("openOrBuildIndex: %v", err)
+		t.Fatalf("OpenOrBuildIndex: %v", err)
 	}
 	defer db.Close()
 
