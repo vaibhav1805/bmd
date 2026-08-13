@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# BMD (Beast Markdown Document) Installer
+# BMD (Beautiful Markdowns) Installer
 # This script detects your OS/architecture and downloads the latest bmd binary
 # Installation: curl -fsSL https://github.com/vaibhav1805/bmd/releases/latest/download/install.sh | bash
 
@@ -17,7 +17,10 @@ REPO="vaibhav1805/bmd"
 GITHUB_API="https://api.github.com/repos/${REPO}/releases"
 INSTALL_PREFIX="${HOME}/.local/bin"
 BINARY_NAME="bmd"
-PAGEINDEX_URL="https://raw.githubusercontent.com/${REPO}/main/bin/pageindex.py"
+# bmd's config file: $XDG_CONFIG_HOME/bmd/config.json if set, else ~/.config/bmd/config.json
+# (matches internal/config/config.go -- no Windows/%APPDATA% special-casing there).
+CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/bmd"
+CONFIG_FILE="${CONFIG_DIR}/config.json"
 
 # Detect OS and Architecture
 detect_platform() {
@@ -104,40 +107,66 @@ download_binary() {
     echo -e "${GREEN}Downloaded to: ${target}${NC}"
 }
 
-# Check if Python 3 is available
-check_python3() {
-    if ! command -v python3 &> /dev/null; then
-        echo -e "${YELLOW}Warning: Python 3 not found${NC}" >&2
-        echo -e "${YELLOW}  pageindex (semantic search) requires Python 3.6+${NC}" >&2
-        echo -e "${YELLOW}  Install with: brew install python3 (macOS) or apt install python3 (Linux)${NC}" >&2
-        return 1
+# Detect vim/nvim and enable bmd's opt-in vim keybindings (edit mode) by
+# default if found -- someone with vim already on their system is exactly
+# who wants modal editing instead of bmd's plain modeless editor. Off by
+# default otherwise. Never prompts (this script runs non-interactively via
+# curl | bash), and never blindly overwrites an existing config file --
+# only ever sets the one key, preserving theme/autosave/etc, mirroring the
+# load-then-save discipline internal/config's own callers use.
+configure_vim_keybindings() {
+    local vim_found=""
+    if command -v vim &> /dev/null; then
+        vim_found="vim"
+    elif command -v nvim &> /dev/null; then
+        vim_found="nvim"
     fi
 
-    local python_version
-    python_version=$(python3 --version 2>&1 | awk '{print $2}')
-    echo -e "${GREEN}✓ Python 3 (${python_version}) available${NC}"
-    return 0
+    if [ -z "$vim_found" ]; then
+        return 0
+    fi
+
+    echo ""
+    echo -e "${GREEN}✓ Detected ${vim_found} on this system${NC}"
+
+    mkdir -p "$CONFIG_DIR"
+
+    if [ ! -f "$CONFIG_FILE" ]; then
+        # No config yet: write one with bmd's own defaults, vim keybindings on.
+        cat > "$CONFIG_FILE" <<JSONEOF
+{
+  "theme": "default",
+  "auto_save_enabled": true,
+  "auto_save_interval": 30000000000,
+  "vim_keybindings": true
 }
-
-# Download and install pageindex wrapper script
-install_pageindex() {
-    local pageindex_path="${INSTALL_PREFIX}/pageindex"
-
-    echo -e "${YELLOW}Installing pageindex wrapper script...${NC}"
-
-    # Check for Python 3 first
-    if ! check_python3; then
-        echo -e "${YELLOW}  Skipping pageindex installation (optional)${NC}"
+JSONEOF
+        echo -e "${GREEN}✓ Enabled vim keybindings by default (${CONFIG_FILE})${NC}"
+    elif command -v jq &> /dev/null; then
+        if jq -e '.vim_keybindings == true' "$CONFIG_FILE" &> /dev/null; then
+            echo -e "${GREEN}✓ Vim keybindings already enabled in ${CONFIG_FILE}${NC}"
+            echo -e "${YELLOW}  (toggle anytime inside bmd by pressing 'v' in the file view)${NC}"
+            return 0
+        fi
+        local tmp_file
+        tmp_file=$(mktemp)
+        if jq '.vim_keybindings = true' "$CONFIG_FILE" > "$tmp_file" 2>/dev/null; then
+            mv "$tmp_file" "$CONFIG_FILE"
+            echo -e "${GREEN}✓ Enabled vim keybindings in existing config: ${CONFIG_FILE}${NC}"
+        else
+            rm -f "$tmp_file"
+            echo -e "${YELLOW}Note: ${CONFIG_FILE} exists but couldn't be parsed as JSON -- leaving it untouched.${NC}" >&2
+            echo -e "${YELLOW}  Press 'v' inside bmd to enable vim keybindings instead.${NC}" >&2
+            return 0
+        fi
+    else
+        echo -e "${YELLOW}Note: ${CONFIG_FILE} already exists and 'jq' isn't installed, so it can't be${NC}"
+        echo -e "${YELLOW}  updated here without risking your other settings.${NC}"
+        echo -e "${YELLOW}  Press 'v' inside bmd to enable vim keybindings instead (persists automatically).${NC}"
         return 0
     fi
 
-    if ! curl -fL --progress-bar "$PAGEINDEX_URL" -o "$pageindex_path"; then
-        echo -e "${YELLOW}Warning: Failed to download pageindex (optional dependency)${NC}" >&2
-        return 0
-    fi
-
-    chmod +x "$pageindex_path"
-    echo -e "${GREEN}✓ Installed pageindex to: ${pageindex_path}${NC}"
+    echo -e "${YELLOW}  (toggle anytime inside bmd by pressing 'v' in the file view)${NC}"
 }
 
 # Ensure install directory exists
@@ -190,8 +219,8 @@ main() {
         echo -e "${GREEN}✓ Renamed to: ${INSTALL_PREFIX}/bmd${NC}"
     fi
 
-    # Install pageindex wrapper script
-    install_pageindex
+    # Enable vim keybindings by default if vim/nvim is already on this system
+    configure_vim_keybindings
 
     echo ""
     echo -e "${GREEN}✓ Installation complete!${NC}"
