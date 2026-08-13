@@ -26,6 +26,33 @@ func isWordChar(r rune) bool {
 		(r >= '0' && r <= '9')
 }
 
+// vimShouldHandle reports whether the vim engine owns msg in normal/visual
+// mode. It owns plain (non-Alt) arrow keys and plain typed characters (the
+// keys that would otherwise be inserted as text), plus Enter/Backspace/
+// Delete -- swallowed as safe no-ops, since vim's modal safety guarantee is
+// that normal mode never mutates the buffer except through an explicit
+// command. Everything else -- every Ctrl-combo (each has its own distinct
+// KeyType, e.g. KeyCtrlO, never KeyRunes), Tab/Shift+Tab, PgUp/PgDn, Home/
+// End, and Alt-modified keys -- deliberately returns false so it falls
+// through to the exact same handling used when vim keybindings are off.
+// This is intentionally an allow-list of what the engine DOES claim, not a
+// deny-list of Ctrl-combos to exclude: a previous version tried enumerating
+// every meta shortcut by KeyType and missed several (Ctrl+O outline,
+// Alt+Up/Down move-line, Tab indent, PgUp/PgDn, ...) because they're
+// string-matched via msg.String() elsewhere rather than having their own
+// KeyType case -- see the git history on this function for the bug.
+func vimShouldHandle(msg tea.KeyMsg) bool {
+	if msg.Alt {
+		return false
+	}
+	switch msg.Type {
+	case tea.KeyUp, tea.KeyDown, tea.KeyLeft, tea.KeyRight,
+		tea.KeyRunes, tea.KeyEnter, tea.KeyBackspace, tea.KeyDelete:
+		return true
+	}
+	return false
+}
+
 // updateVimCommand handles a single keystroke while edit mode's vim engine
 // owns input (v.vimEnabled && v.vimMode != vimModeInsert). It never falls
 // through to plain-text insertion: normal/visual mode must never mutate the

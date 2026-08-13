@@ -25,21 +25,8 @@ func (v *Viewer) updateEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			v.editBuffer.CursorLeft()
 			return v, nil
 		}
-		// Normal/visual mode owns every key except the Ctrl-combo meta
-		// shortcuts below (save/undo/search/jump/outline/replace/etc, which
-		// remain available regardless of vim mode) -- letters, digits, and
-		// motion keys must never fall through to the plain-insertion logic
-		// further down, or modal editing loses its core safety guarantee.
-		if v.vimMode != vimModeInsert {
-			switch msg.Type {
-			case tea.KeyCtrlC, tea.KeyCtrlX, tea.KeyCtrlV, tea.KeyCtrlS, tea.KeyCtrlZ, tea.KeyCtrlY,
-				tea.KeyCtrlF, tea.KeyCtrlG, tea.KeyCtrlHome, tea.KeyCtrlEnd, tea.KeyCtrlH, tea.KeyEsc:
-				// fall through to the shared handling below -- Esc here
-				// exits edit mode entirely (see the existing KeyEsc case),
-				// same as when vim keybindings are off.
-			default:
-				return v.updateVimCommand(msg)
-			}
+		if v.vimMode != vimModeInsert && vimShouldHandle(msg) {
+			return v.updateVimCommand(msg)
 		}
 	}
 

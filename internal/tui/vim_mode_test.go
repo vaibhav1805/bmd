@@ -36,6 +36,8 @@ func vimPress(v *Viewer, keys string) *Viewer {
 }
 
 func TestVim_DefaultDisabled_UnchangedBehavior(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from the real ~/.config/bmd -- New() loads config.VimKeybindings, which must default false regardless of the developer's own real setting
+
 	doc := createTestDocument(nil)
 	v := New(doc, "test.md", theme.NewTheme(), 80)
 	v.editMode = true
@@ -377,6 +379,76 @@ func TestVim_CtrlSStillSavesInNormalMode(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("Expected file to be written to %s: %v", path, err)
 	}
+}
+
+// TestVim_MetaShortcutsSurviveNormalMode guards against a real regression:
+// an earlier version of the vim-mode/legacy-editor guard in edit_mode.go
+// allow-listed meta shortcuts by exact KeyType, and missed every one that
+// bmd matches via msg.String() instead of a dedicated case (Ctrl+O,
+// Alt+Up/Down, Tab/Shift+Tab, PgUp/PgDn) -- they were silently swallowed as
+// vim no-ops whenever vim mode was on. vimShouldHandle() now decides by
+// what the vim engine DOES own (plain arrows, plain runes, Enter/Backspace/
+// Delete) rather than enumerating what it doesn't; this exercises each
+// previously-broken shortcut plus a couple of the ones that already worked,
+// all from vim normal mode.
+func TestVim_MetaShortcutsSurviveNormalMode(t *testing.T) {
+	t.Run("Ctrl+O opens outline", func(t *testing.T) {
+		v := newVimTestViewer([]string{"# Intro", "paragraph", "## Details"})
+		v.Height, v.Width = 24, 80
+		model, _ := v.updateEdit(tea.KeyMsg{Type: tea.KeyCtrlO})
+		v = model.(*Viewer)
+		if !v.outlineMode {
+			t.Error("expected outlineMode=true after Ctrl+O in vim normal mode")
+		}
+	})
+
+	// NOTE: Alt+Up/Alt+Down (move line) turn out to be pre-existing dead
+	// keybindings, unrelated to vim mode and not fixed here (see bmd-*
+	// filed for it) -- edit_mode.go's plain `case tea.KeyDown` never
+	// checks msg.Alt, so it always wins over the later "alt+down" string
+	// case, with or without vim. These subtests just confirm vim mode
+	// doesn't change that pre-existing (if broken) behavior -- i.e. vim
+	// mode isn't making anything worse here, even though it isn't making
+	// it better either.
+	t.Run("Alt+Down leaves buffer as plain cursor-down, same as vim off", func(t *testing.T) {
+		v := newVimTestViewer([]string{"alpha", "beta"})
+		model, _ := v.updateEdit(tea.KeyMsg{Type: tea.KeyDown, Alt: true})
+		v = model.(*Viewer)
+		lines := v.editBuffer.GetLines()
+		if lines[0] != "alpha" || lines[1] != "beta" || v.editBuffer.CursorLine() != 1 {
+			t.Errorf("expected unchanged lines with cursor moved to line 1, got %v (cursor=%d)", lines, v.editBuffer.CursorLine())
+		}
+	})
+
+	t.Run("Tab indents the current line", func(t *testing.T) {
+		v := newVimTestViewer([]string{"alpha"})
+		model, _ := v.updateEdit(tea.KeyMsg{Type: tea.KeyTab})
+		v = model.(*Viewer)
+		lines := v.editBuffer.GetLines()
+		if lines[0] == "alpha" {
+			t.Errorf("expected Tab to indent the line, got unchanged %q", lines[0])
+		}
+	})
+
+	t.Run("Ctrl+D duplicates the current line", func(t *testing.T) {
+		v := newVimTestViewer([]string{"alpha"})
+		model, _ := v.updateEdit(tea.KeyMsg{Type: tea.KeyCtrlD})
+		v = model.(*Viewer)
+		lines := v.editBuffer.GetLines()
+		if len(lines) != 2 || lines[0] != "alpha" || lines[1] != "alpha" {
+			t.Errorf("expected Ctrl+D to duplicate the line, got %v", lines)
+		}
+	})
+
+	t.Run("PgDn does not panic and stays in normal mode", func(t *testing.T) {
+		v := newVimTestViewer([]string{"alpha", "beta", "gamma"})
+		v.Height = 24
+		model, _ := v.updateEdit(tea.KeyMsg{Type: tea.KeyPgDown})
+		v = model.(*Viewer)
+		if v.vimMode != vimModeNormal {
+			t.Errorf("expected PgDn to leave vim mode unchanged, got mode %d", v.vimMode)
+		}
+	})
 }
 
 func TestVim_ToggleTogglesModeAndPersists(t *testing.T) {
