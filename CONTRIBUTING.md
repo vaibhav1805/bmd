@@ -131,7 +131,7 @@ internal/
 ├── search/          In-document search algorithms
 ├── parser/          Markdown parsing (goldmark)
 ├── ast/             Internal AST types
-├── config/          Session persistence
+├── config/          Config & session persistence (theme, autosave, vim keybindings)
 └── terminal/        Terminal utilities
 
 cmd/bmd/
@@ -153,7 +153,7 @@ cmd/bmd/
      )
    ```
 3. **Test:** Update `internal/theme/colors_test.go`
-4. **Document:** Update `QUICKSTART.md` with new theme
+4. **Document:** Update `docs/getting-started.md` with the new theme
 5. **Commit:** `feat: Add neon color theme`
 
 ### Example: Fix a bug
@@ -223,10 +223,10 @@ Releases follow semantic versioning:
 
 ```bash
 # Tag the release
-git tag -a v0.6.0 -m "Add knowledge graphs and agent intelligence"
+git tag -a v2.1.0 -m "Add opt-in vim keybindings to edit mode"
 
 # Push tag
-git push origin v0.6.0
+git push origin v2.1.0
 
 # Create GitHub release with changelog
 # Release notes should include:

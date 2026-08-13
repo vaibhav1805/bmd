@@ -49,13 +49,14 @@ Technical deep-dive into BMD's design and components.
 ### Edit Mode
 **Goal:** Edit markdown files with syntax highlighting and persistence
 
-- **Text Buffer:** Efficient line-based editing with vim-like cursor movement
+- **Text Buffer:** Efficient line-based editing with cursor/selection tracking
 - **Syntax Highlighting:** Pattern-based markdown highlighting with ANSI colors
 - **File Persistence:** Atomic write pattern (temp file + rename)
 - **Undo/Redo:** Full edit history with snapshot restoration
 - **Navigation:** Jump to line, Page Up/Down, Ctrl+Home/End
+- **Vim keybindings (opt-in):** Normal/Insert/Visual(-line) modal editing — core motions, operators, and registers — toggled with `v` and persisted to config; off by default, so the modeless editor above is unchanged unless enabled
 
-**Files:** `internal/editor/`, edit mode in `internal/tui/edit_mode.go`
+**Files:** `internal/editor/` (buffer primitives), `internal/tui/edit_mode.go` (modeless editing), `internal/tui/vim_mode.go` (modal engine)
 
 ### Directory Browser
 **Goal:** Interactive file listing and navigation in the terminal
@@ -63,7 +64,8 @@ Technical deep-dive into BMD's design and components.
 - **Directory Scanning:** Recursive `.md` file discovery with metadata
 - **File Listing:** Sortable view with line count, size, modification time
 - **Navigation:** Keyboard-driven with saved cursor position
-- **Split-Pane Mode:** Dual-pane layout with file list and live preview (`s` to toggle)
+- **Split-Pane Mode:** Lightweight file list + live preview, reachable with `b` from any file view (`s` to toggle within it)
+- **Full Directory Browser:** Reachable with `B` from any file view regardless of how the file was opened
 - **Cross-File Search:** BM25 search results with context snippets (`Ctrl+F`)
 
 **Files:** `internal/tui/directory.go`, `internal/tui/cross_search.go`
@@ -143,8 +145,8 @@ Proven ranking algorithm, configurable parameters, efficient for medium-sized co
 ### Atomic File Writes
 Write to temp file, then rename ensures data durability and prevents corruption.
 
-### Vim-Like Keybindings
-Familiar to terminal-savvy developers, efficient navigation patterns.
+### Opt-In Vim Keybindings, Not a Default
+Read-mode navigation (`j`/`k`/`gg`/`G`) is vim-flavored by default for anyone coming from a terminal-heavy workflow, but full modal editing (Normal/Insert/Visual, operators, registers) is deliberately opt-in in edit mode — toggled with `v`, off by default — rather than replacing bmd's existing modeless editor outright. This keeps zero behavior change for users who never asked for vim semantics, while giving vim users real modal editing without leaving bmd's TUI (live preview, autosave, outline, etc. all keep working either way).
 
 ## Performance
 

@@ -33,12 +33,13 @@ bmd index ./docs       # Creates .bmd/knowledge.db for fast searches
 bmd query "topic" --dir ./docs  # Fast keyword search
 ```
 
-**Key bindings:** `j/k` scroll, `gg`/`G` jump, `e` edit, `/` search, `t` themes, `?` help, `q` quit.
+**Key bindings:** `j/k` scroll, `gg`/`G` jump, `e` edit, `/` search, `t` themes, `B` directory browser, `v` toggle vim keybindings, `?` help, `q` quit.
 
 ## Features
 
 **Editing & Viewing:**
 - ✏️ Syntax-highlighted editing with undo/redo
+- ⌨️ Optional vim keybindings (Normal/Insert/Visual modes — press `v` to toggle)
 - 🎨 Beautiful rendering (headings, code blocks, tables, lists)
 - 🖱️ Mouse support (click links, select text)
 - 🔍 Full-text search within documents

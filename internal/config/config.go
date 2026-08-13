@@ -1,6 +1,7 @@
 // Package config provides configuration management for bmd.
-// Configuration is persisted to the user's home directory in .config/bmd/ (Unix/macOS)
-// or %APPDATA%\bmd\ (Windows).
+// Configuration is persisted to $XDG_CONFIG_HOME/bmd/ if set, otherwise
+// <home>/.config/bmd/ on every platform (this package does not special-case
+// Windows/%APPDATA% -- see configDir below).
 package config
 
 import (
@@ -74,9 +75,8 @@ func configDir() (string, error) {
 	return dir, nil
 }
 
-// configPath returns the path to the bmd config file, creating directories as needed.
-// On Unix/macOS: ~/.config/bmd/config.json
-// On Windows: %APPDATA%\bmd\config.json
+// configPath returns the path to the bmd config file, creating directories
+// as needed: $XDG_CONFIG_HOME/bmd/config.json if set, else ~/.config/bmd/config.json.
 func configPath() (string, error) {
 	dir, err := configDir()
 	if err != nil {
