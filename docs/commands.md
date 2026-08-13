@@ -20,11 +20,14 @@ Build search index for a directory.
 ```bash
 bmd index ./docs
 bmd index ./docs --ignore-dirs vendor,build
+bmd index ./docs --watch          # rebuild automatically on file changes
 ```
 
 **Options:**
 - `--dir DIR` — Directory to index (default: .)
 - `--db PATH` — Database path (default: .bmd/knowledge.db)
+- `--watch` — Rebuild the index automatically on file changes
+- `--poll-interval N` — Polling interval in seconds, watch mode (default: 5)
 - `--ignore-dirs DIRS` — Skip directories (comma-separated)
 - `--ignore-files PATTERNS` — Skip file patterns
 - `-A` — Include hidden directories
@@ -43,7 +46,7 @@ bmd query "authentication" --dir ./docs
 - `--top N` — Max results (default: 10)
 
 ## bmd graph [DIR]
-Export link graph as JSON.
+Export the link graph.
 
 ```bash
 bmd graph --dir ./docs --format json
@@ -51,5 +54,5 @@ bmd graph --dir ./docs --format json
 
 **Options:**
 - `--dir DIR` — Directory to graph (default: .)
-- `--format dot|json` — Output format (default: json)
+- `--format dot|json` — Output format (default: dot)
 - `--service NAME` — Export only the subgraph reachable from this node (matched by ID or filename)

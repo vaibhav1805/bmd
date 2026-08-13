@@ -235,6 +235,8 @@ SEARCH & INDEXING:
   bmd index [DIR] [OPTIONS]
     --dir DIR                 Directory to index (default: .)
     --db DB                   Database path (default: .bmd/knowledge.db)
+    --watch                   Rebuild index automatically on file changes
+    --poll-interval N         Polling interval in seconds, watch mode (default: 5)
     --ignore-dirs DIRS        Comma-separated directory patterns to ignore
     --ignore-files PATTERNS   Comma-separated file patterns to ignore
     -A, --include-hidden      Include hidden directories and files
@@ -247,7 +249,9 @@ SEARCH & INDEXING:
 
 GRAPH:
   bmd graph [OPTIONS]
-    --format dot|json         Output format (default: json)
+    --dir DIR                 Directory to graph (default: .)
+    --format dot|json         Output format (default: dot)
+    --service NAME            Export only the subgraph reachable from this node
     View markdown link structure as a graph
 
 HELP:
@@ -259,7 +263,7 @@ Examples:
   bmd README.md               View file
   bmd index ./docs            Build the search index and link graph
   bmd query "authentication"  Search (BM25)
-  bmd graph                   Show link graph as JSON
+  bmd graph --format json     Show link graph as JSON
 
 For advanced features (dependencies, components, relationships, discovery):
   → Use graphmd: https://github.com/vaibhav1805/graphmd
