@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/renderer"
 	"github.com/bmd/bmd/internal/theme"
@@ -79,6 +80,14 @@ func NewDirectoryModel(rootPath string, th theme.Theme, width, height int) (*Dir
 			return nil // skip errors; don't abort walk
 		}
 		if d.IsDir() {
+			// Skip hidden and well-known vendor/tooling directories, matching
+			// `bmd index`/query/graph (knowledge.ScanDirectory) -- this walk
+			// used to have no such filter at all, surfacing .planning/ and
+			// .handoff/ (gitignored, agent-only working files) alongside real
+			// docs in both the 'b' and 'B' browsers.
+			if p != absPath && knowledge.ShouldSkipDefaultDir(d.Name()) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		// Skip symlinks

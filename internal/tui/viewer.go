@@ -12,6 +12,7 @@ import (
 	"github.com/bmd/bmd/internal/ast"
 	"github.com/bmd/bmd/internal/config"
 	"github.com/bmd/bmd/internal/editor"
+	"github.com/bmd/bmd/internal/knowledge"
 	"github.com/bmd/bmd/internal/nav"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/renderer"
@@ -19,6 +20,7 @@ import (
 	"github.com/bmd/bmd/internal/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -2672,7 +2674,9 @@ func (v *Viewer) scrollToFocusedLink() {
 	}
 }
 
-// scanMdFiles walks startDir and returns a sorted slice of all .md file paths.
+// scanMdFiles walks startDir and returns a sorted slice of all .md file
+// paths, skipping hidden and well-known vendor/tooling directories (see
+// knowledge.ShouldSkipDefaultDir) the same way `bmd index`/query/graph do.
 func scanMdFiles(startDir string) []string {
 	var files []string
 	_ = filepath.WalkDir(startDir, func(path string, d fs.DirEntry, err error) error {
@@ -2680,6 +2684,9 @@ func scanMdFiles(startDir string) []string {
 			return nil // skip errors; don't abort walk
 		}
 		if d.IsDir() {
+			if path != startDir && knowledge.ShouldSkipDefaultDir(d.Name()) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		// Skip symlinks (Lstat-style check)
@@ -2737,35 +2744,42 @@ func stripInlineImageEscapes(line string) string {
 }
 
 // ansiPadOrTruncate truncates or pads s so that its visible width (excluding
-// ANSI escape sequences) equals exactly width, preserving embedded ANSI
-// codes and resetting styling after truncation.
+// ANSI escape sequences, and correctly accounting for wide characters such
+// as emoji and CJK) equals exactly width, preserving embedded ANSI codes
+// and resetting styling after truncation.
+//
+// Uses charmbracelet/x/ansi's grapheme- and width-aware Truncate/StringWidth
+// rather than a naive one-rune-equals-one-cell count (this function's
+// previous implementation): the naive version undercounts every wide
+// character (emoji, CJK) by one cell and overcounts zero-width joiners and
+// variation selectors -- e.g. "✏️" is two runes, U+270F PENCIL + U+FE0F
+// VARIATION SELECTOR-16, for one visual, two-cell glyph -- so any line with
+// a different mix of such characters than its neighbors pads to a
+// different actual screen column. In the split-pane browser and the
+// directory-browser preview (both callers), every row's padded
+// main-content column is followed immediately by a shared "│" divider and
+// the file-list column, so that drift compounds into a visible staircase
+// down the screen: the file list renders at a different horizontal offset
+// on nearly every row instead of a clean aligned column. Reproduced
+// reliably against this project's own README.md, whose feature bullets are
+// emoji-heavy. ansi.Truncate is grapheme-cluster aware (via uniseg) and
+// already correctly handles OSC/APC/DCS image escapes without corrupting
+// them mid-sequence -- verified directly against a synthetic Kitty APC
+// payload before relying on it here, preserving the safety bmd-t0o fixed
+// for the hand-rolled version this replaces.
 func ansiPadOrTruncate(s string, width int) string {
-	var b strings.Builder
-	visible := 0
-	runes := []rune(s)
-	i := 0
-	for i < len(runes) && visible < width {
-		if runes[i] == '\x1b' {
-			// Copy the entire escape sequence as-is (CSI/OSC/APC/DCS — see
-			// ansiEscapeRuneLen; a CSI-only check would treat an embedded
-			// inline-image payload as literal text and truncate it
-			// mid-sequence).
-			escLen := ansiEscapeRuneLen(runes, i)
-			b.WriteString(string(runes[i : i+escLen]))
-			i += escLen
-		} else {
-			b.WriteRune(runes[i])
-			visible++
-			i++
-		}
+	truncated := s
+	if ansi.StringWidth(s) > width {
+		// Reset styling after truncation so colours don't bleed into
+		// whatever's rendered immediately after (e.g. the file-list
+		// divider and column) if truncation cut off content before its
+		// matching style-close code.
+		truncated = ansi.Truncate(s, width, "") + "\x1b[0m"
 	}
-	if visible < width {
-		b.WriteString(strings.Repeat(" ", width-visible))
-	} else {
-		// Reset styling after truncation so colours don't bleed.
-		b.WriteString("\x1b[0m")
+	if pad := width - ansi.StringWidth(truncated); pad > 0 {
+		truncated += strings.Repeat(" ", pad)
 	}
-	return b.String()
+	return truncated
 }
 
 // stripAllSentinels returns a copy of lines with all link sentinels removed.

@@ -64,6 +64,33 @@ func matchPattern(name, pattern string) bool {
 	return name == pattern
 }
 
+// ShouldSkipDefaultDir reports whether a directory named name should be
+// excluded from a default (unconfigured) markdown scan: hidden directories
+// (dot-prefixed, e.g. .git, .planning, .handoff) and well-known
+// vendor/tooling directories (hiddenDirs, DefaultIgnoreDirs). This is the
+// same rule ScanDirectory applies with a zero-value ScanConfig (default
+// ignores on, IncludeHidden false, no extra patterns) -- factored out so
+// callers that need only the directory-skip decision (bmd's TUI file
+// browsers, which gather their own lightweight per-file metadata rather
+// than full Documents) can share it instead of reimplementing an
+// independent, driftable copy. See bmd's "b"/"B" directory browsers,
+// which used to walk unfiltered and surfaced .planning/ and .handoff/
+// content (gitignored, agent-only working files) alongside real docs.
+func ShouldSkipDefaultDir(name string) bool {
+	if strings.HasPrefix(name, ".") {
+		return true
+	}
+	if _, skip := hiddenDirs[name]; skip {
+		return true
+	}
+	for _, pattern := range DefaultIgnoreDirs {
+		if matchPattern(name, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 // ScanDirectory walks the directory tree rooted at root and returns one
 // Document for every ".md" file found.
 //
