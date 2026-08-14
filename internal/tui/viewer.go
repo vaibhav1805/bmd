@@ -240,6 +240,40 @@ type HeadingInfo struct {
 	LineIdx int    // line index in the document (for jumping)
 }
 
+// startDirFor picks the Viewer's startDir for a directly-opened file
+// (absPath must already be absolute): the process's current working
+// directory, if absPath is within it, otherwise absPath's own containing
+// directory as a fallback.
+//
+// startDir's own field comment has always said "directory bmd was
+// launched from" -- but this used to unconditionally return
+// filepath.Dir(absPath) instead, regardless of cwd. That only coincides
+// with "where bmd was launched from" when the opened file has no
+// subdirectory component relative to cwd; for anything nested (`bmd
+// docs/deep/nested/file.md`, or a restored session pointing at such a
+// file -- see cmd/bmd/main.go's isWithinDir-gated session restore, the
+// same issue from the other direction), it silently narrowed every
+// directory-scoped feature (Ctrl+G's graph view, Ctrl+P fuzzy finder,
+// Ctrl+F cross-search, 'b'/'B' directory browsers) down to that
+// subdirectory instead of the project the user was actually sitting in --
+// confirmed live: opening this repo's own README.md scoped Ctrl+G
+// correctly (no subdirectory component), but a session restored pointing
+// at a file under test-data/ scoped it to that narrow test fixture
+// instead of the repo root, even though the user ran `bmd` from the repo
+// root either way.
+//
+// Falling back to absPath's own directory when it's NOT within cwd (e.g.
+// an absolute path outside the launch directory, or cwd being
+// unavailable) keeps the boundary at least as tight as before rather than
+// defaulting to something unrelated to the file at all.
+func startDirFor(absPath string) string {
+	fileDir := filepath.Dir(absPath)
+	if cwd, err := os.Getwd(); err == nil && nav.IsWithinDir(absPath, cwd) {
+		return cwd
+	}
+	return fileDir
+}
+
 // New creates a new Viewer for the given document and file path.
 // startDir is the root directory that the viewer is allowed to navigate within.
 func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer {
@@ -247,7 +281,7 @@ func New(doc *ast.Document, filePath string, th theme.Theme, width int) *Viewer 
 	if err != nil {
 		absPath = filePath
 	}
-	startDir := filepath.Dir(absPath)
+	startDir := startDirFor(absPath)
 
 	h := nav.New()
 	h.Push(absPath)

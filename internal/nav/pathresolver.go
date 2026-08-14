@@ -9,6 +9,22 @@ import (
 	"strings"
 )
 
+// IsWithinDir reports whether path is dir itself, or nested somewhere
+// under it. Both arguments are expected to already be absolute (relative
+// inputs are compared as-is via filepath.Rel, which resolves them against
+// the process's current directory -- pass absolute paths to avoid
+// surprises if that's not what's intended).
+func IsWithinDir(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // IsExternalURL checks if the href is a web URL.
 func IsExternalURL(href string) bool {
 	return strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://")

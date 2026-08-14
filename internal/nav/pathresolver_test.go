@@ -217,3 +217,53 @@ func TestResolveLink_Symlink(t *testing.T) {
 		t.Errorf("ResolveLink symlink error: got %q, want message containing 'symlink'", err.Error())
 	}
 }
+
+// --- IsWithinDir --------------------------------------------------------
+
+// TestIsWithinDir_ExactMatch treats dir itself as "within" dir.
+func TestIsWithinDir_ExactMatch(t *testing.T) {
+	if !nav.IsWithinDir("/repo", "/repo") {
+		t.Error("expected dir to be considered within itself")
+	}
+}
+
+// TestIsWithinDir_Nested is the common case: a file somewhere under dir.
+func TestIsWithinDir_Nested(t *testing.T) {
+	if !nav.IsWithinDir("/repo/docs/getting-started.md", "/repo") {
+		t.Error("expected a file nested under dir to be within it")
+	}
+	if !nav.IsWithinDir(filepath.Join("/repo", "a", "b", "c.md"), "/repo") {
+		t.Error("expected a deeply nested file to be within dir")
+	}
+}
+
+// TestIsWithinDir_OutsideRejected: a file from a completely unrelated
+// directory must not be treated as "within" the current one -- this is
+// what guards `bmd`'s bare-invocation session restore (cmd/bmd/main.go)
+// against silently reopening a file left open in a different project.
+func TestIsWithinDir_OutsideRejected(t *testing.T) {
+	if nav.IsWithinDir("/other-project/file.md", "/repo") {
+		t.Error("expected a file outside dir to be rejected")
+	}
+}
+
+// TestIsWithinDir_SiblingWithSharedPrefixRejected guards against a naive
+// strings.HasPrefix(path, dir) implementation, which would incorrectly
+// accept "/repo-other/file.md" as being within "/repo" (string prefix
+// match without a path-separator boundary check).
+func TestIsWithinDir_SiblingWithSharedPrefixRejected(t *testing.T) {
+	if nav.IsWithinDir("/repo-other/file.md", "/repo") {
+		t.Error("expected a sibling directory with a shared string prefix to be rejected")
+	}
+}
+
+// TestIsWithinDir_ParentRejected: dir's own parent directory (or anything
+// above dir) is not "within" dir, even though dir is within it.
+func TestIsWithinDir_ParentRejected(t *testing.T) {
+	if nav.IsWithinDir("/", "/repo") {
+		t.Error("expected dir's parent to be rejected")
+	}
+	if nav.IsWithinDir("/repo/../other/file.md", "/repo") {
+		t.Error("expected a path that escapes dir via .. to be rejected")
+	}
+}

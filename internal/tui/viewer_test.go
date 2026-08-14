@@ -21,6 +21,47 @@ func createTestDocument(lines []string) *ast.Document {
 	return &ast.Document{}
 }
 
+// TestNew_StartDirUsesCwdWhenFileIsWithinIt is a regression test: New()
+// used to always set startDir to the opened file's own containing
+// directory (filepath.Dir(absPath)), never the process's actual current
+// directory -- even though startDir's own field comment has always said
+// "directory bmd was launched from". Those only coincide when the opened
+// file has no subdirectory component relative to cwd. For a file nested
+// under cwd, every directory-scoped feature (Ctrl+G's graph view, 'b'/'B'
+// browsers, Ctrl+F cross-search, Ctrl+P fuzzy finder) got silently
+// narrowed to that subdirectory instead of scoping to the project the
+// user actually launched bmd from.
+func TestNew_StartDirUsesCwdWhenFileIsWithinIt(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	nestedPath := filepath.Join(cwd, "some", "nested", "subdir", "file.md")
+
+	doc := createTestDocument(nil)
+	v := New(doc, nestedPath, theme.NewTheme(), 80)
+
+	if v.startDir != cwd {
+		t.Errorf("expected startDir=%q (cwd) for a file nested under it, got %q", cwd, v.startDir)
+	}
+}
+
+// TestNew_StartDirFallsBackToFileDirWhenOutsideCwd verifies the opposite
+// case still behaves sanely: a file outside cwd entirely (e.g. an absolute
+// path elsewhere on disk) falls back to its own containing directory
+// rather than defaulting to cwd, which would be unrelated to the file.
+func TestNew_StartDirFallsBackToFileDirWhenOutsideCwd(t *testing.T) {
+	outsidePath := filepath.Join(t.TempDir(), "elsewhere", "file.md")
+
+	doc := createTestDocument(nil)
+	v := New(doc, outsidePath, theme.NewTheme(), 80)
+
+	wantDir := filepath.Dir(outsidePath)
+	if v.startDir != wantDir {
+		t.Errorf("expected startDir=%q (file's own dir) for a file outside cwd, got %q", wantDir, v.startDir)
+	}
+}
+
 // TestEditModeToggle tests entering and exiting edit mode.
 func TestEditModeToggle(t *testing.T) {
 	doc := createTestDocument([]string{})

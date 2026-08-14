@@ -9,6 +9,7 @@ import (
 
 	"github.com/bmd/bmd/internal/config"
 	"github.com/bmd/bmd/internal/knowledge"
+	"github.com/bmd/bmd/internal/nav"
 	"github.com/bmd/bmd/internal/parser"
 	"github.com/bmd/bmd/internal/terminal"
 	"github.com/bmd/bmd/internal/theme"
@@ -60,19 +61,30 @@ func main() {
 
 	// No arguments: try to restore a saved session, or fall back to directory mode.
 	if len(args) == 0 {
-		// Check for a saved session with a file that still exists.
-		if sess, err := config.LoadSession(); err == nil && sess != nil {
-			if _, statErr := os.Stat(sess.LastFilePath); statErr == nil {
-				runViewerWithSession(sess)
-				return
-			}
-		}
-
 		cwd, err := os.Getwd()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "bmd: cannot get current directory:", err)
 			os.Exit(1)
 		}
+
+		// Check for a saved session with a file that still exists AND is
+		// within the current directory. Session state is a single global
+		// file (~/.config/bmd/session.json), not scoped to any project --
+		// without the nav.IsWithinDir check, running bare `bmd` in project A,
+		// then `cd`-ing to an unrelated project B and running bare `bmd`
+		// there too, would silently reopen whatever file was last open in
+		// A (as long as it still exists on disk), ignoring B's cwd
+		// entirely. That's surprising at best, and actively wrong when the
+		// restored file's directory doesn't overlap with cwd (e.g. a graph
+		// view opened from it in bmd would be scoped to A's directory, not
+		// B's, even though the user is sitting in B).
+		if sess, err := config.LoadSession(); err == nil && sess != nil {
+			if _, statErr := os.Stat(sess.LastFilePath); statErr == nil && nav.IsWithinDir(sess.LastFilePath, cwd) {
+				runViewerWithSession(sess)
+				return
+			}
+		}
+
 		if directoryHasMdFiles(cwd) {
 			runDirectoryViewer(cwd)
 			return
