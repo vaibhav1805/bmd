@@ -2,6 +2,8 @@
 
 A powerful, beautiful terminal-based markdown editor with integrated search and link graphs. Edit and view markdown files with stunning formatting, syntax highlighting, and fast searching — all without leaving the CLI.
 
+![bmd demo](./assets/demo.gif)
+
 ## Quick Start
 
 ### Installation
